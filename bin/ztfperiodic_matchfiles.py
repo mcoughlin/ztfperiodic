@@ -319,7 +319,7 @@ if opts.doPlots:
     plt.figure(figsize=(12,12))
     plt.imshow(img,origin='lower')
 
-    xval, yval = gaia['BP-RP'], gaia['Gmag']
+    xval, yval = gaia['BP-RP'], gaia['Gmag'] + 5*np.log10(1/(gaia['Plx']*10))
     xval = 162 + (235-162)*xval/1.0
     yval = 625 + (145-625)*yval/15.0
 
