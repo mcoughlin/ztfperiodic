@@ -12,14 +12,20 @@ import pandas as pd
 import numpy as np
 import tables
 import glob
+
 from astropy.io import ascii
+from astropy import units as u
+from astropy.coordinates import SkyCoord
 
 import requests
 import tqdm
 
+from astroquery.vizier import Vizier
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 
 from gatspy.periodic import LombScargle, LombScargleFast
 
@@ -53,6 +59,57 @@ def parse_commandline():
     opts, args = parser.parse_args()
 
     return opts
+
+def gaia_query(ra_deg, dec_deg, rad_deg, maxmag=25,
+               maxsources=1):
+    """
+    Query Gaia DR1 @ VizieR using astroquery.vizier
+    parameters: ra_deg, dec_deg, rad_deg: RA, Dec, field
+                                          radius in degrees
+                maxmag: upper limit G magnitude (optional)
+                maxsources: maximum number of sources
+    returns: astropy.table object
+    """
+    vquery = Vizier(columns=['Source', 'RA_ICRS', 'DE_ICRS',
+                             'phot_g_mean_mag','phot_r_mean_mag',
+                             'Plx', 'e_Plx', 'BP-RP'],
+                    column_filters={"phot_g_mean_mag":
+                                    ("<%f" % maxmag),
+                                   "phot_r_mean_mag":
+                                    ("<%f" % maxmag)},
+                    row_limit = maxsources)
+
+    field = SkyCoord(ra=ra_deg, dec=dec_deg,
+                           unit=(u.deg, u.deg),
+                           frame='icrs')
+    return vquery.query_region(field,
+                               width=("%fd" % rad_deg),
+                               catalog="I/345/gaia2")[0]
+
+def ps1_query(ra_deg, dec_deg, rad_deg, maxmag=25,
+               maxsources=1):
+    """
+    Query Pan-STARRS @ VizieR using astroquery.vizier
+    parameters: ra_deg, dec_deg, rad_deg: RA, Dec, field
+                                          radius in degrees
+                maxmag: upper limit G magnitude (optional)
+                maxsources: maximum number of sources
+    returns: astropy.table object
+    """
+    vquery = Vizier(columns=['Source', 'RAJ2000', 'DEJ2000',
+                             'gmag','rmag','imag','zmag','ymag'],
+                    column_filters={"gmag":
+                                    ("<%f" % maxmag),
+                                   "imag":
+                                    ("<%f" % maxmag)},
+                    row_limit = maxsources)
+
+    field = SkyCoord(ra=ra_deg, dec=dec_deg,
+                           unit=(u.deg, u.deg),
+                           frame='icrs')
+    return vquery.query_region(field,
+                               width=("%fd" % rad_deg),
+                               catalog="II/349/ps1")[0]
 
 def get_cookie(username, password):
     """Get a cookie from the IPAC login service
@@ -183,6 +240,9 @@ if opts.doOverwrite:
 if not os.path.isdir(path_out_dir):
     os.makedirs(path_out_dir)
 
+# Gaia and PS1 
+gaia = gaia_query(opts.ra, opts.declination, 5/3600.0)
+ps1 = ps1_query(opts.ra, opts.declination, 5/3600.0)
 df = get_lightcurve(dataDir, opts.ra, opts.declination, opts.filt)
 
 mag = df.psfmag.values
@@ -251,3 +311,17 @@ if opts.doPlots:
         plt.savefig(plotName)
         plt.close()
 
+    gaiaimage = os.path.join(inputDir,'ESA_Gaia_DR2_HRD_Gaia_625.png')
+    img=mpimg.imread(gaiaimage)
+    img=np.flipud(img)
+    plotName = os.path.join(path_out_dir,'gaia.pdf')
+    plt.figure(figsize=(12,12))
+    plt.imshow(img,origin='lower')
+
+    xval, yval = gaia['BP-RP'], gaia['Gmag']
+    xval = 162 + (235-162)*xval/1.0
+    yval = 625 + (145-625)*yval/15.0
+
+    plt.plot(xval,yval,'kx')
+    plt.savefig(plotName)
+    plt.close()
