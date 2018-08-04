@@ -254,7 +254,8 @@ mjd = df.mjd.values
 ls = LombScargleFast(silence_warnings=True)
 #ls = LombScargle()
 #ls.optimizer.period_range = (0.001,0.1)
-ls.optimizer.period_range = (1,100)
+mjddiff = np.max(mjd) - np.min(mjd)
+ls.optimizer.period_range = (1,mjddiff)
 ls.fit(mjd,mag,magerr)
 period = ls.best_period
 #phase = period
