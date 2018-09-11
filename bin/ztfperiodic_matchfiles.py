@@ -39,7 +39,7 @@ def parse_commandline():
     """
     parser = optparse.OptionParser()
 
-    parser.add_option("--dataDir",default="/media/Data/kburdge/ZTFMatch/Latest/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/")
+    parser.add_option("--dataDir",default="/media/Data/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/")
     parser.add_option("-o","--outputDir",default="../output")
     parser.add_option("-i","--inputDir",default="../input")
 
@@ -190,6 +190,8 @@ def get_lightcurve(dataDir, ra, dec, filt):
     load_file(url+querystr, outf=tmpfile, auth=(user, pwd), showpbar=True)
     
     data = ascii.read(tmpfile)  
+    print(tmpfile)
+
     for f in glob.iglob(directory):
         fsplit = f.split("/")[-1].split("_")
         fieldid = int(fsplit[1])
@@ -244,6 +246,10 @@ if not os.path.isdir(path_out_dir):
 gaia = gaia_query(opts.ra, opts.declination, 5/3600.0)
 ps1 = ps1_query(opts.ra, opts.declination, 5/3600.0)
 df = get_lightcurve(dataDir, opts.ra, opts.declination, opts.filt)
+
+if len(df) == 0:
+    print("No data available...")
+    exit(0)
 
 mag = df.psfmag.values
 magerr = df.psfmagerr.values
@@ -308,6 +314,7 @@ if opts.doPlots:
         plt.errorbar(mjd_mod,mag,yerr=magerr,fmt='bo')
         plt.xlabel('Phase')
         plt.ylabel('Magnitude [ab]')
+        plt.title('%.5f'%phase)
         plt.gca().invert_yaxis()
         plt.savefig(plotName)
         plt.close()
@@ -319,7 +326,7 @@ if opts.doPlots:
     plt.figure(figsize=(12,12))
     plt.imshow(img,origin='lower')
 
-    xval, yval = gaia['BP-RP'], gaia['Gmag'] + 5*np.log10(1/(gaia['Plx']*10))
+    xval, yval = gaia['BP-RP'], gaia['Gmag'] + 5*(np.log10(gaia['Plx']) - 2)
     xval = 162 + (235-162)*xval/1.0
     yval = 625 + (145-625)*yval/15.0
 
