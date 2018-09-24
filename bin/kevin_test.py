@@ -28,9 +28,8 @@ for f in glob.iglob(directory):
         if len(merged.matchid.unique()) == 0:
             continue
 
-        mergedsort = merged.sort_values(by=['matchid'])
-        matchids = np.array(mergedsort.matchid)
-        values, counts = np.unique(matchids, return_counts=True)       
+        matchids = np.array(merged.matchid)
+        values, indices, counts = np.unique(matchids, return_counts=True,return_inverse=True)       
         idx = np.where(counts>50)[0]
 
         if len(idx) == 0:
