@@ -51,6 +51,7 @@ def parse_commandline():
     parser.add_option("-w","--pwd")
 
     parser.add_option("--doPlots",  action="store_true", default=False)
+    parser.add_option("--doJustHR",  action="store_true", default=False)
     parser.add_option("--doOverwrite",  action="store_true", default=False)
 
     parser.add_option("--doPhase",  action="store_true", default=False)
@@ -245,6 +246,26 @@ if not os.path.isdir(path_out_dir):
 # Gaia and PS1 
 gaia = gaia_query(opts.ra, opts.declination, 5/3600.0)
 ps1 = ps1_query(opts.ra, opts.declination, 5/3600.0)
+
+if opts.doPlots:
+    gaiaimage = os.path.join(inputDir,'ESA_Gaia_DR2_HRD_Gaia_625.png')
+    img=mpimg.imread(gaiaimage)
+    img=np.flipud(img)
+    plotName = os.path.join(path_out_dir,'gaia.pdf')
+    plt.figure(figsize=(12,12))
+    plt.imshow(img,origin='lower')
+
+    xval, yval = gaia['BP-RP'], gaia['Gmag'] + 5*(np.log10(gaia['Plx']) - 2)
+    xval = 162 + (235-162)*xval/1.0
+    yval = 625 + (145-625)*yval/15.0
+
+    plt.plot(xval,yval,'kx')
+    plt.savefig(plotName)
+    plt.close()
+
+if opts.doJustHR:
+    exit(0)
+
 df = get_lightcurve(dataDir, opts.ra, opts.declination, opts.filt)
 
 if len(df) == 0:
@@ -318,18 +339,3 @@ if opts.doPlots:
         plt.gca().invert_yaxis()
         plt.savefig(plotName)
         plt.close()
-
-    gaiaimage = os.path.join(inputDir,'ESA_Gaia_DR2_HRD_Gaia_625.png')
-    img=mpimg.imread(gaiaimage)
-    img=np.flipud(img)
-    plotName = os.path.join(path_out_dir,'gaia.pdf')
-    plt.figure(figsize=(12,12))
-    plt.imshow(img,origin='lower')
-
-    xval, yval = gaia['BP-RP'], gaia['Gmag'] + 5*(np.log10(gaia['Plx']) - 2)
-    xval = 162 + (235-162)*xval/1.0
-    yval = 625 + (145-625)*yval/15.0
-
-    plt.plot(xval,yval,'kx')
-    plt.savefig(plotName)
-    plt.close()
