@@ -16,12 +16,11 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import RBF, Matern, DotProduct, ConstantKernel, RationalQuadratic
+
 import scipy.stats as ss
 from scipy.optimize import curve_fit
-from scipy.special import wofz
-from astropy.modeling.models import Voigt1D as voigt
-from astropy.modeling.models import Gaussian1D as gaussian
-from astropy.modeling.models import Lorentz1D as lorentzian
 
 import corner
 import pymultinest
@@ -34,11 +33,7 @@ def parse_commandline():
 
     parser.add_option("-o","--outputDir",default="../output")
     parser.add_option("-p","--plotDir",default="../plots")
-    parser.add_option("-d","--dataDir",default="../data/spectra")
-    parser.add_option("-N","--N",type=float,default=12)
-    parser.add_option("-s","--start",type=float,default=1750)
-    parser.add_option("-e","--end",type=float,default=2250)
-    parser.add_option("--errorbudget",type=float,default=0.01)
+    parser.add_option("-d","--dataDir",default="../data/co_white_dwarf_models")
 
     opts, args = parser.parse_args()
 
@@ -80,21 +75,47 @@ def kde_eval(kdedir,truth):
 
     return td
 
-def loadspectra(f):
-    data=np.loadtxt(f)
-    return(data[start:stop,1])
-    
-def loadallspectra(N):
-    f='%s/1.txt'%dataDir
-    data=np.loadtxt(f)
-    FullData=[]
-    wavelengths=data[start:stop,0]
-    FullData.append(wavelengths)
-    i=1
-    while i<N+1:
-        f='%s/'%dataDir+str(i)+'.txt'
-        FullData.append((10**17)*loadspectra(f))
-        i=i+1
+def loadallmodels():
+    log10Teffmin, log10Teffmax = np.log10(40000), np.log10(70000)
+    log10Gmin, log10Gmax = 6, 8
+
+    FullData = np.empty((0,12))
+    filenames = glob.glob(os.path.join(dataDir,'*.Z*'))
+    for filename in filenames:
+        if "E00" in filename: # models  without hydrogen  envelope
+            continue
+
+        filenameSplit = filename.split('/')[-1].split(".")
+        nameSplit = filenameSplit[0].split("_")
+        solarMass = float(nameSplit[0][1:])*1e-1
+        if nameSplit[1][0] == "E":
+            fractionalMass = 1/float("1"+nameSplit[1])
+        else:
+            fractionalMass = 1/float(nameSplit[1])
+        fractionalMass = np.log10(fractionalMass)
+        metallicity = 10**(-float(filenameSplit[1][1:]))     
+
+        lines = [line.rstrip('\n').rstrip('\r').rstrip('\x1a') for line in open(filename)]
+        for line in lines:
+            lineSplit = list(filter(None,line.split(" ")))
+            if len(lineSplit) == 0: continue
+            data_out = np.loadtxt(lineSplit,dtype=float)
+
+            if len(data_out) == 10:
+                log10L,log10Teff,log10Tcen,log10rho,mfrac,log10A,log10R,log10G,X_h,log10HL = data_out
+            else:
+                log10L,log10Teff,log10Tcen,log10rho,mfrac,log10A,log10R,log10G,X_h = data_out
+                log10HL = 0
+
+            if ((log10Teffmin>log10Teff) or (log10Teffmax<log10Teff)):
+                continue
+
+            if ((log10Gmin>log10G) or (log10Gmax<log10G)):
+                continue
+
+            data = [solarMass,fractionalMass,metallicity,log10L,log10Teff,log10Tcen,mfrac,log10A,log10R,log10G,X_h,log10HL]
+            FullData = np.vstack((FullData,data))
+
     return FullData
 
 def func(x,p0,p1,p2,vel0,vel1,v1,v2,g1,g2):
@@ -174,19 +195,40 @@ def myloglike(cube, ndim, nparams):
 # Parse command line
 opts = parse_commandline()
 
-FullData=[]
-
-N=opts.N
-start=opts.start
-stop=opts.end
 dataDir = opts.dataDir
-errorbudget = opts.errorbudget
-baseplotDir = os.path.join(opts.plotDir,'%.2f'%errorbudget)
+baseplotDir = os.path.join(opts.plotDir,'WhiteDwarf')
 
 if not os.path.isdir(baseplotDir):
     os.makedirs(baseplotDir)
 
-newdat=loadallspectra(N)
+newdat=loadallmodels()
+param_array = newdat[:,[0,8]]
+param_array_postprocess = np.array(param_array)
+param_mins, param_maxs = np.min(param_array_postprocess,axis=0),np.max(param_array_postprocess,axis=0)
+for i in range(len(param_mins)):
+    param_array_postprocess[:,i] = (param_array_postprocess[:,i]-param_mins[i])/(param_maxs[i]-param_mins[i]) 
+
+log10Teff = newdat[:,4]
+log10G = newdat[:,9] 
+
+kernel = 1.0 * RationalQuadratic(length_scale=1.0, alpha=0.1)
+gp_log10Teff = GaussianProcessRegressor(kernel=kernel,n_restarts_optimizer=0)
+gp_log10Teff.fit(param_array_postprocess, log10Teff)
+gp_log10G = GaussianProcessRegressor(kernel=kernel,n_restarts_optimizer=0)
+gp_log10G.fit(param_array_postprocess, log10G)
+
+param_list = [0.5, 0.0]
+param_list_postprocess = np.array(param_list)
+for i in range(len(param_mins)):
+    param_list_postprocess[i] = (param_list_postprocess[i]-param_mins[i])/(param_maxs[i]-param_mins[i])
+
+log10Teff_pred, log10Teff_sigma2 = gp_log10Teff.predict(np.atleast_2d(param_list_postprocess), return_std=True)
+log10G_pred, log10G_sigma2 = gp_log10G.predict(np.atleast_2d(param_list_postprocess), return_std=True)
+
+print(log10Teff_pred, log10Teff_sigma2)
+print(log10G_pred, log10G_sigma2)
+print(stop)
+
 n=1
 final=[]
 
