@@ -306,6 +306,8 @@ if opts.doPlots:
     plotName = os.path.join(path_out_dir,'phot.pdf')
     plt.figure(figsize=(12,8))
     plt.errorbar(mjd-mjd[0],mag,yerr=magerr,fmt='bo')
+    fittedmodel = fdecomp.make_f(period)
+    plt.plot(mjd-mjd[0],fittedmodel(mjd,*LCfit),'k-')
     plt.xlabel('Time from %.5f [days]'%mjd[0])
     plt.ylabel('Magnitude [ab]')
     plt.gca().invert_yaxis()
