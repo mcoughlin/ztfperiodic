@@ -19,6 +19,7 @@ from astropy.coordinates import SkyCoord
 
 import requests
 import tqdm
+import fdecomp
 
 from astroquery.vizier import Vizier
 
@@ -297,10 +298,16 @@ for harmonic in harmonics:
 fid.close()
 harmonics = np.loadtxt(filename)
 
+# fit the lightcurve with fourier components, using BIC to decide the optimal number of pars
+LCfit = fdecomp.fit_best(np.c_[mjd,mag,magerr],period,5,plotname=False)
+
+
 if opts.doPlots:
     plotName = os.path.join(path_out_dir,'phot.pdf')
     plt.figure(figsize=(12,8))
     plt.errorbar(mjd-mjd[0],mag,yerr=magerr,fmt='bo')
+    fittedmodel = fdecomp.make_f(period)
+    plt.plot(mjd-mjd[0],fittedmodel(mjd,*LCfit),'k-')
     plt.xlabel('Time from %.5f [days]'%mjd[0])
     plt.ylabel('Magnitude [ab]')
     plt.gca().invert_yaxis()
