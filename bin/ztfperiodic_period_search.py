@@ -169,6 +169,7 @@ f = h5py.File(matchFile, 'r+')
 for key in f.keys():
     keySplit = key.split("_")
     nid, ra, dec = int(keySplit[0]), float(keySplit[1]), float(keySplit[2])
+    coordinates.append((ra,dec))
 
     data = list(f[key])
     data = np.array(data).T
@@ -202,10 +203,6 @@ if opts.doGPU:
 
     proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=phase_bins, mag_bins=mag_bins, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
     results = proc.batched_run_const_nfreq(lightcurves, batch_size=10, freqs = freqs, only_keep_best_freq=True,show_progress=True)
-    finalresults=(([x[0] for x in coordinates]),([x[1] for x in coordinates]),([x[0] for x in results]),([x[2] for x in results]))
-    np.concatenate(finalresults)
-    finalresults=np.transpose(finalresults)
-
     for out in results:
         period = 1./out[0]
         significance=out[2]
