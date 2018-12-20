@@ -185,16 +185,18 @@ else:
 f.close()
 
 samples_per_peak = 10
+phase_bins, mag_bins = 20, 10
+
 df = 1./(samples_per_peak * baseline)
 nf = int(np.ceil((fmax - fmin) / df))
 freqs = fmin + df * np.arange(nf)
 
-significances, periods = [], []
+significances, periods_best = [], []
 
 if opts.doGPU:
     from cuvarbase.ce import ConditionalEntropyAsyncProcess
 
-    proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=20, mag_bins=10, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
+    proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=phase_bins, mag_bins=mag_bins, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
     results = proc.batched_run_const_nfreq(lightcurves, batch_size=10, freqs = freqs, only_keep_best_freq=True,show_progress=True)
     finalresults=(([x[0] for x in coordinates]),([x[1] for x in coordinates]),([x[0] for x in results]),([x[2] for x in results]))
     np.concatenate(finalresults)
@@ -203,31 +205,32 @@ if opts.doGPU:
     for out in results:
         period = 1./out[0]
         significance=out[2]
-        periods.append(period)
+        periods_best.append(period)
         significances.append(significance)  
 
 elif opts.doCPU:
 
     periods = 1/freqs
-    xbins=10
-    ybins=5
     period_jobs=1
 
-    for data in lightcurves:
+    for ii,data in enumerate(lightcurves):
+        if np.mod(ii,10) == 0:
+            print("%d/%d"%(ii,len(lightcurves)))
+
         copy = np.ma.copy(data)
         copy[:,1] = (copy[:,1]  - np.min(copy[:,1])) \
            / (np.max(copy[:,1]) - np.min(copy[:,1]))
-        partial_job = partial(CE, data=copy, xbins=xbins, ybins=ybins)
+        partial_job = partial(CE, data=copy, xbins=phase_bins, ybins=mag_bins)
         m = map if period_jobs <= 1 else Pool(period_jobs).map
         entropies = list(m(partial_job, periods))
 
         period = periods[np.argmin(entropies)]
         significance = np.min(entropies)
 
-        periods.append(period)
+        periods_best.append(period)
         significances.append(significance)
 
-for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,periods,significances):
+for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,periods_best,significances):
     if significance>6:
         phases = np.mod(lightcurve[:,0],2*period)/(2*period)
         magnitude, err = lightcurve[:,1], lightcurve[:,2]
