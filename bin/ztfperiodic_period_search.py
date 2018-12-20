@@ -162,10 +162,14 @@ period_ranges = [0,0.002777778,0.0034722,0.0041666,0.004861111,0.006944444,0.020
 folders = [None,"4min","5min","6min","7_10min","10_30min","30_60min","1_2hours","2_4hours","4_12hours","12_72hours","3_10days","10_50days","50_baseline"]
 
 lightcurves = []
+coordinates = []
 baseline=0
 
 f = h5py.File(matchFile, 'r+')
 for key in f.keys():
+    keySplit = key.split("_")
+    nid, ra, dec = int(keySplit[0]), float(keySplit[1]), float(keySplit[2])
+
     data = list(f[key])
     data = np.array(data).T
     if len(data[:,0]) < 50: continue
