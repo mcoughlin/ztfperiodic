@@ -43,6 +43,10 @@ condorDir = os.path.join(outputDir,'condor')
 if not os.path.isdir(condorDir):
     os.makedirs(condorDir)
 
+logDir = os.path.join(condorDir,'logs')
+if not os.path.isdir(logDir):
+    os.makedirs(logDir)
+
 directory="%s/*/*/*"%opts.dataDir
 
 condordag = os.path.join(condorDir,'condor.dag')
