@@ -2,19 +2,21 @@
 import os, sys
 import glob
 import optparse
+from functools import partial
 
 import tables
 import pandas as pd
 import numpy as np
 import h5py
 
-from cuvarbase.ce import ConditionalEntropyAsyncProcess
-
 def parse_commandline():
     """
     Parse the options given on the command-line.
     """
     parser = optparse.OptionParser()
+
+    parser.add_option("--doGPU",  action="store_true", default=False)
+    parser.add_option("--doCPU",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     parser.add_option("-m","--matchFile",default="/home/michael.coughlin/ZTF/Matchfiles/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.h5")
@@ -23,8 +25,131 @@ def parse_commandline():
 
     return opts
 
+def rephase(data, period=1.0, shift=0.0, col=0, copy=True):
+    """
+    Returns *data* (or a copy) phased with *period*, and shifted by a
+    phase-shift *shift*.
+
+    **Parameters**
+
+    data : array-like, shape = [n_samples, n_cols]
+        Array containing the time or phase values to be rephased in column
+        *col*.
+    period : number, optional
+        Period to phase *data* by (default 1.0).
+    shift : number, optional
+        Phase shift to apply to phases (default 0.0).
+    col : int, optional
+        Column in *data* containing the time or phase values to be rephased
+        (default 0).
+    copy : bool, optional
+        If True, a new array is returned, otherwise *data* is rephased
+        in-place (default True).
+
+    **Returns**
+
+    rephased : array-like, shape = [n_samples, n_cols]
+        Array containing the rephased *data*.
+    """
+    rephased = np.ma.array(data, copy=copy)
+    rephased[:, col] = get_phase(rephased[:, col], period, shift)
+
+    return rephased
+
+
+
+def get_phase(time, period=1.0, shift=0.0):
+    """
+    Returns *time* transformed to phase-space with *period*, after applying a
+    phase-shift *shift*.
+
+    **Parameters**
+
+    time : array-like, shape = [n_samples]
+        The times to transform.
+    period : number, optional
+        The period to phase by (default 1.0).
+    shift : number, optional
+        The phase-shift to apply to the phases (default 0.0).
+
+    **Returns**
+
+    phase : array-like, shape = [n_samples]
+        *time* transformed into phase-space with *period*, after applying a
+        phase-shift *shift*.
+    """
+    return (time / period - shift) % 1
+
+def CE(period, data, xbins=10, ybins=5):
+    """
+    Returns the conditional entropy of *data* rephased with *period*.
+
+    **Parameters**
+
+    period : number
+        The period to rephase *data* by.
+    data : array-like, shape = [n_samples, 2] or [n_samples, 3]
+        Array containing columns *time*, *mag*, and (optional) *error*.
+    xbins : int, optional
+        Number of phase bins (default 10).
+    ybins : int, optional
+        Number of magnitude bins (default 5).
+    """
+    if period <= 0:
+        return np.PINF
+
+    r = rephase(data, period)
+    bins, xedges, yedges = np.histogram2d(r[:,0], r[:,1], [xbins, ybins], [[0,1], [0,1]])
+    size = r.shape[0]
+
+# The following code was once more readable, but much slower.
+# Here is what it used to be:
+# -----------------------------------------------------------------------
+#    return np.sum((lambda p: p * np.log(np.sum(bins[i,:]) / size / p) \
+#                             if p > 0 else 0)(bins[i][j] / size)
+#                  for i in np.arange(0, xbins)
+#                  for j in np.arange(0, ybins)) if size > 0 else np.PINF
+# -----------------------------------------------------------------------
+# TODO: replace this comment with something that's not old code
+    if size > 0:
+        # bins[i,j] / size
+        divided_bins = bins / size
+        # indices where that is positive
+        # to avoid division by zero
+        arg_positive = divided_bins > 0
+
+        # array containing the sums of each column in the bins array
+        column_sums = np.sum(divided_bins, axis=1) #changed 0 by 1
+        # array is repeated row-wise, so that it can be sliced by arg_positive
+        column_sums = np.repeat(np.reshape(column_sums, (xbins,1)), ybins, axis=1)
+        #column_sums = np.repeat(np.reshape(column_sums, (1,-1)), xbins, axis=0)
+
+
+        # select only the elements in both arrays which correspond to a
+        # positive bin
+        select_divided_bins = divided_bins[arg_positive]
+        select_column_sums  = column_sums[arg_positive]
+
+        # initialize the result array
+        A = np.empty((xbins, ybins), dtype=float)
+        # store at every index [i,j] in A which corresponds to a positive bin:
+        # bins[i,j]/size * log(bins[i,:] / size / (bins[i,j]/size))
+        A[ arg_positive] = select_divided_bins \
+                         * np.log(select_column_sums / select_divided_bins)
+        # store 0 at every index in A which corresponds to a non-positive bin
+        A[~arg_positive] = 0
+
+        # return the summation
+        return np.sum(A)
+    else:
+        return np.PINF
+
 # Parse command line
 opts = parse_commandline()
+
+if not (opts.doCPU or opts.doGPU):
+    print("--doCPU or --doGPU required")
+    exit(0)
 
 matchFile = opts.matchFile
 outputDir = opts.outputDir
@@ -59,41 +184,68 @@ else:
     fmin, fmax = 2/baseline, 480
 f.close()
 
-proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=20, mag_bins=10, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
 samples_per_peak = 10
 df = 1./(samples_per_peak * baseline)
 nf = int(np.ceil((fmax - fmin) / df))
 freqs = fmin + df * np.arange(nf)
-results = proc.batched_run_const_nfreq(lightcurves, batch_size=10, freqs = freqs, only_keep_best_freq=True,show_progress=True)
-finalresults=(([x[0] for x in coordinates]),([x[1] for x in coordinates]),([x[0] for x in results]),([x[2] for x in results]))
-np.concatenate(finalresults)
-finalresults=np.transpose(finalresults)    
 
-k=0
-while k<len(lightcurves):
-    out  = results[k]
-    period = 1./out[0]
-    significance=out[2]
+significances, periods = [], []
+
+if opts.doGPU:
+    from cuvarbase.ce import ConditionalEntropyAsyncProcess
+
+    proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=20, mag_bins=10, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
+    results = proc.batched_run_const_nfreq(lightcurves, batch_size=10, freqs = freqs, only_keep_best_freq=True,show_progress=True)
+    finalresults=(([x[0] for x in coordinates]),([x[1] for x in coordinates]),([x[0] for x in results]),([x[2] for x in results]))
+    np.concatenate(finalresults)
+    finalresults=np.transpose(finalresults)
+
+    for out in results:
+        period = 1./out[0]
+        significance=out[2]
+        periods.append(period)
+        significances.append(significance)  
+
+elif opts.doCPU:
+
+    periods = 1/freqs
+    xbins=10
+    ybins=5
+    period_jobs=1
+
+    for data in lightcurves:
+        copy = np.ma.copy(data)
+        copy[:,1] = (copy[:,1]  - np.min(copy[:,1])) \
+           / (np.max(copy[:,1]) - np.min(copy[:,1]))
+        partial_job = partial(CE, data=copy, xbins=xbins, ybins=ybins)
+        m = map if period_jobs <= 1 else Pool(period_jobs).map
+        entropies = list(m(partial_job, periods))
+
+        period = periods[np.argmin(entropies)]
+        significance = np.min(entropies)
+
+        periods.append(period)
+        significances.append(significance)
+
+for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,periods,significances):
     if significance>6:
-        phases=[]
-        for i in lightcurves[k][0]:
-            y=float(i)
-            phases.append(np.remainder(y,2*period)/2*period)
+        phases = np.mod(lightcurve[:,0],2*period)/(2*period)
+        magnitude, err = lightcurve[:,1], lightcurve[:,2]
+        RA, Dec = coordinate
 
-            magnitude=lightcurves[k][1]
-            err=lightcurves[k][2]
-            RA=coordinates[k][0]
-            Dec=coordinates[k][1]
+        fig = plt.figure(figsize=(10,10))
+        plt.gca().invert_yaxis()
+        ax=fig.add_subplot(1,1,1)
+        ax.errorbar(phases, magnitude,err,ls='none',c='k')
+        period2=period
+        ax.set_title(str(period2)+"_"+str(RA)+"_"+str(Dec))
 
-            fig = plt.figure(figsize=(10,10))
-            plt.gca().invert_yaxis()
-            ax=fig.add_subplot(1,1,1)
-            ax.errorbar(phases, magnitude,err,ls='none',c='k')
-            period2=period
-            ax.set_title(str(period2)+"_"+str(RA)+"_"+str(Dec))
-
-            figfile = "%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec, 
+        figfile = "%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec, 
                                                   period, fil)
-            pngfile = os.path.join(basefolder,figfile)
-            fig.savefig(pngfile)
-            plt.close()
+        idx = np.where((period>=period_ranges[0:]) & (period<=period_ranges[:-1]))[0]
+        folder = os.path.join(basefolder,folders[idx.astype(int)])
+        if not os.path.isdir(folder):
+            os.makedirs(folder)
+        pngfile = os.path.join(folder,figfile)
+        fig.savefig(pngfile)
+        plt.close()
