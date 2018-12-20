@@ -220,9 +220,10 @@ elif opts.doCPU:
         copy = np.ma.copy(data)
         copy[:,1] = (copy[:,1]  - np.min(copy[:,1])) \
            / (np.max(copy[:,1]) - np.min(copy[:,1]))
-        partial_job = partial(CE, data=copy, xbins=phase_bins, ybins=mag_bins)
-        m = map if period_jobs <= 1 else Pool(period_jobs).map
-        entropies = list(m(partial_job, periods))
+        entropies = []
+        for period in periods:
+            entropy = CE(period, data=copy, xbins=phase_bins, ybins=mag_bins)
+            entropies.append(entropy)
 
         period = periods[np.argmin(entropies)]
         significance = np.min(entropies)
