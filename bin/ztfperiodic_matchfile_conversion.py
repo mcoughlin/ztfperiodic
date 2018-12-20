@@ -1,29 +1,46 @@
 
 import os, sys
 import glob
+import optparse
 
 import tables
 import pandas as pd
 import numpy as np
 import h5py
 
+def parse_commandline():
+    """
+    Parse the options given on the command-line.
+    """
+    parser = optparse.OptionParser()
 
-dataDir = "/media/Data/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/"
-directory="%s/*/*/*"%dataDir
+    parser.add_option("-o","--outputDir",default="/media/Data/mcoughlin/Matchfiles")
+    parser.add_option("-d","--dataDir",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch")
 
-dataDir = "/media/Data/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc18/fr000251-000300/"
-directory="%s/*"%dataDir
+    opts, args = parser.parse_args()
 
-#dataDir = "/media/Data/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc02/fr000301-000350/"
-#directory="%s/*"%dataDir
+    return opts
 
-outputDir = "../output/matchfile"
-if not os.path.isdir(outputDir):
-    os.makedirs(outputDir)
+# Parse command line
+opts = parse_commandline()
+
+dataDir = opts.dataDir
+outputDir = opts.outputDir
+directory="%s/*/*/*"%opts.dataDir
 
 for f in glob.iglob(directory):
     #if not "ztf_000283_zr_c05_q3_match.pytable" in f: continue 
-    print(f)
+    fileend = "/".join(f.split("/")[-3:])
+    fnew = "%s/%s"%(outputDir,fileend)
+    filedir = "/".join(fnew.split("/")[:-1])
+    if not os.path.isdir(filedir):
+        os.makedirs(filedir)
+
+    fnew = fnew.replace("pytable","h5")
+    if os.path.isfile(fnew): continue
+
+    print("Running %s"%fnew)
+
     with tables.open_file(f) as store:
         for tbl in store.walk_nodes("/", "Table"):
             if tbl.name in ["sourcedata", "transientdata"]:
@@ -44,25 +61,29 @@ for f in glob.iglob(directory):
         if len(idx) == 0:
             continue
 
-        fname = f.split("/")[-1].replace("pytable","h5") 
-        filename = os.path.join(outputDir,fname)
-        f = h5py.File(filename, 'w')
+        f = h5py.File(fnew, 'w')
 
         matchids = np.unique(matchids[idx])
         nmatchids = len(idx)
 
+        cnt = 0
         for k in matchids:
+            if np.mod(cnt,10) == 0:
+                print('%d/%d'%(cnt,len(matchids)))
             df = merged[merged['matchid'] == k]
             RA = df.ra
             Dec = df.dec
             x = df.psfmag
             err=df.psfmagerr
-            obsHJD = df.hjd            
+            obsHJD = df.hjd
+
+            if len(x) < 50: continue
 
             data = np.vstack((obsHJD,x,err))
             key = "%d_%.10f_%.10f"%(k,RA.values[0],Dec.values[0])
-            print(key)
             f.create_dataset(key, data=data, dtype='f', compression="gzip",shuffle=True)
+
+            cnt = cnt + 1
+
         f.close()
 
-        print(stop)
