@@ -161,6 +161,13 @@ if not os.path.isfile(matchFile):
 period_ranges = [0,0.002777778,0.0034722,0.0041666,0.004861111,0.006944444,0.020833333,0.041666667,0.083333333,0.166666667,0.5,3.0,10.0,50.0,np.inf]
 folders = [None,"4min","5min","6min","7_10min","10_30min","30_60min","1_2hours","2_4hours","4_12hours","12_72hours","3_10days","10_50days","50_baseline"]
 
+catalogDir = os.path.join(outputDir,'catalog')
+if not os.path.isdir(catalogDir):
+    os.makedirs(catalogDir)
+
+matchFileEnd = matchFile.split("/")[-1].replace("h5","dat")
+catalogFile = os.path.join(catalogDir,matchFileEnd)
+
 lightcurves = []
 coordinates = []
 baseline=0
@@ -232,7 +239,10 @@ elif opts.doCPU:
         periods_best.append(period)
         significances.append(significance)
 
+fid = open(catalogFile,'w')
+
 for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,periods_best,significances):
+    fid.write('%.10f %.10f %.10f %.10f\n'%(coordinate[0],coordinate[1],period, significance))
     if significance>6:
         phases = np.mod(lightcurve[:,0],2*period)/(2*period)
         magnitude, err = lightcurve[:,1], lightcurve[:,2]
@@ -254,3 +264,5 @@ for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,
         pngfile = os.path.join(folder,figfile)
         fig.savefig(pngfile)
         plt.close()
+
+fid.close()
