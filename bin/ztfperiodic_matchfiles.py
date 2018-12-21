@@ -40,12 +40,12 @@ def parse_commandline():
     """
     parser = optparse.OptionParser()
 
-    parser.add_option("--dataDir",default="/media/Data/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/")
+    parser.add_option("--dataDir",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/")
     parser.add_option("-o","--outputDir",default="../output")
     parser.add_option("-i","--inputDir",default="../input")
 
-    parser.add_option("-r","--ra",default=296.9594842,type=float)
-    parser.add_option("-d","--declination",default=45.2661256,type=float)
+    parser.add_option("-r","--ra",default=234.884000,type=float)
+    parser.add_option("-d","--declination",default=50.460778,type=float)
     parser.add_option("-f","--filt",default="r")
 
     parser.add_option("-u","--user")

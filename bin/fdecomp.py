@@ -152,7 +152,7 @@ def fit(LC,p,Nterms=3,output='compact',plotname=False):
     model = f(t, *popt)
 
     # calc BICs
-    print np.r_[popt[:2], np.zeros(Nterms*2)]
+    print(np.r_[popt[:2], np.zeros(Nterms*2)])
     m0 = f(t, *np.r_[popt[:2], np.zeros(Nterms*2)])
     chi2_0 = np.sum(((y-m0)/dy)**2)
     chi2 = np.sum(((y-model)/dy)**2)
