@@ -211,8 +211,11 @@ if opts.doGPU:
     proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=phase_bins, mag_bins=mag_bins, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
     results = proc.batched_run_const_nfreq(lightcurves, batch_size=10, freqs = freqs, only_keep_best_freq=True,show_progress=True)
     for out in results:
-        period = 1./out[0]
-        significance=out[2]
+        periods = 1./out[0]
+        entropies = out[1]
+        significance = np.abs(np.min(entropies)-np.median(entropies))/np.std(entropies)
+        period = periods[np.argmin(entropies)]
+
         periods_best.append(period)
         significances.append(significance)  
 
@@ -232,9 +235,8 @@ elif opts.doCPU:
         for period in periods:
             entropy = CE(period, data=copy, xbins=phase_bins, ybins=mag_bins)
             entropies.append(entropy)
-
+        significance = np.abs(np.min(entropies)-np.median(entropies))/np.std(entropies)
         period = periods[np.argmin(entropies)]
-        significance = np.min(entropies)
 
         periods_best.append(period)
         significances.append(significance)
