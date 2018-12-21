@@ -21,6 +21,7 @@ def parse_commandline():
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     parser.add_option("-m","--matchFile",default="/home/michael.coughlin/ZTF/Matchfiles/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.h5")
+    parser.add_option("-b","--batch_size",default=1,type=int)
 
     opts, args = parser.parse_args()
 
@@ -154,6 +155,7 @@ if not (opts.doCPU or opts.doGPU):
 
 matchFile = opts.matchFile
 outputDir = opts.outputDir
+batch_size = opts.batch_size
 
 if not os.path.isfile(matchFile):
     print("%s missing..."%matchFile)
@@ -210,7 +212,7 @@ if opts.doGPU:
     from cuvarbase.ce import ConditionalEntropyAsyncProcess
 
     proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=phase_bins, mag_bins=mag_bins, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
-    results = proc.batched_run_const_nfreq(lightcurves, batch_size=10, freqs = freqs, only_keep_best_freq=True,show_progress=True)
+    results = proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, freqs = freqs, only_keep_best_freq=True,show_progress=True)
     for out in results:
         periods = 1./out[0]
         entropies = out[1]
