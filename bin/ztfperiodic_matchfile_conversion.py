@@ -2,6 +2,7 @@
 import os, sys
 import glob
 import optparse
+from pathlib import Path
 
 import tables
 import pandas as pd
@@ -59,6 +60,7 @@ for f in glob.iglob(directory):
         idx = np.where(counts>50)[0]
 
         if len(idx) == 0:
+            Path(fnew).touch()
             continue
 
         f = h5py.File(fnew, 'w')
@@ -68,7 +70,7 @@ for f in glob.iglob(directory):
 
         cnt = 0
         for k in matchids:
-            if np.mod(cnt,10) == 0:
+            if np.mod(cnt,100) == 0:
                 print('%d/%d'%(cnt,len(matchids)))
             df = merged[merged['matchid'] == k]
             RA = df.ra
@@ -81,8 +83,7 @@ for f in glob.iglob(directory):
 
             data = np.vstack((obsHJD,x,err))
             key = "%d_%.10f_%.10f"%(k,RA.values[0],Dec.values[0])
-            f.create_dataset(key, data=data, dtype='f', compression="gzip",shuffle=True)
-
+            f.create_dataset(key, data=data, dtype='float64', compression="gzip",shuffle=True)
             cnt = cnt + 1
 
         f.close()
