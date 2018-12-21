@@ -19,6 +19,7 @@ def parse_commandline():
 
     parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output")
     parser.add_option("-d","--dataDir",default="/home/mcoughlin/ZTF/Matchfiles")
+    parser.add_option("-b","--batch_size",default=1,type=int)
 
     opts, args = parser.parse_args()
 
@@ -38,6 +39,7 @@ else:
 
 dataDir = opts.dataDir
 outputDir = opts.outputDir
+batch_size = opts.batch_size
 
 condorDir = os.path.join(outputDir,'condor')
 if not os.path.isdir(condorDir):
@@ -46,6 +48,8 @@ if not os.path.isdir(condorDir):
 logDir = os.path.join(condorDir,'logs')
 if not os.path.isdir(logDir):
     os.makedirs(logDir)
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
 
 directory="%s/*/*/*"%opts.dataDir
 
@@ -56,10 +60,10 @@ fid1 = open(condorsh,'w')
 
 job_number = 0
 for f in glob.iglob(directory):
-    fid1.write('python ztfperiodic_period_search.py %s --outputDir %s --matchFile %s\n'%(cpu_gpu_flag, outputDir, f))
+    fid1.write('python %s/ztfperiodic_period_search.py %s --outputDir %s --matchFile %s\n'%(dir_path, cpu_gpu_flag, outputDir, f))
 
     fid.write('JOB %d condor.sub\n'%(job_number))
-    fid.write('RETRY %d 3\n'%(job_number))
+    fid.write('RETRY %d 0\n'%(job_number))
     fid.write('VARS %d jobNumber="%d" matchFile="%s"\n'%(job_number,job_number,f))
     fid.write('\n\n')
     job_number = job_number + 1
@@ -68,10 +72,10 @@ fid1.close()
 fid.close()
 
 fid = open(os.path.join(condorDir,'condor.sub'),'w')
-fid.write('executable = ztfperiodic_period_search.py\n')
+fid.write('executable = %s/ztfperiodic_period_search.py\n'%dir_path)
 fid.write('output = logs/out.$(jobNumber)\n');
 fid.write('error = logs/err.$(jobNumber)\n');
-fid.write('arguments = %s --outputDir %s --matchFile $(matchFile)\n'%(cpu_gpu_flag,outputDir))
+fid.write('arguments = %s --outputDir %s --batch_size %d --matchFile $(matchFile)\n'%(cpu_gpu_flag,outputDir,batch_size))
 fid.write('requirements = OpSys == "LINUX"\n');
 fid.write('request_memory = 4000\n');
 if opts.doCPU:
