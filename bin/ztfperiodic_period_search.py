@@ -10,6 +10,10 @@ import pandas as pd
 import numpy as np
 import h5py
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 def parse_commandline():
     """
     Parse the options given on the command-line.
@@ -22,6 +26,7 @@ def parse_commandline():
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     parser.add_option("-m","--matchFile",default="/home/michael.coughlin/ZTF/Matchfiles/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.h5")
     parser.add_option("-b","--batch_size",default=1,type=int)
+    parser.add_option("-a","--algorithm",default="CE")
 
     opts, args = parser.parse_args()
 
@@ -153,9 +158,14 @@ if not (opts.doCPU or opts.doGPU):
     print("--doCPU or --doGPU required")
     exit(0)
 
+algorithm = opts.algorithm
 matchFile = opts.matchFile
 outputDir = opts.outputDir
 batch_size = opts.batch_size
+
+if opts.doCPU and algorithm=="BLS":
+    print("BLS only available for --doGPU")
+    exit(0)
 
 if not os.path.isfile(matchFile):
     print("%s missing..."%matchFile)
@@ -170,6 +180,8 @@ if not os.path.isdir(catalogDir):
 
 matchFileEnd = matchFile.split("/")[-1].replace("h5","dat")
 catalogFile = os.path.join(catalogDir,matchFileEnd)
+matchFileEndSplit = matchFileEnd.split("_")
+fil = matchFileEndSplit[2][1]
 
 lightcurves = []
 coordinates = []
@@ -192,10 +204,10 @@ for key in f.keys():
         baseline=newbaseline
 
 if baseline<10:
-    basefolder = os.path.join(outputDir,'CEHC')
+    basefolder = os.path.join(outputDir,'%sHC'%algorithm)
     fmin, fmax = 18, 1440
 else:
-    basefolder = os.path.join(outputDir,'CE')
+    basefolder = os.path.join(outputDir,'%s'%algorithm)
     fmin, fmax = 2/baseline, 480
 f.close()
 
@@ -210,17 +222,35 @@ significances, periods_best = [], []
 
 if opts.doGPU:
     from cuvarbase.ce import ConditionalEntropyAsyncProcess
+    from cuvarbase.bls import eebls_gpu_fast
 
-    proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=phase_bins, mag_bins=mag_bins, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
-    results = proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, freqs = freqs, only_keep_best_freq=True,show_progress=True)
-    for out in results:
-        periods = 1./out[0]
-        entropies = out[1]
-        significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
-        period = periods[np.argmin(entropies)]
+    if algorithm == "CE":
+        proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=phase_bins, mag_bins=mag_bins, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
+        results = proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, freqs = freqs, only_keep_best_freq=True,show_progress=True)
+        for out in results:
+            periods = 1./out[0]
+            entropies = out[1]
+            significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
+            period = periods[np.argmin(entropies)]
 
-        periods_best.append(period)
-        significances.append(significance)  
+            periods_best.append(period)
+            significances.append(significance)  
+
+    elif algorithm == "BLS":
+        for ii,data in enumerate(lightcurves):
+            if np.mod(ii,10) == 0:
+                print("%d/%d"%(ii,len(lightcurves)))
+            copy = np.ma.copy(data).T
+            powers = eebls_gpu_fast(copy[:,0],copy[:,1], copy[:,2],
+                                    freq_batch_size=batch_size,
+                                    freqs = freqs)
+
+            significance = np.abs(np.mean(powers)-np.max(powers))/np.std(powers)
+            freq = freqs[np.argmax(powers)]
+            period = 1.0/freq
+
+            periods_best.append(period)
+            significances.append(significance)
 
 elif opts.doCPU:
 
@@ -231,7 +261,7 @@ elif opts.doCPU:
         if np.mod(ii,10) == 0:
             print("%d/%d"%(ii,len(lightcurves)))
 
-        copy = np.ma.copy(data)
+        copy = np.ma.copy(data).T
         copy[:,1] = (copy[:,1]  - np.min(copy[:,1])) \
            / (np.max(copy[:,1]) - np.min(copy[:,1]))
         entropies = []
@@ -249,8 +279,9 @@ fid = open(catalogFile,'w')
 for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,periods_best,significances):
     fid.write('%.10f %.10f %.10f %.10f\n'%(coordinate[0],coordinate[1],period, significance))
     if significance>6:
-        phases = np.mod(lightcurve[:,0],2*period)/(2*period)
-        magnitude, err = lightcurve[:,1], lightcurve[:,2]
+        copy = np.ma.copy(lightcurve).T
+        phases = np.mod(copy[:,0],2*period)/(2*period)
+        magnitude, err = copy[:,1], copy[:,2]
         RA, Dec = coordinate
 
         fig = plt.figure(figsize=(10,10))
@@ -260,9 +291,11 @@ for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,
         period2=period
         ax.set_title(str(period2)+"_"+str(RA)+"_"+str(Dec))
 
-        figfile = "%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec, 
+        figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec, 
                                                   period, fil)
-        idx = np.where((period>=period_ranges[0:]) & (period<=period_ranges[:-1]))[0]
+        idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
+        if folders[idx.astype(int)] == None:
+            continue
         folder = os.path.join(basefolder,folders[idx.astype(int)])
         if not os.path.isdir(folder):
             os.makedirs(folder)
