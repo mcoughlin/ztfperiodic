@@ -214,7 +214,7 @@ if opts.doGPU:
     for out in results:
         periods = 1./out[0]
         entropies = out[1]
-        significance = np.abs(np.min(entropies)-np.median(entropies))/np.std(entropies)
+        significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
         period = periods[np.argmin(entropies)]
 
         periods_best.append(period)
@@ -236,7 +236,7 @@ elif opts.doCPU:
         for period in periods:
             entropy = CE(period, data=copy, xbins=phase_bins, ybins=mag_bins)
             entropies.append(entropy)
-        significance = np.abs(np.min(entropies)-np.median(entropies))/np.std(entropies)
+        significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
         period = periods[np.argmin(entropies)]
 
         periods_best.append(period)
