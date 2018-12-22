@@ -17,6 +17,7 @@ def parse_commandline():
 
     parser.add_option("-o","--outputDir",default="/media/Data/mcoughlin/Matchfiles")
     parser.add_option("-d","--dataDir",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch")
+    parser.add_option("-f","--filename",default=None)
 
     opts, args = parser.parse_args()
 
@@ -30,7 +31,8 @@ outputDir = opts.outputDir
 directory="%s/*/*/*"%opts.dataDir
 
 for f in glob.iglob(directory):
-    #if not "ztf_000283_zr_c05_q3_match.pytable" in f: continue 
+    if opts.filename is not None:
+        if not opts.filename in f: continue
     fileend = "/".join(f.split("/")[-3:])
     fnew = "%s/%s"%(outputDir,fileend)
     filedir = "/".join(fnew.split("/")[:-1])
