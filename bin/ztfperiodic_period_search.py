@@ -174,7 +174,7 @@ if not os.path.isfile(matchFile):
 period_ranges = [0,0.002777778,0.0034722,0.0041666,0.004861111,0.006944444,0.020833333,0.041666667,0.083333333,0.166666667,0.5,3.0,10.0,50.0,np.inf]
 folders = [None,"4min","5min","6min","7_10min","10_30min","30_60min","1_2hours","2_4hours","4_12hours","12_72hours","3_10days","10_50days","50_baseline"]
 
-catalogDir = os.path.join(outputDir,'catalog')
+catalogDir = os.path.join(outputDir,'catalog',algorithm)
 if not os.path.isdir(catalogDir):
     os.makedirs(catalogDir)
 
@@ -187,6 +187,7 @@ lightcurves = []
 coordinates = []
 baseline=0
 
+print('Organizing lightcurves...')
 f = h5py.File(matchFile, 'r+')
 for key in f.keys():
     keySplit = key.split("_")
@@ -218,11 +219,22 @@ df = 1./(samples_per_peak * baseline)
 nf = int(np.ceil((fmax - fmin) / df))
 freqs = fmin + df * np.arange(nf)
 
+if opts.doGPU and (algorithm == "PDM"):
+    from cuvarbase.utils import weights
+    lightcurves_pdm = []
+    for lightcurve in lightcurves:
+        t, y, dy = lightcurve
+        lightcurves_pdm.append((t, y, weights(np.ones(dy.shape)), freqs))
+    lightcurves = lightcurves_pdm 
+
 significances, periods_best = [], []
 
+print('Period finding lightcurves...')
 if opts.doGPU:
     from cuvarbase.ce import ConditionalEntropyAsyncProcess
     from cuvarbase.bls import eebls_gpu_fast
+    from cuvarbase.lombscargle import LombScargleAsyncProcess, fap_baluev
+    from cuvarbase.pdm import PDMAsyncProcess
 
     if algorithm == "CE":
         proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=phase_bins, mag_bins=mag_bins, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
@@ -244,6 +256,46 @@ if opts.doGPU:
             powers = eebls_gpu_fast(copy[:,0],copy[:,1], copy[:,2],
                                     freq_batch_size=batch_size,
                                     freqs = freqs)
+
+            significance = np.abs(np.mean(powers)-np.max(powers))/np.std(powers)
+            freq = freqs[np.argmax(powers)]
+            period = 1.0/freq
+
+            periods_best.append(period)
+            significances.append(significance)
+
+    elif algorithm == "LS":
+        nfft_sigma, spp = 5, 3
+
+        ls_proc = LombScargleAsyncProcess(use_double=True,
+                                              sigma=nfft_sigma)
+
+        results = ls_proc.batched_run_const_nfreq(lightcurves, 
+                                                  batch_size=batch_size,
+                                                  use_fft=True,
+                                                  samples_per_peak=spp)  
+        ls_proc.finish()
+
+        for data, out in zip(lightcurves,results):
+            freqs, powers = out
+            copy = np.ma.copy(data).T
+            fap = fap_baluev(copy[:,0], copy[:,1], powers, np.max(freqs))
+            idx = np.argmin(fap)
+
+            period = 1./freqs[idx]
+            significance = 1./fap[idx]
+
+            periods_best.append(period)
+            significances.append(significance)
+
+    elif algorithm == "PDM":
+        kind, nbins = 'binned_linterp', 10
+
+        pdm_proc = PDMAsyncProcess()
+        for lightcurve in lightcurves:
+            results = pdm_proc.run([lightcurve], kind=kind, nbins=nbins)
+            pdm_proc.finish()
+            powers = results[0]
 
             significance = np.abs(np.mean(powers)-np.max(powers))/np.std(powers)
             freq = freqs[np.argmax(powers)]
@@ -274,12 +326,15 @@ elif opts.doCPU:
         periods_best.append(period)
         significances.append(significance)
 
+print('Plotting lightcurves...')
 fid = open(catalogFile,'w')
-
 for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,periods_best,significances):
     fid.write('%.10f %.10f %.10f %.10f\n'%(coordinate[0],coordinate[1],period, significance))
     if significance>6:
-        copy = np.ma.copy(lightcurve).T
+        if opts.doGPU and (algorithm == "PDM"):
+            copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
+        else:
+            copy = np.ma.copy(lightcurve).T
         phases = np.mod(copy[:,0],2*period)/(2*period)
         magnitude, err = copy[:,1], copy[:,2]
         RA, Dec = coordinate
