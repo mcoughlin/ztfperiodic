@@ -22,6 +22,7 @@ def parse_commandline():
 
     parser.add_option("-o","--outputDir",default="/media/Data/mcoughlin/Matchfiles")
     parser.add_option("-p","--plotDir",default="/media/Data/mcoughlin/Matchfiles_plots")
+    
 
     parser.add_option("-d","--dataDir",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch")
     parser.add_option("-f","--filename",default=None)
@@ -43,7 +44,14 @@ if opts.doDetrend:
 
 dataDir = opts.dataDir
 outputDir = opts.outputDir
-plotDir = opts.plotDir
+
+plotDir = os.path.join(outputDir,'plots')
+if not os.path.isdir(plotDir):
+    os.makedirs(plotDir)
+catalogDir = os.path.join(outputDir,'catalog')
+if not os.path.isdir(catalogDir):
+    os.makedirs(catalogDir)
+
 directory="%s/*/*/*"%opts.dataDir
 
 for f in glob.iglob(directory):
@@ -60,8 +68,14 @@ for f in glob.iglob(directory):
     if not os.path.isdir(pdir):
         os.makedirs(pdir)
 
+    cnew =  "%s/%s"%(catalogDir,fileend)
+    cdir = "/".join(cnew.split("/")[:-1])
+    if not os.path.isdir(cdir):
+        os.makedirs(cdir)
+
     fnew = fnew.replace("pytable","h5")
     pnew = pnew.replace("pytable","png")
+    cnew = cnew.replace("pytable","dat")
     if not opts.doOverwrite:
         if os.path.isfile(fnew): continue
 
@@ -143,6 +157,7 @@ for f in glob.iglob(directory):
                 ax = fig.add_subplot(1, 1, 1)
                 colors=cm.rainbow(np.linspace(0,1,len(lcs)))
 
+            fid = open(cnew,'w')
             cnt = 0
             for obsHJD, x, err, RA, Dec, k in zip(times, lcs, errs, RAs, Decs, ids):
                 if np.mod(cnt,100) == 0:
@@ -152,6 +167,7 @@ for f in glob.iglob(directory):
                 key = "%d_%.10f_%.10f"%(k,RA,Dec)
                 f.create_dataset(key, data=data, dtype='float64', compression="gzip",shuffle=True)
 
+                fid.write('%.10f %.10f %.10f\n'%(RA,Dec,len(x)/np.max(ncounts)))
                 if opts.doPlots:
                     vals = vals - np.median(vals)
                     bins = np.linspace(np.min(vals),np.max(vals),11)
@@ -167,6 +183,7 @@ for f in glob.iglob(directory):
 
                 cnt = cnt + 1
 
+            fid.close()
             if opts.doPlots:
                 ax.set_yscale('log')
                 plt.savefig(pnew)
@@ -177,8 +194,9 @@ for f in glob.iglob(directory):
             if opts.doPlots:
                 fig = plt.figure(figsize=(30,10))
                 ax = fig.add_subplot(1, 1, 1)
-                colors=cm.rainbow(np.linspace(0,1,len(lcs)))
+                colors=cm.rainbow(np.linspace(0,1,len(matchids)))
 
+            fid = open(cnew,'w')
             cnt = 0
             for k in matchids:
                 if np.mod(cnt,100) == 0:
@@ -193,6 +211,8 @@ for f in glob.iglob(directory):
                 key = "%d_%.10f_%.10f"%(k,RA.values[0],Dec.values[0])
                 f.create_dataset(key, data=data, dtype='float64', compression="gzip",shuffle=True)
 
+                fid.write('%.10f %.10f %.10f\n'%(RA.values[0],Dec.values[0],len(x)/np.max(ncounts)))
+
                 if opts.doPlots:
                     x = x - np.median(x)
                     bins = np.linspace(np.min(x.values),np.max(x.values),11)
@@ -202,6 +222,7 @@ for f in glob.iglob(directory):
 
                 cnt = cnt + 1
 
+            fid.close()
             if opts.doPlots:
                 ax.set_yscale('log')
                 plt.savefig(pnew)
