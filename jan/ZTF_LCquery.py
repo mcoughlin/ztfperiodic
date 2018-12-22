@@ -23,7 +23,6 @@ if __name__ == "__main__":
     parser.add_argument("--verbose",'-v',action="store_true", default=False,help='verbose') 
     parser.add_argument("--save",'-s',action="store_true", default=False,help='save to txt files')    
     args = parser.parse_args()
-
     verbose = args.verbose
 
     # load the coordinates

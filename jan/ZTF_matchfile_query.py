@@ -43,7 +43,7 @@ def connect_to_db(_config):
 
 
 
-def query_db(coords,r=3.):
+def query_db(coords,r=3.,catname='ZTF_20181219'):
     """ given a set of coordinates, get the matchIDs from the database
         Note that everything that is in the aperture is returned.
     
@@ -52,6 +52,10 @@ def query_db(coords,r=3.):
 
     coords : 2d-array
         2d-array with Ra,dec in degrees
+    r : float
+        matching radius
+    coords : str
+        catalog name
 
     Returns
     -------
@@ -86,7 +90,7 @@ def query_db(coords,r=3.):
         query['$or'].append(obj_query)
 
     # execute query: [return only id's as an example]
-    cursor = db['ZTF_20180919'].find(query, {'_id': 1})
+    cursor = db[catname].find(query, {'_id': 1})
     
     # put the matchIDs in an array
     matchIDs = np.array([i['_id'] for i in list(cursor)],dtype='str')
@@ -106,7 +110,7 @@ def split_objID(ID):
 
 
 
-def make_filename(fID,rcID,filt,filedir="/media/Data/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/"):
+def make_filename(fID,rcID,filt,filedir="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/"):
     """for a fieldID, CCDid, and filter make the filename"""
     
     filtdict = {1:'g',2:'r',3:'i',}
