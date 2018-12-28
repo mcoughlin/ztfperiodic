@@ -121,13 +121,12 @@ if not os.path.isdir(baseplotDir):
 
 lightcurveFile = os.path.join(dataDir,'JulyChimeraBJD.csv')
 data=np.loadtxt(lightcurveFile,skiprows=1,delimiter=' ')
-
+data[:,4] = np.abs(data[:,4])
 #y, dy=Detrending.detrending(data)
 
 y=data[:,3]/np.max(data[:,3])
 dy=data[:,4]/np.max(data[:,3])
 t=data[:,0]
-tmin, tmax = np.min(t), np.max(t)
 
 r1 = 0.125
 r2 = 0.3
@@ -144,6 +143,10 @@ ldc_2=0.4548
 gdc_2=0.61
 f_c=0
 f_s=0
+
+tmin, tmax = np.min(t), np.max(t)
+tmin, tmax = np.min(t), np.min(t)+p
+
 # generate the test light curve given parameters
 
 model_pars = [r1,r2,J,i,t0,scale,heat_2,q] # the parameters
