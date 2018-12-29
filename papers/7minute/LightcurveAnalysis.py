@@ -66,7 +66,8 @@ def basic_model(t,pars,grid='default'):
                 f_s=0,
                 t_exp=3.0/86400,
                 grid_1=grid,
-                grid_2=grid, heat_2 = pars[6],exact_grav=True)
+                grid_2=grid, heat_2 = pars[6],exact_grav=True,
+                verbose=0)
         m *= pars[5]
 
     except:
