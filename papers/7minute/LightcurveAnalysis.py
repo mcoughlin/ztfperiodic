@@ -32,6 +32,7 @@ def parse_commandline():
     parser.add_option("-o","--outputDir",default="../../output")
     parser.add_option("-p","--plotDir",default="../../plots")
     parser.add_option("-d","--dataDir",default="../../data/lightcurves")
+    parser.add_option("-e","--errorbudget",default=0.0,type=float)
 
     opts, args = parser.parse_args()
 
@@ -116,6 +117,7 @@ opts = parse_commandline()
 
 dataDir = opts.dataDir
 baseplotDir = os.path.join(opts.plotDir,'Lightcurve')
+baseplotDir = os.path.join(baseplotDir,"%.5f"%opts.errorbudget)
 
 if not os.path.isdir(baseplotDir):
     os.makedirs(baseplotDir)
@@ -126,7 +128,7 @@ data[:,4] = np.abs(data[:,4])
 #y, dy=Detrending.detrending(data)
 
 y=data[:,3]/np.max(data[:,3])
-dy=data[:,4]/np.max(data[:,3])
+dy=np.sqrt(data[:,4]**2 + opts.errorbudget**2)/np.max(data[:,3])
 t=data[:,0]
 
 r1 = 0.125
