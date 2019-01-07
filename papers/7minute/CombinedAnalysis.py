@@ -19,6 +19,7 @@ from matplotlib.pyplot import cm
 plt.rcParams.update({'font.size': 30})
 
 import scipy.stats as ss
+from scipy import interpolate
 
 import corner
 import pymultinest
@@ -249,13 +250,25 @@ H, xedges1, yedges1 = np.histogram2d(models_m1,models_m2,bins=(xedges, yedges))
 x = (xedges1[1:] + xedges1[:-1])/2.0
 y = (yedges1[1:] + yedges1[:-1])/2.0
 X, Y = np.meshgrid(x, y)
-CS = plt.contour(X, Y, H.T, 10, colors='r')
+H = H / np.sum(H)
+n = 1000
+t = np.linspace(0, H.max(), n)
+integral = ((H >= t[:, None, None]) * H).sum(axis=(1,2))
+f = interpolate.interp1d(integral, t)
+t_contours = f(np.array([0.68, 0.5, 0.32]))
+CS = plt.contour(X, Y, H.T, t_contours, colors='r')
 
 H, xedges2, yedges2 = np.histogram2d(mass1,mass2,bins=(xedges, yedges))
 x = (xedges2[1:] + xedges2[:-1])/2.0
 y = (yedges2[1:] + yedges2[:-1])/2.0
 X, Y = np.meshgrid(x, y)
-CS = plt.contour(X, Y, H.T, 10, colors='g')
+H = H / np.sum(H)
+n = 1000
+t = np.linspace(0, H.max(), n)
+integral = ((H >= t[:, None, None]) * H).sum(axis=(1,2))
+f = interpolate.interp1d(integral, t)
+t_contours = f(np.array([0.68, 0.5, 0.32]))
+CS = plt.contour(X, Y, H.T, t_contours, colors='g')
 
 plt.xlim(0.22,1.2)
 plt.ylim(0,0.8)
@@ -270,8 +283,8 @@ x=np.linspace(0,1.2,1000)
 # measured q's by lightcurve (replace me)
 y1=q_5*x
 y2=q_95*x
-plt.plot(x,y1,'b--')
-plt.plot(x,y2,'b--')
+#plt.plot(x,y1,'b--')
+#plt.plot(x,y2,'b--')
 
 plt.xlabel('$m_1$')
 plt.ylabel('$m_2$')
