@@ -9,41 +9,11 @@ import tables
 from concurrent.futures import as_completed
 from astropy.io import fits
 import matplotlib.pyplot as plt
-import pymongo
+from penquins import Kowalski
 
 
 
-def connect_to_db(_config):
-    """ setup the connection to the matchID database
-    
-    Parameters
-    ----------
-
-    _config : dict
-        configuration
-
-    Returns
-    -------
-    _client : ???
-        ???
-    _db : ???
-        object to interface with db
-    
-
-    """
-
-    _client = pymongo.MongoClient(host=_config['database']['host'], port=_config['database']['port'])
-    # grab main database:
-    _db = _client[_config['database']['db']]
-
-    # authenticate
-    _db.authenticate(_config['database']['user'], _config['database']['pwd'])
-
-    return _client, _db
-
-
-
-def query_db(coords,r=3.,catname='ZTF_20181219'):
+def query_db(coords,r=3.):
     """ given a set of coordinates, get the matchIDs from the database
         Note that everything that is in the aperture is returned.
     
@@ -65,18 +35,9 @@ def query_db(coords,r=3.,catname='ZTF_20181219'):
 
     """
 
-    # db config
-    config = {'database':
-                  {
-                      'host': 'kowalski.caltech.edu',
-                      'port': 27017,
-                      'db': 'ztf',
-                      'user': 'ztf_reader',
-                      'pwd': 'VerySecretPa$$word'
-                  }
-    }
-    _, db = connect_to_db(config)
-
+    k = Kowalski(username='jroestel', 
+            password='Erg$terkWachtwoord', verbose=False)
+    
     # cone search radius must be in radians:
     cone_search_radius = r * np.pi / 180.0 / 3600.
 
@@ -89,11 +50,16 @@ def query_db(coords,r=3.,catname='ZTF_20181219'):
             '$geoWithin': {'$centerSphere': [[ra-180., dec], cone_search_radius]}}}
         query['$or'].append(obj_query)
 
-    # execute query: [return only id's as an example]
-    cursor = db[catname].find(query, {'_id': 1})
-    
-    # put the matchIDs in an array
-    matchIDs = np.array([i['_id'] for i in list(cursor)],dtype='str')
+
+    q = {"query_type": "general_search", 
+         "query": "db['ZTF_20181220'].find(%s)" %(query)  
+         }
+
+    # execute query    
+    output = k.query(query=q)
+
+    # get matchids
+    matchIDs = [str(l['_id']) for l in output['result_data']['query_result']]
 
     return(matchIDs)
 
