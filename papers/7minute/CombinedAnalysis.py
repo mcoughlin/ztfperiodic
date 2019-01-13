@@ -213,7 +213,6 @@ title_fontsize = 26
 label_fontsize = 30
 
 parameters = ["mass1","mass2"]
-labels = [r"$m_1$",r"$m_2$"]
 n_params = len(parameters)
 
 plotDir = os.path.join(baseplotDir,'com')
@@ -228,16 +227,6 @@ data = np.loadtxt(multifile)
 mass1, mass2, loglikelihood = data[:,0], data[:,1], data[:,2]
 idx = np.argmax(loglikelihood)
 mass1_best, mass2_best = data[idx,0:-1]
-
-plotName = "%s/corner.pdf"%(plotDir)
-figure = corner.corner(data[:,:-1], labels=labels,
-                       quantiles=[0.16, 0.5, 0.84],
-                       show_titles=True, title_kwargs={"fontsize": title_fontsize},
-                       label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
-                       smooth=3)
-figure.set_size_inches(18.0,18.0)
-plt.savefig(plotName)
-plt.close()
 
 plotName = "%s/constraints.pdf"%(baseplotDir)
 fig = plt.figure(figsize=(28,28))
@@ -255,7 +244,8 @@ n = 1000
 t = np.linspace(0, H.max(), n)
 integral = ((H >= t[:, None, None]) * H).sum(axis=(1,2))
 f = interpolate.interp1d(integral, t)
-t_contours = f(np.array([0.68, 0.5, 0.32]))
+#t_contours = f(np.array([0.68, 0.5, 0.32]))
+t_contours = f(np.array([0.50]))
 CS = plt.contour(X, Y, H.T, t_contours, colors='r')
 
 H, xedges2, yedges2 = np.histogram2d(mass1,mass2,bins=(xedges, yedges))
@@ -267,7 +257,8 @@ n = 1000
 t = np.linspace(0, H.max(), n)
 integral = ((H >= t[:, None, None]) * H).sum(axis=(1,2))
 f = interpolate.interp1d(integral, t)
-t_contours = f(np.array([0.68, 0.5, 0.32]))
+#t_contours = f(np.array([0.68, 0.5, 0.32]))
+t_contours = f(np.array([0.50]))
 CS = plt.contour(X, Y, H.T, t_contours, colors='g')
 
 plt.xlim(0.22,1.2)
@@ -299,6 +290,25 @@ a_s=np.sort(a)
 # a comes from spectroscopy
 r1=lightcurves_r1*a
 r2=lightcurves_r2*a
+
+ncombined = len(mass1)
+a_combined=(p**2*6.67*10**(-11)*(mass1+mass2)/(4*3.141592654**2))**(1/3)
+lightcurves_r1_combined = np.random.choice(data_lightcurves[:,0],size=ncombined)
+lightcurves_r2_combined = np.random.choice(data_lightcurves[:,1],size=ncombined)
+r1_combined = lightcurves_r1_combined*a_combined
+r2_combined = lightcurves_r2_combined*a_combined
+
+data = np.vstack((mass1,mass2,r1_combined,r2_combined)).T
+labels = [r"$m_1$",r"$m_2$",r"$r_1$",r"$r_2$"]
+plotName = "%s/corner.pdf"%(plotDir)
+figure = corner.corner(data, labels=labels,
+                       quantiles=[0.16, 0.5, 0.84],
+                       show_titles=True, title_kwargs={"fontsize": title_fontsize},
+                       label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
+                       smooth=3)
+figure.set_size_inches(18.0,18.0)
+plt.savefig(plotName)
+plt.close()
 
 r1s=np.sort(r1)
 r2s=np.sort(r2)
