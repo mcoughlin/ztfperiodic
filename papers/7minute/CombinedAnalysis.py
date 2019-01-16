@@ -19,6 +19,7 @@ from matplotlib.pyplot import cm
 plt.rcParams.update({'font.size': 30})
 
 import scipy.stats as ss
+from scipy import interpolate
 
 import corner
 import pymultinest
@@ -29,9 +30,9 @@ def parse_commandline():
     """
     parser = optparse.OptionParser()
 
-    parser.add_option("-o","--outputDir",default="../output")
-    parser.add_option("-p","--plotDir",default="../plots")
-    parser.add_option("-d","--dataDir",default="../data/posteriors")
+    parser.add_option("-o","--outputDir",default="../../output")
+    parser.add_option("-p","--plotDir",default="../../plots")
+    parser.add_option("-d","--dataDir",default="../../data/posteriors")
 
     opts, args = parser.parse_args()
 
@@ -154,9 +155,19 @@ models_file = os.path.join(opts.dataDir,'models.dat')
 data_models = np.loadtxt(models_file,usecols=(0,1,2,3))
 ndatam=len(data_models[:,0])
 
+lightcurves_file = os.path.join(opts.dataDir,'lightcurves.dat')
+data_lightcurves = np.loadtxt(lightcurves_file)
+ndatal=len(data_lightcurves[:,0])
+
+lightcurves_r1_model = np.random.choice(data_lightcurves[:,0],size=ndatam)
+lightcurves_r1 = np.random.choice(data_lightcurves[:,0],size=ndata)
+lightcurves_r2 = np.random.choice(data_lightcurves[:,1],size=ndata)
+lightcurves_q = data_lightcurves[:,7]
+q_5, q_50, q_95 = np.percentile(lightcurves_q,5), np.percentile(lightcurves_q,50), np.percentile(lightcurves_q,95)
+inclination = np.random.choice(data_lightcurves[:,3],size=ndata)
+
 models_m1, models_r1 = data_models[:,0], 10**data_models[:,3]
-# radii/a come from lightcurve (replace me)
-models_a=models_r1/np.random.normal(0.12833265627103668,0.010046116182493627,ndatam)
+models_a=models_r1/lightcurves_r1_model
 models_m2 = (1/2e30)*(4.0*(np.pi**2)/G)*((1e-2*models_a)**3)/p**2 - models_m1
 idx = np.where(models_m1>=models_m2)[0]
 models_m1, models_m2 = models_m1[idx], models_m2[idx]
@@ -171,16 +182,12 @@ pdot_m=np.random.normal(0.745134,0.00228,ndata)
 # JAN (replace me)
 col=np.random.normal(0.68,0.04,ndata)
 
-# lightcurve fitting (replace me)
-inclination=np.random.normal(83.222,0.562,ndata)
-
 inc=np.sin(inclination* np.pi / 180.)**3
 
 k1=smear*data_spectra[:,0]*1000
 k_m2=data_spectra[:,1]*1000
 
-# lightcurve fitting (replace me)
-r2=np.random.normal(0.2869784978955453,0.007519356801558582,ndata)
+r2=lightcurves_r2*1.0
 k2=1/2.0*((4*col*k1*k_m2*smear*r2+(-col*smear*k_m2*r2-smear*k_m2)**2)**0.5+col*smear*k_m2*r2+smear*k_m2)
 
 m1=(k2**3*p/(2*np.pi*6.67e-11*inc)*(1+k1/k2)**2)
@@ -206,7 +213,6 @@ title_fontsize = 26
 label_fontsize = 30
 
 parameters = ["mass1","mass2"]
-labels = [r"$m_1$",r"$m_2$"]
 n_params = len(parameters)
 
 plotDir = os.path.join(baseplotDir,'com')
@@ -222,16 +228,6 @@ mass1, mass2, loglikelihood = data[:,0], data[:,1], data[:,2]
 idx = np.argmax(loglikelihood)
 mass1_best, mass2_best = data[idx,0:-1]
 
-plotName = "%s/corner.pdf"%(plotDir)
-figure = corner.corner(data[:,:-1], labels=labels,
-                       quantiles=[0.16, 0.5, 0.84],
-                       show_titles=True, title_kwargs={"fontsize": title_fontsize},
-                       label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
-                       smooth=3)
-figure.set_size_inches(18.0,18.0)
-plt.savefig(plotName)
-plt.close()
-
 plotName = "%s/constraints.pdf"%(baseplotDir)
 fig = plt.figure(figsize=(28,28))
 
@@ -243,13 +239,27 @@ H, xedges1, yedges1 = np.histogram2d(models_m1,models_m2,bins=(xedges, yedges))
 x = (xedges1[1:] + xedges1[:-1])/2.0
 y = (yedges1[1:] + yedges1[:-1])/2.0
 X, Y = np.meshgrid(x, y)
-CS = plt.contour(X, Y, H.T, 10, colors='r')
+H = H / np.sum(H)
+n = 1000
+t = np.linspace(0, H.max(), n)
+integral = ((H >= t[:, None, None]) * H).sum(axis=(1,2))
+f = interpolate.interp1d(integral, t)
+#t_contours = f(np.array([0.68, 0.5, 0.32]))
+t_contours = f(np.array([0.50]))
+CS = plt.contour(X, Y, H.T, t_contours, colors='r')
 
 H, xedges2, yedges2 = np.histogram2d(mass1,mass2,bins=(xedges, yedges))
 x = (xedges2[1:] + xedges2[:-1])/2.0
 y = (yedges2[1:] + yedges2[:-1])/2.0
 X, Y = np.meshgrid(x, y)
-CS = plt.contour(X, Y, H.T, 10, colors='g')
+H = H / np.sum(H)
+n = 1000
+t = np.linspace(0, H.max(), n)
+integral = ((H >= t[:, None, None]) * H).sum(axis=(1,2))
+f = interpolate.interp1d(integral, t)
+#t_contours = f(np.array([0.68, 0.5, 0.32]))
+t_contours = f(np.array([0.50]))
+CS = plt.contour(X, Y, H.T, t_contours, colors='g')
 
 plt.xlim(0.22,1.2)
 plt.ylim(0,0.8)
@@ -262,10 +272,10 @@ plt.plot(data[0],data[1],'w--')
 
 x=np.linspace(0,1.2,1000)
 # measured q's by lightcurve (replace me)
-y1=(0.298+0.04356)*x
-y2=(0.298-0.04356)*x
-plt.plot(x,y1,'b--')
-plt.plot(x,y2,'b--')
+y1=q_5*x
+y2=q_95*x
+#plt.plot(x,y1,'b--')
+#plt.plot(x,y2,'b--')
 
 plt.xlabel('$m_1$')
 plt.ylabel('$m_2$')
@@ -278,8 +288,27 @@ a_s=np.sort(a)
 
 # radii/a come from lightcurve (replace me) 
 # a comes from spectroscopy
-r1=np.random.normal(0.12833265627103668,0.010046116182493627,ndata)*a
-r2=np.random.normal(0.2869784978955453,0.007519356801558582,ndata)*a
+r1=lightcurves_r1*a
+r2=lightcurves_r2*a
+
+ncombined = len(mass1)
+a_combined=(p**2*6.67*10**(-11)*(mass1+mass2)/(4*3.141592654**2))**(1/3)
+lightcurves_r1_combined = np.random.choice(data_lightcurves[:,0],size=ncombined)
+lightcurves_r2_combined = np.random.choice(data_lightcurves[:,1],size=ncombined)
+r1_combined = lightcurves_r1_combined*a_combined
+r2_combined = lightcurves_r2_combined*a_combined
+
+data = np.vstack((mass1,mass2,r1_combined,r2_combined)).T
+labels = [r"$m_1$",r"$m_2$",r"$r_1$",r"$r_2$"]
+plotName = "%s/corner.pdf"%(plotDir)
+figure = corner.corner(data, labels=labels,
+                       quantiles=[0.16, 0.5, 0.84],
+                       show_titles=True, title_kwargs={"fontsize": title_fontsize},
+                       label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
+                       smooth=3)
+figure.set_size_inches(18.0,18.0)
+plt.savefig(plotName)
+plt.close()
 
 r1s=np.sort(r1)
 r2s=np.sort(r2)

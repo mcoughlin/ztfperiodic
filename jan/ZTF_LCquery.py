@@ -21,9 +21,9 @@ if __name__ == "__main__":
     parser.add_argument("-r",type=float,default=1.0,help='match radius in arcsec')    
     parser.add_argument("--delimiter",type=str,default=None,help='delimiter of coord file')    
     parser.add_argument("--verbose",'-v',action="store_true", default=False,help='verbose') 
-    parser.add_argument("--save",'-s',action="store_true", default=False,help='save to txt files')    
+    parser.add_argument("--save",'-s',action="store_true", default=False,help='save to txt files')
+    parser.add_argument("--save_dir",help='directory of where to save files',type=str,default='./')
     args = parser.parse_args()
-
     verbose = args.verbose
 
     # load the coordinates
@@ -38,8 +38,11 @@ if __name__ == "__main__":
     if verbose:
         print("%d lightcurves found" %(len(objIDlist)))
 
+    print([s for s in objIDlist])
+
     # put in a pd dataframe for easy splitting by unique matchfiles
-    objID = pd.DataFrame([(s[:8],s[8:]) for s in objIDlist],dtype=int,columns=['fileID','matchID'])
+    objID = pd.DataFrame([(s[:8],s[8:]) for s in objIDlist],
+        dtype=int,columns=['fileID','matchID'])
 
     # loop over matchfiles
     info = []
@@ -70,10 +73,10 @@ if __name__ == "__main__":
         info = np.array(info)
         c2 = SkyCoord(ra=info[:,0]*u.degree, dec=info[:,1]*u.degree)
         idx, d2d, d3d = c2.match_to_catalog_sky(c1)
-        idx_g = idx[d2d<1*u.arcsec]
+        idx_g = idx[d2d<1*u.arcsec] # g&R&I matchiing radius of 1
 
-	Nlc = np.bincount(idx,minlength=np.size(coords[:,0]))
-	
+        Nlc = np.bincount(idx,minlength=np.size(coords[:,0]))
+    
         if verbose:
             print("# i: N        Ra       Dec")
             for k,(c,Nlc) in enumerate(zip(coords,Nlc)):
@@ -83,6 +86,7 @@ if __name__ == "__main__":
             # get coordinates
             ra,dec = coords[i]
             filename = "%08.4f_%.4f.dat" %(ra,dec)
+            filename = os.path.join(args.save_dir, filename)
 
             # get the data
             output = []
