@@ -56,8 +56,8 @@ def make_f(p):
         # fourier components, loops from 1 to ?
         for n in np.arange(1,(len(pars)-2)/2+1,1):
             phi = 2*np.pi*t/p
-            y += pars[n*2] * np.cos(n * phi)
-            y += pars[n*2+1] * np.sin(n * phi)
+            y += pars[int(n*2)] * np.cos(n * phi)
+            y += pars[int(n*2+1)] * np.sin(n * phi)
         return y
     return f
 
