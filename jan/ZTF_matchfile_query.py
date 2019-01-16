@@ -9,37 +9,7 @@ import tables
 from concurrent.futures import as_completed
 from astropy.io import fits
 import matplotlib.pyplot as plt
-import pymongo
-
-
-
-def connect_to_db(_config):
-    """ setup the connection to the matchID database
-    
-    Parameters
-    ----------
-
-    _config : dict
-        configuration
-
-    Returns
-    -------
-    _client : ???
-        ???
-    _db : ???
-        object to interface with db
-    
-
-    """
-
-    _client = pymongo.MongoClient(host=_config['database']['host'], port=_config['database']['port'])
-    # grab main database:
-    _db = _client[_config['database']['db']]
-
-    # authenticate
-    _db.authenticate(_config['database']['user'], _config['database']['pwd'])
-
-    return _client, _db
+from penquins import Kowalski
 
 
 
@@ -52,6 +22,10 @@ def query_db(coords,r=3.):
 
     coords : 2d-array
         2d-array with Ra,dec in degrees
+    r : float
+        matching radius
+    coords : str
+        catalog name
 
     Returns
     -------
@@ -61,18 +35,9 @@ def query_db(coords,r=3.):
 
     """
 
-    # db config
-    config = {'database':
-                  {
-                      'host': 'kowalski.caltech.edu',
-                      'port': 27017,
-                      'db': 'ztf',
-                      'user': 'ztf_reader',
-                      'pwd': 'VerySecretPa$$word'
-                  }
-    }
-    _, db = connect_to_db(config)
-
+    k = Kowalski(username='jroestel', 
+            password='Erg$terkWachtwoord', verbose=False)
+    
     # cone search radius must be in radians:
     cone_search_radius = r * np.pi / 180.0 / 3600.
 
@@ -85,11 +50,16 @@ def query_db(coords,r=3.):
             '$geoWithin': {'$centerSphere': [[ra-180., dec], cone_search_radius]}}}
         query['$or'].append(obj_query)
 
-    # execute query: [return only id's as an example]
-    cursor = db['ZTF_20180919'].find(query, {'_id': 1})
-    
-    # put the matchIDs in an array
-    matchIDs = np.array([i['_id'] for i in list(cursor)],dtype='str')
+
+    q = {"query_type": "general_search", 
+         "query": "db['ZTF_20181220'].find(%s)" %(query)  
+         }
+
+    # execute query    
+    output = k.query(query=q)
+
+    # get matchids
+    matchIDs = [str(l['_id']) for l in output['result_data']['query_result']]
 
     return(matchIDs)
 
@@ -106,7 +76,7 @@ def split_objID(ID):
 
 
 
-def make_filename(fID,rcID,filt,filedir="/media/Data/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/"):
+def make_filename(fID,rcID,filt,filedir="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/"):
     """for a fieldID, CCDid, and filter make the filename"""
     
     filtdict = {1:'g',2:'r',3:'i',}
