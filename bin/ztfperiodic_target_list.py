@@ -1,5 +1,5 @@
 
-import os, sys, glob
+import os, sys, glob, time
 import optparse
 import numpy as np
 import matplotlib
@@ -20,6 +20,8 @@ from astroplan import FixedTarget
 from astroplan.constraints import AtNightConstraint, AirmassConstraint
 from astroplan import observability_table
 
+from astroquery.simbad import Simbad
+
 def parse_commandline():
     """
     Parse the options given on the command-line.
@@ -28,6 +30,9 @@ def parse_commandline():
 
     parser.add_option("-o","--outfile",default="/Users/mcoughlin/Code/KP84/KevinPeriods/NewSearch/obj.dat")
     parser.add_option("-i","--inputDir",default="/Users/mcoughlin/Code/KP84/KevinPeriods/NewSearch/ForFollowUp/")
+    parser.add_option("-z","--ztfperiodicInputDir",default="../input")
+
+    parser.add_option("--doXray",  action="store_true", default=False)
 
     #parser.add_option("-o","--outfile",default="/Users/mcoughlin/Code/KP84/KevinPeriods/NewSearch/objLong.dat")
     #parser.add_option("-i","--inputDir",default="/Users/mcoughlin/Code/KP84/KevinPeriods/NewSearch/ForFollowUpLong/")
@@ -76,8 +81,14 @@ def convert_to_hex(val, delimiter=':', force_sign=False):
 opts = parse_commandline()
 inputDir = opts.inputDir
 outfile = opts.outfile
+ztfperiodicInputDir = opts.ztfperiodicInputDir
+
+if opts.doXray:
+    xrayfile = os.path.join(ztfperiodicInputDir,'xray.dat')
+    xray = np.genfromtxt(xrayfile, dtype="S20,f8,f8,f8,f8,f8",names=['names','ras','decs','errs','appfluxes','absfluxes'], delimiter=" ")
 
 observed = ["ZTFJ20071648","ZTFJ19274408","ZTFJ18320856","ZTFJ19385841","ZTFJ19541818","ZTFJ18492550","ZTFJ18390938","ZTFJ17182524","ZTFJ17483237","ZTFJ18174120","ZTFJ19244707","ZTFJ20062220","ZTFJ19243104","ZTFJ1913-1205","ZTFJ1909-0654","ZTFJ18494132","ZTFJ18461355","ZTFJ1913-1105","ZTFJ1921-0815","ZTFJ1905-1910","ZTFJ1843-2041","ZTFJ1924-1258","ZTFJ1914-0718","ZTFJ1909-1437","ZTFJ18261000","ZTFJ18221209","ZTFJ1903-1730","ZTFJ1903-0721","ZTFJ1903-0721","ZTFJ18562916","ZTFJ18451515","ZTFJ18321130"]
+observed = []
 
 fid = open(outfile,'w')
 filenames = glob.glob(os.path.join(inputDir,"*.png"))
@@ -85,8 +96,21 @@ sigs = []
 for filename in filenames:
     filenameSplit = filename.split("/")[-1].replace(".png","").split("_")
     sig, ra, dec, period = float(filenameSplit[0]), float(filenameSplit[1]), float(filenameSplit[2]), float(filenameSplit[3])
-    sigs.append(sig)
+
+    if opts.doXray:
+        idx1 = np.where(np.abs(xray["ras"] - ra)<=2e-3)[0]
+        idx2 = np.where(np.abs(xray["decs"] - dec)<=2e-3)[0]
+        idx = np.intersect1d(idx1,idx2)
+        if len(idx) > 0:
+            appflux = xray["appfluxes"][idx[0]]
+            absflux = xray["absfluxes"][idx[0]]
+        else:
+            appflux, absflux = np.nan, np.nan
+        sigs.append(appflux)
+    else:
+        sigs.append(sig)
 filenames = [x for _,x in sorted(zip(sigs,filenames))]
+print(filenames)
 
 FixedTargets = []
 for filename in filenames:
@@ -101,11 +125,30 @@ for filename in filenames:
 
     if objname in observed: continue
 
-    fid.write('%s %.5f %.5f %.5f %.5f\n'%(objname,ra,dec,period,sig))
-
     coord = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
     tar = FixedTarget(coord=coord, name=objname)
     FixedTargets.append(tar)
+
+    time.sleep(0.5)
+    result_table = Simbad.query_region(coord, radius=10.0/3600.0 * u.deg)
+    if not result_table is None:
+        name = result_table[0]["MAIN_ID"].decode()
+    else:
+        name = "NA"
+
+    if opts.doXray:
+        idx1 = np.where(np.abs(xray["ras"] - ra)<=2e-3)[0]
+        idx2 = np.where(np.abs(xray["decs"] - dec)<=2e-3)[0]
+        idx = np.intersect1d(idx1,idx2)
+        if len(idx) > 0:
+            appflux = xray["appfluxes"][idx[0]]
+            absflux = xray["absfluxes"][idx[0]]
+        else:
+            appflux, absflux = np.nan, np.nan
+
+        fid.write('%s %.5f %.5f %.5f %.5f %.5e %.5e "%s"\n'%(objname,ra,dec,period,sig,appflux, absflux,name))
+    else:
+        fid.write('%s %.5f %.5f %.5f %.5f "%s"\n'%(objname,ra,dec,period,sig,name))
 
 fid.close()
 
