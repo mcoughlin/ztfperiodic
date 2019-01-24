@@ -172,6 +172,12 @@ models_m2 = (1/2e30)*(4.0*(np.pi**2)/G)*((1e-2*models_a)**3)/p**2 - models_m1
 idx = np.where(models_m1>=models_m2)[0]
 models_m1, models_m2 = models_m1[idx], models_m2[idx]
 
+modelsfile = "%s/models.dat"%baseplotDir
+fid = open(modelsfile,'w')
+for a,b in zip(models_m1,models_m2):
+    fid.write('%.5f %.5f\n'%(a,b))
+fid.close()
+
 pts = np.vstack((models_m1,models_m2)).T
 kdedir = greedy_kde_areas_2d(pts)
 kdedir_models_pts = copy.deepcopy(kdedir)
@@ -309,6 +315,12 @@ figure = corner.corner(data, labels=labels,
 figure.set_size_inches(18.0,18.0)
 plt.savefig(plotName)
 plt.close()
+
+combofile = "%s/combined.dat"%baseplotDir
+fid = open(combofile,'w')
+for a,b,c,d in zip(mass1,mass2,r1_combined,r2_combined):
+    fid.write('%.5f %.5f %.5f %.5f\n'%(a,b,c,d))
+fid.close()
 
 r1s=np.sort(r1)
 r2s=np.sort(r2)
