@@ -13,6 +13,11 @@ import numpy as np
 import tables
 import glob
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+
 from astropy.io import ascii
 from astropy import units as u
 from astropy.coordinates import SkyCoord
@@ -23,12 +28,9 @@ import fdecomp
 
 from astroquery.vizier import Vizier
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
-
 from gatspy.periodic import LombScargle, LombScargleFast
+
+from penquins import Kowalski
 
 LOGIN_URL = "https://irsa.ipac.caltech.edu/account/signon/login.do"
 meta_baseurl="https://irsa.ipac.caltech.edu/ibe/search/ztf/products/"
@@ -57,6 +59,8 @@ def parse_commandline():
 
     parser.add_option("--doPhase",  action="store_true", default=False)
     parser.add_option("-p","--phase",default=4.736406,type=float)
+
+    parser.add_option("-l","--lightcurve_source",default="matchfiles")
 
     opts, args = parser.parse_args()
 
@@ -180,6 +184,26 @@ def haversine_np(lon1, lat1, lon2, lat2):
     c = 2 * np.arcsin(np.sqrt(a))
     return c
 
+def get_kowalski(ra, dec, user, pwd, radius = 5.0):
+
+    k = Kowalski(username=user, password=pwd)
+
+    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20181220": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1}" } } }  
+    r = k.query(query=qu)
+
+    hjd, mag, magerr = [], [], []
+    key = list(r["result_data"].keys())[0]
+    data = r["result_data"][key]
+    key = list(data.keys())[0]
+    data = data[key][0]["data"]
+    print(data)
+    for dic in data:
+        hjd.append(dic["hjd"])
+        mag.append(dic["mag"])
+        magerr.append(dic["magerr"])
+
+    return np.array(hjd), np.array(mag), np.array(magerr)
+
 def get_lightcurve(dataDir, ra, dec, filt):
 
     directory="%s/*/*/*"%dataDir
@@ -267,17 +291,24 @@ if opts.doPlots:
 if opts.doJustHR:
     exit(0)
 
-df = get_lightcurve(dataDir, opts.ra, opts.declination, opts.filt)
+if opts.lightcurve_source == "Kowalski":
+    hjd, mag, magerr = get_kowalski(opts.ra, opts.declination, opts.user, opts.pwd)
+    # KEVIN ADD hjd to mjd function
+    if mjd.size == 0:
+        print("No data available...")
+        exit(0)
 
-if len(df) == 0:
-    print("No data available...")
-    exit(0)
+elif opts.lightcurve_source == "matchfiles":
+    df = get_lightcurve(dataDir, opts.ra, opts.declination, opts.filt)
+    mag = df.psfmag.values
+    magerr = df.psfmagerr.values
+    flux = df.psfflux.values
+    fluxerr=df.psffluxerr.values
+    mjd = df.mjd.values
 
-mag = df.psfmag.values
-magerr = df.psfmagerr.values
-flux = df.psfflux.values
-fluxerr=df.psffluxerr.values
-mjd = df.mjd.values
+    if len(df) == 0:
+        print("No data available...")
+        exit(0)
 
 ls = LombScargleFast(silence_warnings=True)
 #ls = LombScargle()
