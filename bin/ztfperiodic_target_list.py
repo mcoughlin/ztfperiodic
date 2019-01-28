@@ -129,11 +129,14 @@ for filename in filenames:
     tar = FixedTarget(coord=coord, name=objname)
     FixedTargets.append(tar)
 
-    time.sleep(0.5)
-    result_table = Simbad.query_region(coord, radius=10.0/3600.0 * u.deg)
-    if not result_table is None:
-        name = result_table[0]["MAIN_ID"].decode()
-    else:
+    time.sleep(1.0)
+    try:
+        result_table = Simbad.query_region(coord, radius=10.0/3600.0 * u.deg)
+        if not result_table is None:
+            name = result_table[0]["MAIN_ID"].decode()
+        else:
+            name = "NA"
+    except:
         name = "NA"
 
     if opts.doXray:
@@ -156,8 +159,9 @@ location = EarthLocation.from_geodetic(-111.5967*u.deg, 31.9583*u.deg,
                                        2096*u.m)
 kp = Observer(location=location, name="Kitt Peak",timezone="US/Arizona")
 
-observe_time = Time('2018-11-04 1:00:00')
-observe_time = observe_time + np.linspace(0, 10, 55)*u.hour
+#observe_time = Time('2018-11-04 1:00:00')
+observe_time = Time.now()
+observe_time = observe_time + np.linspace(0, 24, 55)*u.hour
 tstart, tend = observe_time[0],observe_time[-1]
 
 global_constraints = [AirmassConstraint(max = 1.5, boolean_constraint = False),
@@ -170,7 +174,7 @@ print("%d/%d targets observable from %s-%s"%(len(idx),len(table),tstart,tend))
 FixedTargets = [FixedTargets[i] for i in idx]
 
 plt.figure(figsize=(30,20))
-plot_airmass(FixedTargets, kp, observe_time)
+plot_airmass(FixedTargets, kp, observe_time, brightness_shading=True, altitude_yaxis=True)
 plt.legend(loc="best")
 plotName = outfile.replace(".dat",".png").replace(".txt",".png")
 plt.savefig(plotName)
