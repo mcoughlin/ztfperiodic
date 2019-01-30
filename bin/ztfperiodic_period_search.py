@@ -14,6 +14,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+import ztfperiodic
+from ztfperiodic.period import CE
+
 def parse_commandline():
     """
     Parse the options given on the command-line.
@@ -31,125 +34,6 @@ def parse_commandline():
     opts, args = parser.parse_args()
 
     return opts
-
-def rephase(data, period=1.0, shift=0.0, col=0, copy=True):
-    """
-    Returns *data* (or a copy) phased with *period*, and shifted by a
-    phase-shift *shift*.
-
-    **Parameters**
-
-    data : array-like, shape = [n_samples, n_cols]
-        Array containing the time or phase values to be rephased in column
-        *col*.
-    period : number, optional
-        Period to phase *data* by (default 1.0).
-    shift : number, optional
-        Phase shift to apply to phases (default 0.0).
-    col : int, optional
-        Column in *data* containing the time or phase values to be rephased
-        (default 0).
-    copy : bool, optional
-        If True, a new array is returned, otherwise *data* is rephased
-        in-place (default True).
-
-    **Returns**
-
-    rephased : array-like, shape = [n_samples, n_cols]
-        Array containing the rephased *data*.
-    """
-    rephased = np.ma.array(data, copy=copy)
-    rephased[:, col] = get_phase(rephased[:, col], period, shift)
-
-    return rephased
-
-
-
-def get_phase(time, period=1.0, shift=0.0):
-    """
-    Returns *time* transformed to phase-space with *period*, after applying a
-    phase-shift *shift*.
-
-    **Parameters**
-
-    time : array-like, shape = [n_samples]
-        The times to transform.
-    period : number, optional
-        The period to phase by (default 1.0).
-    shift : number, optional
-        The phase-shift to apply to the phases (default 0.0).
-
-    **Returns**
-
-    phase : array-like, shape = [n_samples]
-        *time* transformed into phase-space with *period*, after applying a
-        phase-shift *shift*.
-    """
-    return (time / period - shift) % 1
-
-def CE(period, data, xbins=10, ybins=5):
-    """
-    Returns the conditional entropy of *data* rephased with *period*.
-
-    **Parameters**
-
-    period : number
-        The period to rephase *data* by.
-    data : array-like, shape = [n_samples, 2] or [n_samples, 3]
-        Array containing columns *time*, *mag*, and (optional) *error*.
-    xbins : int, optional
-        Number of phase bins (default 10).
-    ybins : int, optional
-        Number of magnitude bins (default 5).
-    """
-    if period <= 0:
-        return np.PINF
-
-    r = rephase(data, period)
-    bins, xedges, yedges = np.histogram2d(r[:,0], r[:,1], [xbins, ybins], [[0,1], [0,1]])
-    size = r.shape[0]
-
-# The following code was once more readable, but much slower.
-# Here is what it used to be:
-# -----------------------------------------------------------------------
-#    return np.sum((lambda p: p * np.log(np.sum(bins[i,:]) / size / p) \
-#                             if p > 0 else 0)(bins[i][j] / size)
-#                  for i in np.arange(0, xbins)
-#                  for j in np.arange(0, ybins)) if size > 0 else np.PINF
-# -----------------------------------------------------------------------
-# TODO: replace this comment with something that's not old code
-    if size > 0:
-        # bins[i,j] / size
-        divided_bins = bins / size
-        # indices where that is positive
-        # to avoid division by zero
-        arg_positive = divided_bins > 0
-
-        # array containing the sums of each column in the bins array
-        column_sums = np.sum(divided_bins, axis=1) #changed 0 by 1
-        # array is repeated row-wise, so that it can be sliced by arg_positive
-        column_sums = np.repeat(np.reshape(column_sums, (xbins,1)), ybins, axis=1)
-        #column_sums = np.repeat(np.reshape(column_sums, (1,-1)), xbins, axis=0)
-
-
-        # select only the elements in both arrays which correspond to a
-        # positive bin
-        select_divided_bins = divided_bins[arg_positive]
-        select_column_sums  = column_sums[arg_positive]
-
-        # initialize the result array
-        A = np.empty((xbins, ybins), dtype=float)
-        # store at every index [i,j] in A which corresponds to a positive bin:
-        # bins[i,j]/size * log(bins[i,:] / size / (bins[i,j]/size))
-        A[ arg_positive] = select_divided_bins \
-                         * np.log(select_column_sums / select_divided_bins)
-        # store 0 at every index in A which corresponds to a non-positive bin
-        A[~arg_positive] = 0
-
-        # return the summation
-        return np.sum(A)
-    else:
-        return np.PINF
 
 # Parse command line
 opts = parse_commandline()
