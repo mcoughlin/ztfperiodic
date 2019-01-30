@@ -32,13 +32,13 @@ def parse_commandline():
     """
     parser = optparse.OptionParser()
 
-    parser.add_option("-o","--outputDir",default="../output")
-    parser.add_option("-p","--plotDir",default="../plots")
-    parser.add_option("-d","--dataDir",default="../data/spectra")
+    parser.add_option("-o","--outputDir",default="../../output")
+    parser.add_option("-p","--plotDir",default="../../plots")
+    parser.add_option("-d","--dataDir",default="../../data/spectra")
     parser.add_option("-N","--N",type=float,default=12)
     parser.add_option("-s","--start",type=float,default=1750)
     parser.add_option("-e","--end",type=float,default=2250)
-    parser.add_option("--errorbudget",type=float,default=0.01)
+    parser.add_option("--errorbudget",type=float,default=0.1)
 
     opts, args = parser.parse_args()
 
@@ -143,8 +143,14 @@ def myloglike_fit(cube, ndim, nparams):
         kdeeval = kde_eval(kdedir,vals)[0]
         prob = prob + np.log(kdeeval)
 
+        if not np.isfinite(prob):
+            break
+
     if np.isnan(prob):
         prob = -np.inf
+
+    if np.isfinite(prob):
+        print(A,B,phi,c,d,prob)
 
     return prob
 
@@ -322,15 +328,39 @@ for key, color in zip(keys,colors):
         pc.set_facecolor(color2)
         pc.set_edgecolor(color2)
 
-#plt.plot(xs,vel0s_10,'--',color=color1)
 plt.plot(xs,vel0s_50,'x--',color=color1)
-#plt.plot(xs,vel0s_90,'--',color=color1)
-#plt.plot(xs,vel1s_10,'--',color=color2)
 plt.plot(xs,vel1s_50,'o--',color=color2)
-#plt.plot(xs,vel1s_90,'--',color=color2)
 plt.fill_between(xs,vel0s_10,vel0s_90,facecolor=color1,edgecolor=color1,alpha=0.2,linewidth=3)
 plt.fill_between(xs,vel1s_10,vel1s_90,facecolor=color2,edgecolor=color2,alpha=0.2,linewidth=3)
 
+plt.xlabel('Phase Bin',fontsize=28)
+plt.xlabel('Velocity [km/s]',fontsize=28)
+plt.grid()
+plt.yticks(fontsize=36)
+plt.xticks(fontsize=36)
+plt.savefig(plotName)
+plt.close()
+
+color1 = 'r'
+color2 = 'b'
+
+plotName = "%s/sigma.pdf"%(baseplotDir)
+fig = plt.figure(figsize=(22,28))
+for key, color in zip(keys,colors):
+    sigma_low = np.percentile(data_out[key]["vel0"],2.5)
+    sigma_high = np.percentile(data_out[key]["vel0"],97.5)
+    med = np.median(data_out[key]["vel0"])
+    plt.errorbar((float(key)+1)/12.0,med,yerr=np.atleast_2d(np.array([med-sigma_low,sigma_high-med])).T,c=color1,fmt='o-',linewidth=3)
+
+    sigma_low = np.percentile(data_out[key]["vel1"],2.5)
+    sigma_high = np.percentile(data_out[key]["vel1"],97.5)
+    med = np.median(data_out[key]["vel1"])
+    plt.errorbar((float(key)+1)/12.0,med,yerr=np.atleast_2d(np.array([med-sigma_low,sigma_high-med])).T,c=color2,fmt='o-',linewidth=3)
+
+plt.plot((xs+1)/12.0,vel0s_50,'x--',color=color1,linewidth=3)
+plt.plot((xs+1)/12.0,vel1s_50,'o--',color=color2,linewidth=3)
+plt.xlabel('Phase',fontsize=36)
+plt.ylabel('Velocity [km/s]',fontsize=36)
 plt.grid()
 plt.yticks(fontsize=36)
 plt.xticks(fontsize=36)
@@ -346,8 +376,6 @@ figure = corner.corner(data[:,:-1], labels=labels,
 figure.set_size_inches(18.0,18.0)
 plt.savefig(plotName)
 plt.close()
-
-print(stop)
 
 plotName = "%s/spec_panels.pdf"%(baseplotDir)
 fig = plt.figure(figsize=(22,28))
