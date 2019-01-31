@@ -161,13 +161,54 @@ def get_kowalski(ra, dec, user, pwd, radius = 5.0):
     data = r["result_data"][key]
     key = list(data.keys())[0]
     data = data[key][0]["data"]
-    print(data)
     for dic in data:
         hjd.append(dic["hjd"])
         mag.append(dic["mag"])
         magerr.append(dic["magerr"])
 
     return np.array(hjd), np.array(mag), np.array(magerr)
+
+def get_kowalski_bulk(field, ccd, quadrant, user, pwd):
+
+    batch_size = 10
+    num_batches = 10
+
+    k = Kowalski(username=user, password=pwd)
+    # FIX ME: when indexing done
+    #qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
+    #r = k.query(query=qu)
+
+    objdata = {}
+    for nb in range(num_batches):
+
+        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].find_one({})"}
+        #r = k.query(query=qu)
+
+        qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
+        r = k.query(query=qu)
+
+        datas = r["result_data"]["query_result"]
+        for data in datas:
+            hjd, mag, magerr = [], [], []
+            objid = data["_id"]
+            data = data["data"]
+            for dic in data:
+                hjd.append(dic["hjd"])
+                mag.append(dic["mag"])
+                magerr.append(dic["magerr"])
+
+            lightcurve=(np.array(hjd),np.array(mag),np.array(magerr))
+            lightcurves.append(lightcurve)
+
+            coordinate=(RA.values[0],Dec.values[0])
+            coordinates.append(coordinate)
+
+            newbaseline = max(obsHJD)-min(obsHJD)
+            if newbaseline>baseline:
+                baseline=newbaseline
+            cnt = cnt + 1
+
+    return lightcurves, coordinates, baseline
 
 def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
 
@@ -214,3 +255,51 @@ def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
             return df
 
     return lightcurve
+
+def get_matchfile(f):
+
+    lightcurves, coordinates = [], []
+    baseline = 0
+    with tables.open_file(f) as store:
+        for tbl in store.walk_nodes("/", "Table"):
+            if tbl.name in ["sourcedata", "transientdata"]:
+                group = tbl._v_parent
+                break
+        srcdata = pd.DataFrame.from_records(store.root.matches.sourcedata.read_where('programid > 1'))
+        srcdata.sort_values('matchid', axis=0, inplace=True)
+        exposures = pd.DataFrame.from_records(store.root.matches.exposures.read_where('programid > 1'))
+        merged = srcdata.merge(exposures, on="expid")
+
+        if len(merged.matchid.unique()) == 0:
+            return [], [], baseline
+
+        matchids = np.array(merged.matchid)
+        values, indices, counts = np.unique(matchids, return_counts=True,return_inverse=True)
+        idx = np.where(counts>50)[0]
+
+        matchids, idx2 = np.unique(matchids[idx],return_index=True)
+        ncounts = counts[idx][idx2]
+        nmatchids = len(idx)
+
+        cnt = 0
+        for k in matchids:
+            if np.mod(cnt,100) == 0:
+                print('%d/%d'%(cnt,len(matchids)))
+            df = merged[merged['matchid'] == k]
+            RA, Dec, x, err = df.ra, df.dec, df.psfmag, df.psfmagerr
+            obsHJD = df.hjd
+
+            if len(x) < 50: continue
+
+            lightcurve=(obsHJD,x,err)
+            lightcurves.append(lightcurve)
+
+            coordinate=(RA.values[0],Dec.values[0])
+            coordinates.append(coordinate)
+ 
+            newbaseline = max(obsHJD)-min(obsHJD)
+            if newbaseline>baseline:
+                baseline=newbaseline
+            cnt = cnt + 1
+
+    return lightcurves, coordinates, baseline

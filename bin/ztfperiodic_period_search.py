@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 
 import ztfperiodic
 from ztfperiodic.period import CE
+from ztfperiodic.utils import get_kowalski_bulk
+from ztfperiodic.utils import get_matchfile
 
 def parse_commandline():
     """
@@ -27,9 +29,19 @@ def parse_commandline():
     parser.add_option("--doCPU",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
-    parser.add_option("-m","--matchFile",default="/home/michael.coughlin/ZTF/Matchfiles/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.h5")
+    #parser.add_option("-m","--matchFile",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.pytable") 
+    parser.add_option("-m","--matchFile",default="/media/Data/mcoughlin/Matchfiles/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.h5")
     parser.add_option("-b","--batch_size",default=1,type=int)
     parser.add_option("-a","--algorithm",default="CE")
+
+    parser.add_option("-f","--field",default=251,type=int)
+    parser.add_option("-c","--ccd",default=16,type=int)
+    parser.add_option("-q","--quadrant",default=4,type=int)
+
+    parser.add_option("-l","--lightcurve_source",default="matchfiles")
+
+    parser.add_option("-u","--user")
+    parser.add_option("-w","--pwd")
 
     opts, args = parser.parse_args()
 
@@ -37,6 +49,10 @@ def parse_commandline():
 
 # Parse command line
 opts = parse_commandline()
+
+if not opts.lightcurve_source in ["matchfiles","h5files","Kowalski"]:
+    print("--lightcurve_source must be either matchfiles, h5files, or Kowalski")
+    exit(0)
 
 if not (opts.doCPU or opts.doGPU):
     print("--doCPU or --doGPU required")
@@ -46,13 +62,12 @@ algorithm = opts.algorithm
 matchFile = opts.matchFile
 outputDir = opts.outputDir
 batch_size = opts.batch_size
+field = opts.field
+ccd = opts.ccd
+quadrant = opts.quadrant
 
 if opts.doCPU and algorithm=="BLS":
     print("BLS only available for --doGPU")
-    exit(0)
-
-if not os.path.isfile(matchFile):
-    print("%s missing..."%matchFile)
     exit(0)
 
 period_ranges = [0,0.002777778,0.0034722,0.0041666,0.004861111,0.006944444,0.020833333,0.041666667,0.083333333,0.166666667,0.5,3.0,10.0,50.0,np.inf]
@@ -62,31 +77,52 @@ catalogDir = os.path.join(outputDir,'catalog',algorithm)
 if not os.path.isdir(catalogDir):
     os.makedirs(catalogDir)
 
-matchFileEnd = matchFile.split("/")[-1].replace("h5","dat")
-catalogFile = os.path.join(catalogDir,matchFileEnd)
-matchFileEndSplit = matchFileEnd.split("_")
-fil = matchFileEndSplit[2][1]
 
 lightcurves = []
 coordinates = []
 baseline=0
 
 print('Organizing lightcurves...')
-f = h5py.File(matchFile, 'r+')
-for key in f.keys():
-    keySplit = key.split("_")
-    nid, ra, dec = int(keySplit[0]), float(keySplit[1]), float(keySplit[2])
-    coordinates.append((ra,dec))
+if opts.lightcurve_source == "Kowalski":
+    lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, opts.user, opts.pwd)
 
-    data = list(f[key])
-    data = np.array(data).T
-    if len(data[:,0]) < 50: continue
-    lightcurve=(data[:,0],data[:,1],data[:,2])
-    lightcurves.append(lightcurve)
+elif opts.lightcurve_source == "matchfiles":
+    if not os.path.isfile(matchFile):
+        print("%s missing..."%matchFile)
+        exit(0)
 
-    newbaseline = max(data[:,0])-min(data[:,0])
-    if newbaseline>baseline:
-        baseline=newbaseline
+    lightcurves, coordinates, baseline = get_matchfile(matchFile)
+
+    if len(lightcurves) == 0:
+        print("No data available...")
+        exit(0)
+
+elif opts.lightcurve_source == "h5files":
+    if not os.path.isfile(matchFile):
+        print("%s missing..."%matchFile)
+        exit(0)
+
+    matchFileEnd = matchFile.split("/")[-1].replace("h5","dat")
+    catalogFile = os.path.join(catalogDir,matchFileEnd)
+    matchFileEndSplit = matchFileEnd.split("_")
+    fil = matchFileEndSplit[2][1]
+
+    f = h5py.File(matchFile, 'r+')
+    for key in f.keys():
+        keySplit = key.split("_")
+        nid, ra, dec = int(keySplit[0]), float(keySplit[1]), float(keySplit[2])
+        coordinates.append((ra,dec))
+
+        data = list(f[key])
+        data = np.array(data).T
+        if len(data[:,0]) < 50: continue
+        lightcurve=(data[:,0],data[:,1],data[:,2])
+        lightcurves.append(lightcurve)
+
+        newbaseline = max(data[:,0])-min(data[:,0])
+        if newbaseline>baseline:
+            baseline=newbaseline
+    f.close()
 
 if baseline<10:
     basefolder = os.path.join(outputDir,'%sHC'%algorithm)
@@ -94,7 +130,6 @@ if baseline<10:
 else:
     basefolder = os.path.join(outputDir,'%s'%algorithm)
     fmin, fmax = 2/baseline, 480
-f.close()
 
 samples_per_peak = 10
 phase_bins, mag_bins = 20, 10
