@@ -345,17 +345,28 @@ color1 = 'r'
 color2 = 'b'
 
 plotName = "%s/sigma.pdf"%(baseplotDir)
+filename = "%s/vel.dat"%(baseplotDir)
+fid = open(filename,'w')
 fig = plt.figure(figsize=(22,28))
 for key, color in zip(keys,colors):
+
+    fid.write('%.5f '%((float(key)+1)/12.0))
+
     sigma_low = np.percentile(data_out[key]["vel0"],2.5)
     sigma_high = np.percentile(data_out[key]["vel0"],97.5)
     med = np.median(data_out[key]["vel0"])
     plt.errorbar((float(key)+1)/12.0,med,yerr=np.atleast_2d(np.array([med-sigma_low,sigma_high-med])).T,c=color1,fmt='o-',linewidth=3)
 
+    fid.write('%.5f %.5f %.5f '%(med,sigma_low,sigma_high))
+
     sigma_low = np.percentile(data_out[key]["vel1"],2.5)
     sigma_high = np.percentile(data_out[key]["vel1"],97.5)
     med = np.median(data_out[key]["vel1"])
     plt.errorbar((float(key)+1)/12.0,med,yerr=np.atleast_2d(np.array([med-sigma_low,sigma_high-med])).T,c=color2,fmt='o-',linewidth=3)
+
+    fid.write('%.5f %.5f %.5f\n'%(med,sigma_low,sigma_high))
+
+fid.close()
 
 plt.plot((xs+1)/12.0,vel0s_50,'x--',color=color1,linewidth=3)
 plt.plot((xs+1)/12.0,vel1s_50,'o--',color=color2,linewidth=3)
