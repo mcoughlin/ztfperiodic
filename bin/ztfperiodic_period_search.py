@@ -14,6 +14,11 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+import ztfperiodic
+from ztfperiodic.period import CE
+from ztfperiodic.utils import get_kowalski_bulk
+from ztfperiodic.utils import get_matchfile
+
 def parse_commandline():
     """
     Parse the options given on the command-line.
@@ -24,135 +29,30 @@ def parse_commandline():
     parser.add_option("--doCPU",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
-    parser.add_option("-m","--matchFile",default="/home/michael.coughlin/ZTF/Matchfiles/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.h5")
+    #parser.add_option("-m","--matchFile",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.pytable") 
+    parser.add_option("-m","--matchFile",default="/media/Data/mcoughlin/Matchfiles/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.h5")
     parser.add_option("-b","--batch_size",default=1,type=int)
     parser.add_option("-a","--algorithm",default="CE")
+
+    parser.add_option("-f","--field",default=251,type=int)
+    parser.add_option("-c","--ccd",default=16,type=int)
+    parser.add_option("-q","--quadrant",default=4,type=int)
+
+    parser.add_option("-l","--lightcurve_source",default="matchfiles")
+
+    parser.add_option("-u","--user")
+    parser.add_option("-w","--pwd")
 
     opts, args = parser.parse_args()
 
     return opts
 
-def rephase(data, period=1.0, shift=0.0, col=0, copy=True):
-    """
-    Returns *data* (or a copy) phased with *period*, and shifted by a
-    phase-shift *shift*.
-
-    **Parameters**
-
-    data : array-like, shape = [n_samples, n_cols]
-        Array containing the time or phase values to be rephased in column
-        *col*.
-    period : number, optional
-        Period to phase *data* by (default 1.0).
-    shift : number, optional
-        Phase shift to apply to phases (default 0.0).
-    col : int, optional
-        Column in *data* containing the time or phase values to be rephased
-        (default 0).
-    copy : bool, optional
-        If True, a new array is returned, otherwise *data* is rephased
-        in-place (default True).
-
-    **Returns**
-
-    rephased : array-like, shape = [n_samples, n_cols]
-        Array containing the rephased *data*.
-    """
-    rephased = np.ma.array(data, copy=copy)
-    rephased[:, col] = get_phase(rephased[:, col], period, shift)
-
-    return rephased
-
-
-
-def get_phase(time, period=1.0, shift=0.0):
-    """
-    Returns *time* transformed to phase-space with *period*, after applying a
-    phase-shift *shift*.
-
-    **Parameters**
-
-    time : array-like, shape = [n_samples]
-        The times to transform.
-    period : number, optional
-        The period to phase by (default 1.0).
-    shift : number, optional
-        The phase-shift to apply to the phases (default 0.0).
-
-    **Returns**
-
-    phase : array-like, shape = [n_samples]
-        *time* transformed into phase-space with *period*, after applying a
-        phase-shift *shift*.
-    """
-    return (time / period - shift) % 1
-
-def CE(period, data, xbins=10, ybins=5):
-    """
-    Returns the conditional entropy of *data* rephased with *period*.
-
-    **Parameters**
-
-    period : number
-        The period to rephase *data* by.
-    data : array-like, shape = [n_samples, 2] or [n_samples, 3]
-        Array containing columns *time*, *mag*, and (optional) *error*.
-    xbins : int, optional
-        Number of phase bins (default 10).
-    ybins : int, optional
-        Number of magnitude bins (default 5).
-    """
-    if period <= 0:
-        return np.PINF
-
-    r = rephase(data, period)
-    bins, xedges, yedges = np.histogram2d(r[:,0], r[:,1], [xbins, ybins], [[0,1], [0,1]])
-    size = r.shape[0]
-
-# The following code was once more readable, but much slower.
-# Here is what it used to be:
-# -----------------------------------------------------------------------
-#    return np.sum((lambda p: p * np.log(np.sum(bins[i,:]) / size / p) \
-#                             if p > 0 else 0)(bins[i][j] / size)
-#                  for i in np.arange(0, xbins)
-#                  for j in np.arange(0, ybins)) if size > 0 else np.PINF
-# -----------------------------------------------------------------------
-# TODO: replace this comment with something that's not old code
-    if size > 0:
-        # bins[i,j] / size
-        divided_bins = bins / size
-        # indices where that is positive
-        # to avoid division by zero
-        arg_positive = divided_bins > 0
-
-        # array containing the sums of each column in the bins array
-        column_sums = np.sum(divided_bins, axis=1) #changed 0 by 1
-        # array is repeated row-wise, so that it can be sliced by arg_positive
-        column_sums = np.repeat(np.reshape(column_sums, (xbins,1)), ybins, axis=1)
-        #column_sums = np.repeat(np.reshape(column_sums, (1,-1)), xbins, axis=0)
-
-
-        # select only the elements in both arrays which correspond to a
-        # positive bin
-        select_divided_bins = divided_bins[arg_positive]
-        select_column_sums  = column_sums[arg_positive]
-
-        # initialize the result array
-        A = np.empty((xbins, ybins), dtype=float)
-        # store at every index [i,j] in A which corresponds to a positive bin:
-        # bins[i,j]/size * log(bins[i,:] / size / (bins[i,j]/size))
-        A[ arg_positive] = select_divided_bins \
-                         * np.log(select_column_sums / select_divided_bins)
-        # store 0 at every index in A which corresponds to a non-positive bin
-        A[~arg_positive] = 0
-
-        # return the summation
-        return np.sum(A)
-    else:
-        return np.PINF
-
 # Parse command line
 opts = parse_commandline()
+
+if not opts.lightcurve_source in ["matchfiles","h5files","Kowalski"]:
+    print("--lightcurve_source must be either matchfiles, h5files, or Kowalski")
+    exit(0)
 
 if not (opts.doCPU or opts.doGPU):
     print("--doCPU or --doGPU required")
@@ -162,13 +62,12 @@ algorithm = opts.algorithm
 matchFile = opts.matchFile
 outputDir = opts.outputDir
 batch_size = opts.batch_size
+field = opts.field
+ccd = opts.ccd
+quadrant = opts.quadrant
 
 if opts.doCPU and algorithm=="BLS":
     print("BLS only available for --doGPU")
-    exit(0)
-
-if not os.path.isfile(matchFile):
-    print("%s missing..."%matchFile)
     exit(0)
 
 period_ranges = [0,0.002777778,0.0034722,0.0041666,0.004861111,0.006944444,0.020833333,0.041666667,0.083333333,0.166666667,0.5,3.0,10.0,50.0,np.inf]
@@ -178,31 +77,52 @@ catalogDir = os.path.join(outputDir,'catalog',algorithm)
 if not os.path.isdir(catalogDir):
     os.makedirs(catalogDir)
 
-matchFileEnd = matchFile.split("/")[-1].replace("h5","dat")
-catalogFile = os.path.join(catalogDir,matchFileEnd)
-matchFileEndSplit = matchFileEnd.split("_")
-fil = matchFileEndSplit[2][1]
 
 lightcurves = []
 coordinates = []
 baseline=0
 
 print('Organizing lightcurves...')
-f = h5py.File(matchFile, 'r+')
-for key in f.keys():
-    keySplit = key.split("_")
-    nid, ra, dec = int(keySplit[0]), float(keySplit[1]), float(keySplit[2])
-    coordinates.append((ra,dec))
+if opts.lightcurve_source == "Kowalski":
+    lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, opts.user, opts.pwd)
 
-    data = list(f[key])
-    data = np.array(data).T
-    if len(data[:,0]) < 50: continue
-    lightcurve=(data[:,0],data[:,1],data[:,2])
-    lightcurves.append(lightcurve)
+elif opts.lightcurve_source == "matchfiles":
+    if not os.path.isfile(matchFile):
+        print("%s missing..."%matchFile)
+        exit(0)
 
-    newbaseline = max(data[:,0])-min(data[:,0])
-    if newbaseline>baseline:
-        baseline=newbaseline
+    lightcurves, coordinates, baseline = get_matchfile(matchFile)
+
+    if len(lightcurves) == 0:
+        print("No data available...")
+        exit(0)
+
+elif opts.lightcurve_source == "h5files":
+    if not os.path.isfile(matchFile):
+        print("%s missing..."%matchFile)
+        exit(0)
+
+    matchFileEnd = matchFile.split("/")[-1].replace("h5","dat")
+    catalogFile = os.path.join(catalogDir,matchFileEnd)
+    matchFileEndSplit = matchFileEnd.split("_")
+    fil = matchFileEndSplit[2][1]
+
+    f = h5py.File(matchFile, 'r+')
+    for key in f.keys():
+        keySplit = key.split("_")
+        nid, ra, dec = int(keySplit[0]), float(keySplit[1]), float(keySplit[2])
+        coordinates.append((ra,dec))
+
+        data = list(f[key])
+        data = np.array(data).T
+        if len(data[:,0]) < 50: continue
+        lightcurve=(data[:,0],data[:,1],data[:,2])
+        lightcurves.append(lightcurve)
+
+        newbaseline = max(data[:,0])-min(data[:,0])
+        if newbaseline>baseline:
+            baseline=newbaseline
+    f.close()
 
 if baseline<10:
     basefolder = os.path.join(outputDir,'%sHC'%algorithm)
@@ -210,7 +130,6 @@ if baseline<10:
 else:
     basefolder = os.path.join(outputDir,'%s'%algorithm)
     fmin, fmax = 2/baseline, 480
-f.close()
 
 samples_per_peak = 10
 phase_bins, mag_bins = 20, 10
