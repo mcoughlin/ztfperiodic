@@ -149,8 +149,8 @@ def myloglike_fit(cube, ndim, nparams):
     if np.isnan(prob):
         prob = -np.inf
 
-    if np.isfinite(prob):
-        print(A,B,phi,c,d,prob)
+    #if np.isfinite(prob):
+    #    print(A,B,phi,c,d,prob)
 
     return prob
 
