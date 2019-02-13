@@ -35,6 +35,11 @@ from ztfperiodic.utils import get_lightcurve
 
 from gatspy.periodic import LombScargle, LombScargleFast
 
+try:
+    from penquins import Kowalski
+except:
+    print("penquins not installed... need to use matchfiles.")
+
 def parse_commandline():
     """
     Parse the options given on the command-line.
@@ -107,9 +112,9 @@ if opts.doJustHR:
     exit(0)
 
 if opts.lightcurve_source == "Kowalski":
-    hjd, mag, magerr = get_kowalski(opts.ra, opts.declination, opts.user, opts.pwd)
-    # KEVIN ADD hjd to mjd function
-    if mjd.size == 0:
+    kow = Kowalski(username=opts.user, password=opts.pwd)
+    hjd, mag, magerr = get_kowalski(opts.ra, opts.declination, kow)
+    if hjd.size == 0:
         print("No data available...")
         exit(0)
 
@@ -119,7 +124,7 @@ elif opts.lightcurve_source == "matchfiles":
     magerr = df.psfmagerr.values
     flux = df.psfflux.values
     fluxerr=df.psffluxerr.values
-    mjd = df.mjd.values
+    hjd = df.hjd.values
 
     if len(df) == 0:
         print("No data available...")
@@ -128,9 +133,9 @@ elif opts.lightcurve_source == "matchfiles":
 ls = LombScargleFast(silence_warnings=True)
 #ls = LombScargle()
 #ls.optimizer.period_range = (0.001,0.1)
-mjddiff = np.max(mjd) - np.min(mjd)
-ls.optimizer.period_range = (1,mjddiff)
-ls.fit(mjd,mag,magerr)
+hjddiff = np.max(hjd) - np.min(hjd)
+ls.optimizer.period_range = (1,hjddiff)
+ls.fit(hjd,mag,magerr)
 period = ls.best_period
 #phase = period
 print("Best period: " + str(period) + " days")
@@ -145,16 +150,16 @@ fid.close()
 harmonics = np.loadtxt(filename)
 
 # fit the lightcurve with fourier components, using BIC to decide the optimal number of pars
-LCfit = fdecomp.fit_best(np.c_[mjd,mag,magerr],period,5,plotname=False)
+LCfit = fdecomp.fit_best(np.c_[hjd,mag,magerr],period,5,plotname=False)
 
 
 if opts.doPlots:
     plotName = os.path.join(path_out_dir,'phot.pdf')
     plt.figure(figsize=(12,8))
-    plt.errorbar(mjd-mjd[0],mag,yerr=magerr,fmt='bo')
+    plt.errorbar(hjd-hjd[0],mag,yerr=magerr,fmt='bo')
     fittedmodel = fdecomp.make_f(period)
-    plt.plot(mjd-mjd[0],fittedmodel(mjd,*LCfit),'k-')
-    plt.xlabel('Time from %.5f [days]'%mjd[0])
+    plt.plot(hjd-hjd[0],fittedmodel(hjd,*LCfit),'k-')
+    plt.xlabel('Time from %.5f [days]'%hjd[0])
     plt.ylabel('Magnitude [ab]')
     plt.gca().invert_yaxis()
     plt.savefig(plotName)
@@ -182,10 +187,10 @@ if opts.doPlots:
     plt.close()
 
     if opts.doPhase:
-        mjd_mod = np.mod(mjd, phase)/phase
+        hjd_mod = np.mod(hjd, phase)/phase
         plotName = os.path.join(path_out_dir,'phase.pdf')
         plt.figure(figsize=(12,8))
-        plt.errorbar(mjd_mod,mag,yerr=magerr,fmt='bo')
+        plt.errorbar(hjd_mod,mag,yerr=magerr,fmt='bo')
         plt.xlabel('Phase')
         plt.ylabel('Magnitude [ab]')
         plt.title('%.5f'%phase)

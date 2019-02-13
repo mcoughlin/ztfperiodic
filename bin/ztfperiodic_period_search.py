@@ -19,6 +19,11 @@ from ztfperiodic.period import CE
 from ztfperiodic.utils import get_kowalski_bulk
 from ztfperiodic.utils import get_matchfile
 
+try:
+    from penquins import Kowalski
+except:
+    print("penquins not installed... need to use matchfiles.")
+
 def parse_commandline():
     """
     Parse the options given on the command-line.
@@ -84,7 +89,8 @@ baseline=0
 
 print('Organizing lightcurves...')
 if opts.lightcurve_source == "Kowalski":
-    lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, opts.user, opts.pwd)
+    kow = Kowalski(username=opts.user, password=opts.pwd)
+    lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow)
 
 elif opts.lightcurve_source == "matchfiles":
     if not os.path.isfile(matchFile):

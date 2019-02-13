@@ -22,11 +22,6 @@ from astroquery.vizier import Vizier
 
 from gatspy.periodic import LombScargle, LombScargleFast
 
-try:
-    from penquins import Kowalski
-except:
-    print("penquins not installed... need to use matchfiles.")
-
 LOGIN_URL = "https://irsa.ipac.caltech.edu/account/signon/login.do"
 meta_baseurl="https://irsa.ipac.caltech.edu/ibe/search/ztf/products/"
 data_baseurl="https://irsa.ipac.caltech.edu/ibe/data/ztf/products/"
@@ -149,12 +144,10 @@ def haversine_np(lon1, lat1, lon2, lat2):
     c = 2 * np.arcsin(np.sqrt(a))
     return c
 
-def get_kowalski(ra, dec, user, pwd, radius = 5.0):
-
-    k = Kowalski(username=user, password=pwd)
+def get_kowalski(ra, dec, kow, radius = 5.0):
 
     qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20181220": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1}" } } }
-    r = k.query(query=qu)
+    r = kow.query(query=qu)
 
     hjd, mag, magerr = [], [], []
     key = list(r["result_data"].keys())[0]
@@ -168,42 +161,45 @@ def get_kowalski(ra, dec, user, pwd, radius = 5.0):
 
     return np.array(hjd), np.array(mag), np.array(magerr)
 
-def get_kowalski_bulk(field, ccd, quadrant, user, pwd):
+def get_kowalski_bulk(field, ccd, quadrant, kow, num_batches = 10):
 
-    batch_size = 10
-    num_batches = 10
+    qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
+    r = kow.query(query=qu)
+    nlightcurves = r['result_data']['query_result']
+    batch_size = int(nlightcurves/num_batches)
 
-    k = Kowalski(username=user, password=pwd)
-    # FIX ME: when indexing done
-    #qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
-    #r = k.query(query=qu)
+    baseline=0
+    cnt=0
+    lightcurves, coordinates = [], []
 
     objdata = {}
     for nb in range(num_batches):
 
-        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].find_one({})"}
-        #r = k.query(query=qu)
+        qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
+        r = kow.query(query=qu)
 
-        qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
-        r = k.query(query=qu)
+        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].find_one({})"}
+        #r = kow.query(query=qu)
 
         datas = r["result_data"]["query_result"]
         for data in datas:
-            hjd, mag, magerr = [], [], []
+            hjd, mag, magerr, ra, dec = [], [], [], [], []
             objid = data["_id"]
             data = data["data"]
             for dic in data:
                 hjd.append(dic["hjd"])
                 mag.append(dic["mag"])
                 magerr.append(dic["magerr"])
+                ra.append(dic["ra"])
+                dec.append(dic["dec"])
 
             lightcurve=(np.array(hjd),np.array(mag),np.array(magerr))
             lightcurves.append(lightcurve)
 
-            coordinate=(RA.values[0],Dec.values[0])
+            coordinate=(np.median(ra),np.median(dec))
             coordinates.append(coordinate)
 
-            newbaseline = max(obsHJD)-min(obsHJD)
+            newbaseline = max(hjd)-min(hjd)
             if newbaseline>baseline:
                 baseline=newbaseline
             cnt = cnt + 1

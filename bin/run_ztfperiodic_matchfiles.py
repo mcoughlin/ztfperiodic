@@ -6,6 +6,8 @@ filenames = ["../input/3-10.dat","../input/10-50.dat","../input/50-baseline.dat"
 filenames = ["../input/12_72hours.dat","../input/4_12hours.dat"]
 filenames = ["../input/pure.dat"]
 outputDir = '../output/pure'
+filenames = ["../input/obsDBSP.dat"]
+outputDir = '../output/dbsp'
 
 for filename in filenames:
     lines = [line.rstrip('\n') for line in open(filename)]
@@ -16,7 +18,7 @@ for filename in filenames:
         filename = os.path.join(path_out_dir,'harmonics.dat')
         if os.path.isfile(filename): continue
 
-        system_call = "python ztfperiodic_matchfiles.py --doPlots --doPhase --user mcoughli@caltech.edu --pwd mchoop --ra %.5f --declination %.5f --phase %.5f --outputDir %s"%(ra, dec, period, outputDir)
+        system_call = "python ztfperiodic_matchfiles.py --doJustHR --doPlots --doPhase --user mcoughli@caltech.edu --pwd mchoop --ra %.5f --declination %.5f --phase %.5f --outputDir %s"%(ra, dec, period, outputDir)
         print(system_call)
         os.system(system_call)
 
