@@ -10,7 +10,6 @@ import os, sys
 import optparse
 import pandas as pd
 import numpy as np
-import tables
 import glob
 
 import matplotlib
