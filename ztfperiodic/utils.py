@@ -144,22 +144,36 @@ def haversine_np(lon1, lat1, lon2, lat2):
     c = 2 * np.arcsin(np.sqrt(a))
     return c
 
-def get_kowalski(ra, dec, kow, radius = 5.0):
+def get_kowalski(ra, dec, kow, radius = 5.0, oid = None):
 
-    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20181220": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1}" } } }
+    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20181220": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.fid': 1}" } } }
     r = kow.query(query=qu)
 
-    hjd, mag, magerr = [], [], []
     key = list(r["result_data"].keys())[0]
     data = r["result_data"][key]
     key = list(data.keys())[0]
-    data = data[key][0]["data"]
-    for dic in data:
-        hjd.append(dic["hjd"])
-        mag.append(dic["mag"])
-        magerr.append(dic["magerr"])
+    data = data[key]
 
-    return np.array(hjd), np.array(mag), np.array(magerr)
+    lightcurves = {}
+    for datlist in data:
+        objid = str(datlist["_id"])
+        if not oid is None:
+            if not objid == str(oid):
+                continue
+        dat = datlist["data"]
+        hjd, mag, magerr = [], [], []
+
+        for dic in dat:
+            hjd.append(dic["hjd"])
+            mag.append(dic["mag"])
+            magerr.append(dic["magerr"])
+
+        lightcurves[objid] = {}
+        lightcurves[objid]["hjd"] = np.array(hjd)
+        lightcurves[objid]["mag"] = np.array(mag)
+        lightcurves[objid]["magerr"] = np.array(magerr)
+
+    return lightcurves
 
 def get_kowalski_bulk(field, ccd, quadrant, kow, num_batches = 10):
 

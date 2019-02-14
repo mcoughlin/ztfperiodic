@@ -65,6 +65,8 @@ def parse_commandline():
     parser.add_option("-p","--phase",default=4.736406,type=float)
 
     parser.add_option("-l","--lightcurve_source",default="matchfiles")
+ 
+    parser.add_option("--objid",type=int)
 
     opts, args = parser.parse_args()
 
@@ -113,7 +115,16 @@ if opts.doJustHR:
 
 if opts.lightcurve_source == "Kowalski":
     kow = Kowalski(username=opts.user, password=opts.pwd)
-    hjd, mag, magerr = get_kowalski(opts.ra, opts.declination, kow)
+    lightcurves = get_kowalski(opts.ra, opts.declination, kow, oid=opts.objid)
+    if len(lightcurves.keys()) > 1:
+        print("Choose one object ID and run again...")
+        for objid in lightcurves.keys():
+            print("Object ID: %s"%objid)
+        exit(0)
+
+    key = list(lightcurves.keys())[0]
+    hjd, mag, magerr = lightcurves[key]["hjd"], lightcurves[key]["mag"], lightcurves[key]["magerr"]
+
     if hjd.size == 0:
         print("No data available...")
         exit(0)
