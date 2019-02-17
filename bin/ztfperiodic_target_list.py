@@ -187,9 +187,10 @@ for filename in filenames:
         if len(idx) == 0:
             continue 
 
+    ps1 = ps1_query(ra, dec, 5/3600.0)
+    gmag = ps1["gmag"]
     if opts.doMagnitudeCut:
-        ps1 = ps1_query(ra, dec, 5/3600.0)
-        if ps1["gmag"] < opts.magnitude:
+        if gmag < opts.magnitude:
             continue
 
     FixedTargets.append(tar)
@@ -214,9 +215,9 @@ for filename in filenames:
         else:
             appflux, absflux = np.nan, np.nan
 
-        fid.write('%s %.5f %.5f %.5f %.5f %.5e %.5e "%s"\n'%(objname,ra,dec,period,sig,appflux, absflux,name))
+        fid.write('%s %.5f %.5f %.5f %.5f %.5f %.5e %.5e "%s"\n'%(objname, ra, dec, period, sig, gmag, appflux, absflux, name))
     else:
-        fid.write('%s %.5f %.5f %.5f %.5f "%s"\n'%(objname,ra,dec,period,sig,name))
+        fid.write('%s %.5f %.5f %.5f %.5f %.5f "%s"\n'%(objname, ra, dec, period, sig, gmag, name))
 
 fid.close()
 
