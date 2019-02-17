@@ -22,10 +22,9 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 
 import requests
-import tqdm
-import fdecomp
 
 import ztfperiodic
+from ztfperiodic import fdecomp
 from ztfperiodic.utils import gaia_query
 from ztfperiodic.utils import ps1_query
 from ztfperiodic.utils import load_file
