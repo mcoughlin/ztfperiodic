@@ -68,6 +68,11 @@ install_requires = [
     'astropy',
     'matplotlib',
     'gatspy',
+    'astroquery',
+    'pandas',
+    'h5py',
+    'tqdm',
+    'tables'
 ]
 tests_require = [
     'pytest'
