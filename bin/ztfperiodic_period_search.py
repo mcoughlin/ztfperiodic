@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import os, sys
 import glob
@@ -29,6 +29,7 @@ def parse_commandline():
     Parse the options given on the command-line.
     """
     parser = optparse.OptionParser()
+    parser.add_option("--doPlots",  action="store_true", default=False)
 
     parser.add_option("--doGPU",  action="store_true", default=False)
     parser.add_option("--doCPU",  action="store_true", default=False)
@@ -51,6 +52,12 @@ def parse_commandline():
     opts, args = parser.parse_args()
 
     return opts
+
+def touch(fname):
+    if os.path.exists(fname):
+        os.utime(fname, None)
+    else:
+        open(fname, 'a').close()
 
 # Parse command line
 opts = parse_commandline()
@@ -89,6 +96,9 @@ baseline=0
 
 print('Organizing lightcurves...')
 if opts.lightcurve_source == "Kowalski":
+
+    catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
+
     kow = Kowalski(username=opts.user, password=opts.pwd)
     lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow)
 
@@ -96,6 +106,9 @@ elif opts.lightcurve_source == "matchfiles":
     if not os.path.isfile(matchFile):
         print("%s missing..."%matchFile)
         exit(0)
+
+    matchFileEnd = matchFile.split("/")[-1].replace("pytable","dat")
+    catalogFile = os.path.join(catalogDir,matchFileEnd)
 
     lightcurves, coordinates, baseline = get_matchfile(matchFile)
 
@@ -129,6 +142,11 @@ elif opts.lightcurve_source == "h5files":
         if newbaseline>baseline:
             baseline=newbaseline
     f.close()
+
+if len(lightcurves) == 0:
+    touch(catalogFile)
+    print('No lightcurves available for field %d, ccd %d, quadrant %d... exiting.'%(field,ccd,quadrant))
+    exit(0)
 
 if baseline<10:
     basefolder = os.path.join(outputDir,'%sHC'%algorithm)
@@ -251,15 +269,16 @@ elif opts.doCPU:
         periods_best.append(period)
         significances.append(significance)
 
-print('Plotting lightcurves...')
+print('Cataloging / Plotting lightcurves...')
 fid = open(catalogFile,'w')
 for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,periods_best,significances):
     fid.write('%.10f %.10f %.10f %.10f\n'%(coordinate[0],coordinate[1],period, significance))
-    if significance>6:
+    if opts.doPlots and (significance>6):
         if opts.doGPU and (algorithm == "PDM"):
             copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
         else:
             copy = np.ma.copy(lightcurve).T
+        print(copy.shape)
         phases = np.mod(copy[:,0],2*period)/(2*period)
         magnitude, err = copy[:,1], copy[:,2]
         RA, Dec = coordinate
