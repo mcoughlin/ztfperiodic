@@ -38,6 +38,8 @@ def parse_commandline():
     parser.add_option("--doSaveMemory",  action="store_true", default=False)
     parser.add_option("--doRemoveTerrestrial",  action="store_true", default=False)
     parser.add_option("--doLightcurveStats",  action="store_true", default=False)
+    parser.add_option("--doParallel",  action="store_true", default=False)
+    parser.add_option("-n","--Ncore",default=4,type=int)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     #parser.add_option("-m","--matchFile",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.pytable") 
@@ -211,8 +213,6 @@ if opts.doGPU:
     if algorithm == "CE":
         proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=phase_bins, mag_bins=mag_bins, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
 
-        lightcurves = lightcurves[:10]
-
         if opts.doSaveMemory:
             periods_best, significances = proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, freqs = freqs, only_keep_best_freq=True,show_progress=True,returnBestFreq=True)
         else:
@@ -334,16 +334,21 @@ elif opts.doCPU:
 
 if opts.doLightcurveStats:
     print('Running lightcurve stats...')
-    stats = []
-    for ii,data in enumerate(lightcurves):
-        period = periods_best[ii]
-        if np.mod(ii,10) == 0:
-            print("%d/%d"%(ii,len(lightcurves)))
-        copy = np.ma.copy(data).T
-        t, mag, magerr = copy[:,0], copy[:,1], copy[:,2]
 
-        stat = calc_stats(t, mag, magerr, period)
-        stats.append(stat)
+    if opts.doParallel:
+        from joblib import Parallel, delayed
+        stats = Parallel(n_jobs=opts.Ncore)(delayed(calc_stats)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,periods_best))
+    else:
+        stats = []
+        for ii,data in enumerate(lightcurves):
+            period = periods_best[ii]
+            if np.mod(ii,10) == 0:
+                print("%d/%d"%(ii,len(lightcurves)))
+            copy = np.ma.copy(data).T
+            t, mag, magerr = copy[:,0], copy[:,1], copy[:,2]
+
+            stat = calc_stats(t, mag, magerr, period)
+            stats.append(stat)
 
 print('Cataloging / Plotting lightcurves...')
 cnt = 0
