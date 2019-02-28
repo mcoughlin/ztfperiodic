@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import ztfperiodic
 from ztfperiodic.period import CE
 from ztfperiodic.utils import get_kowalski_bulk
+from ztfperiodic.utils import get_kowalski_list
 from ztfperiodic.utils import get_matchfile
 
 try:
@@ -47,6 +48,8 @@ def parse_commandline():
     parser.add_option("-q","--quadrant",default=4,type=int)
 
     parser.add_option("-l","--lightcurve_source",default="matchfiles")
+    parser.add_option("-s","--source_type",default="quadrant")
+    parser.add_option("--catalog_file",default="../input/xray.dat")
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
@@ -101,7 +104,26 @@ if opts.lightcurve_source == "Kowalski":
     catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
 
     kow = Kowalski(username=opts.user, password=opts.pwd)
-    lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow)
+
+    if opts.source_type == "quadrant":
+        catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
+        lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow)
+    elif opts.source_type == "catalog":
+        catalog_file = opts.catalog_file
+        lines = [line.rstrip('\n') for line in open(catalog_file)]
+        ras, decs = [], []
+        for line in lines:
+            lineSplit = line.split(" ")
+            ras.append(float(lineSplit[1]))
+            decs.append(float(lineSplit[2]))
+        ras, decs = np.array(ras), np.array(decs)
+
+        catalog_file_split = catalog_file.replace(".dat","").split("/")[-1]
+        catalogFile = os.path.join(catalogDir,"%s.dat"%(catalog_file_split))
+        lightcurves, coordinates, baseline = get_kowalski_list(ras, decs, kow)
+    else:
+        print("Source type unknown...")
+        exit(0)
 
 elif opts.lightcurve_source == "matchfiles":
     if not os.path.isfile(matchFile):
