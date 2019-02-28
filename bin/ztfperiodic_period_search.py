@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 
 import ztfperiodic
 from ztfperiodic.period import CE
+from ztfperiodic.lcstats import calc_stats
 from ztfperiodic.utils import get_kowalski_bulk
 from ztfperiodic.utils import get_kowalski_list
 from ztfperiodic.utils import get_matchfile
@@ -36,6 +37,7 @@ def parse_commandline():
     parser.add_option("--doCPU",  action="store_true", default=False)
     parser.add_option("--doSaveMemory",  action="store_true", default=False)
     parser.add_option("--doRemoveTerrestrial",  action="store_true", default=False)
+    parser.add_option("--doLightcurveStats",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     #parser.add_option("-m","--matchFile",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.pytable") 
@@ -209,6 +211,8 @@ if opts.doGPU:
     if algorithm == "CE":
         proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=phase_bins, mag_bins=mag_bins, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
 
+        lightcurves = lightcurves[:10]
+
         if opts.doSaveMemory:
             periods_best, significances = proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, freqs = freqs, only_keep_best_freq=True,show_progress=True,returnBestFreq=True)
         else:
@@ -328,16 +332,34 @@ elif opts.doCPU:
         periods_best.append(period)
         significances.append(significance)
 
+if opts.doLightcurveStats:
+    print('Running lightcurve stats...')
+    stats = []
+    for ii,data in enumerate(lightcurves):
+        period = periods_best[ii]
+        if np.mod(ii,10) == 0:
+            print("%d/%d"%(ii,len(lightcurves)))
+        copy = np.ma.copy(data).T
+        t, mag, magerr = copy[:,0], copy[:,1], copy[:,2]
+
+        stat = calc_stats(t, mag, magerr, period)
+        stats.append(stat)
+
 print('Cataloging / Plotting lightcurves...')
+cnt = 0
 fid = open(catalogFile,'w')
 for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,periods_best,significances):
-    fid.write('%.10f %.10f %.10f %.10f\n'%(coordinate[0],coordinate[1],period, significance))
+    if opts.doLightcurveStats:
+        fid.write('%.10f %.10f %.10f %.10f '%(coordinate[0], coordinate[1], period, significance))
+        fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
+    else:
+        fid.write('%.10f %.10f %.10f %.10f\n'%(coordinate[0], coordinate[1], period, significance))
+
     if opts.doPlots and (significance>6):
         if opts.doGPU and (algorithm == "PDM"):
             copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
         else:
             copy = np.ma.copy(lightcurve).T
-        print(copy.shape)
         phases = np.mod(copy[:,0],2*period)/(2*period)
         magnitude, err = copy[:,1], copy[:,2]
         RA, Dec = coordinate
@@ -361,4 +383,5 @@ for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,
         fig.savefig(pngfile)
         plt.close()
 
+    cnt = cnt + 1
 fid.close()
