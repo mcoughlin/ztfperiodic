@@ -215,6 +215,11 @@ def get_kowalski_bulk(field, ccd, quadrant, kow, num_batches = 10,
     qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
     r = kow.query(query=qu)
     nlightcurves = r['result_data']['query_result']
+
+    if not "result_data" in r:
+        print("Query for field: %d, CCD: %d, quadrant %d failed... returning."%(field, ccd, quadrant))
+        return [], [], []
+
     batch_size = int(nlightcurves/num_batches)
 
     baseline=0
@@ -226,6 +231,10 @@ def get_kowalski_bulk(field, ccd, quadrant, kow, num_batches = 10,
 
         qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
         r = kow.query(query=qu)
+
+        if not "result_data" in r:
+            print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
+            continue
 
         #qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].find_one({})"}
         #r = kow.query(query=qu)

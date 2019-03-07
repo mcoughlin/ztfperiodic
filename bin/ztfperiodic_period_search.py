@@ -85,10 +85,10 @@ def slicestardist(lightcurves, coordinates):
         decs.append(coordinate[1])
     ras, decs = np.array(decs), np.array(decs)
 
-    filename = "../catalogs/bsc5.hdf5"
+    filename = "%s/bsc5.hdf5" % starCatalogDir
     sep = brightstardist(filename,ras,decs)
     idx1 = np.where(sep >= opts.stardist)[0]
-    filename = "../catalogs/Gaia.hdf5"
+    filename = "%s/Gaia.hdf5" % starCatalogDir
     sep = brightstardist(filename,ras,decs)
     idx2 = np.where(sep >= opts.stardist)[0]
     idx = np.union1d(idx1,idx2).astype(int)
@@ -119,6 +119,9 @@ batch_size = opts.batch_size
 field = opts.field
 ccd = opts.ccd
 quadrant = opts.quadrant
+
+scriptpath = os.path.realpath(__file__)
+starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
 
 if opts.doCPU and algorithm=="BLS":
     print("BLS only available for --doGPU")
@@ -163,10 +166,10 @@ if opts.lightcurve_source == "Kowalski":
                 ras, decs = f['ra'][:], f['dec'][:]
 
         if opts.doRemoveBrightStars:
-            filename = "../catalogs/bsc5.hdf5" 
+            filename = "%s/bsc5.hdf5" % starCatalogDir
             sep = brightstardist(filename,ras,decs)
             idx1 = np.where(sep >= opts.stardist)[0]
-            filename = "../catalogs/Gaia.hdf5"
+            filename = "%s/Gaia.hdf5" % starCatalogDir
             sep = brightstardist(filename,ras,decs)
             idx2 = np.where(sep >= opts.stardist)[0]
             idx = np.union1d(idx1,idx2)
