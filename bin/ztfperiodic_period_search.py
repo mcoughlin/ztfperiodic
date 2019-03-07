@@ -50,6 +50,7 @@ def parse_commandline():
     #parser.add_option("-m","--matchFile",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.pytable") 
     parser.add_option("-m","--matchFile",default="/media/Data/mcoughlin/Matchfiles/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.h5")
     parser.add_option("-b","--batch_size",default=1,type=int)
+    parser.add_option("-k","--kowalski_batch_size",default=1000,type=int)
     parser.add_option("-a","--algorithm",default="CE")
 
     parser.add_option("-f","--field",default=251,type=int)
@@ -60,7 +61,7 @@ def parse_commandline():
     parser.add_option("-s","--source_type",default="quadrant")
     parser.add_option("--catalog_file",default="../input/xray.dat")
 
-    parser.add_option("--stardist",default=10.0,type=float)
+    parser.add_option("--stardist",default=100.0,type=float)
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
@@ -147,7 +148,7 @@ if opts.lightcurve_source == "Kowalski":
 
     if opts.source_type == "quadrant":
         catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
-        lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow)
+        lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow, batch_size = opts.kowalski_batch_size)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates = slicestardist(lightcurves, coordinates)
 
