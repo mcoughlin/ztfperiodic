@@ -24,7 +24,7 @@ def parse_commandline():
     parser.add_option("-b","--batch_size",default=1,type=int)
     parser.add_option("-a","--algorithm",default="CE")
 
-    parser.add_option("-l","--lightcurve_source",default="matchfiles")
+    parser.add_option("-l","--lightcurve_source",default="Kowalski")
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
@@ -68,11 +68,11 @@ job_number = 0
 
 if opts.lightcurve_source == "Kowalski":
     fields, ccds, quadrants = np.arange(1,880), np.arange(1,17), np.arange(1,5)
-    fields = [251]
+    fields = [683]
     for field in fields:
         for ccd in ccds:
             for quadrant in quadrants:
-                fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --algorithm %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size,opts.algorithm))
+                fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size,opts.algorithm))
 
                 fid.write('JOB %d condor.sub\n'%(job_number))
                 fid.write('RETRY %d 3\n'%(job_number))
@@ -83,7 +83,7 @@ if opts.lightcurve_source == "Kowalski":
 elif opts.lightcurve_source == "matchfiles":
     directory="%s/*/*/*"%opts.dataDir
     for f in glob.iglob(directory):
-        fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --matchFile %s -l matchfiles --doSaveMemory --doRemoveTerrestrial --algorithm %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, f, opts.algorithm))
+        fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --matchFile %s -l matchfiles --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats --algorithm %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, f, opts.algorithm))
 
         fid.write('JOB %d condor.sub\n'%(job_number))
         fid.write('RETRY %d 3\n'%(job_number))
@@ -99,9 +99,9 @@ fid.write('executable = %s/ztfperiodic_period_search.py\n'%dir_path)
 fid.write('output = logs/out.$(jobNumber)\n');
 fid.write('error = logs/err.$(jobNumber)\n');
 if opts.lightcurve_source == "Kowalski":
-    fid.write('arguments = %s --outputDir %s --batch_size %d --field $(field) --ccd $(ccd) --quadrant $(quadrant) --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --algorithm %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.algorithm))
+    fid.write('arguments = %s --outputDir %s --batch_size %d --field $(field) --ccd $(ccd) --quadrant $(quadrant) --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats --algorithm %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.algorithm))
 else:
-    fid.write('arguments = %s --outputDir %s --batch_size %d --matchFile $(matchFile) -l matchfiles --doSaveMemory --doRemoveTerrestrial --algorithm %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.algorithm))
+    fid.write('arguments = %s --outputDir %s --batch_size %d --matchFile $(matchFile) -l matchfiles --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats --algorithm %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.algorithm))
 fid.write('requirements = OpSys == "LINUX"\n');
 fid.write('request_memory = 8192\n');
 if opts.doCPU:
