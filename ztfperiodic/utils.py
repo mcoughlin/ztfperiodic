@@ -147,7 +147,7 @@ def haversine_np(lon1, lat1, lon2, lat2):
 def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3]):
 
     qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20181220": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.fid': 1, 'data.programid': 1}" } } }
-    r = kow.query(query=qu)
+    r = database_query(kow, qu, nquery = 10)
 
     if not "result_data" in r:
         print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec)) 
@@ -213,12 +213,13 @@ def get_kowalski_bulk(field, ccd, quadrant, kow, num_batches = 10,
                       program_ids = [2,3]):
 
     qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
-    r = kow.query(query=qu)
-    nlightcurves = r['result_data']['query_result']
+    r = database_query(kow, qu, nquery = 10)
 
     if not "result_data" in r:
         print("Query for field: %d, CCD: %d, quadrant %d failed... returning."%(field, ccd, quadrant))
         return [], [], []
+
+    nlightcurves = r['result_data']['query_result']
 
     batch_size = int(nlightcurves/num_batches)
 
@@ -230,7 +231,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow, num_batches = 10,
     for nb in range(num_batches):
 
         qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
-        r = kow.query(query=qu)
+        r = database_query(kow, qu, nquery = 10)
 
         if not "result_data" in r:
             print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
@@ -359,3 +360,14 @@ def get_matchfile(f):
             cnt = cnt + 1
 
     return lightcurves, coordinates, baseline
+
+def database_query(kow, qu, nquery = 10):
+
+    r = {}
+    cnt = 0
+    while cnt < nquery:
+        r = kow.query(query=qu)
+        if "result_data" in r:
+            break
+        cnt = cnt + 1
+    return r
