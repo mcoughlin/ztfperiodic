@@ -14,6 +14,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+from astropy import units as u
+from astropy.coordinates import SkyCoord
+
 import ztfperiodic
 from ztfperiodic.period import CE
 from ztfperiodic.lcstats import calc_stats
@@ -38,6 +41,8 @@ def parse_commandline():
     parser.add_option("--doSaveMemory",  action="store_true", default=False)
     parser.add_option("--doRemoveTerrestrial",  action="store_true", default=False)
     parser.add_option("--doLightcurveStats",  action="store_true", default=False)
+    parser.add_option("--doRemoveBrightStars",  action="store_true", default=False)
+
     parser.add_option("--doParallel",  action="store_true", default=False)
     parser.add_option("-n","--Ncore",default=4,type=int)
 
@@ -55,12 +60,40 @@ def parse_commandline():
     parser.add_option("-s","--source_type",default="quadrant")
     parser.add_option("--catalog_file",default="../input/xray.dat")
 
+    parser.add_option("--stardist",default=10.0,type=float)
+
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
 
     opts, args = parser.parse_args()
 
     return opts
+
+def brightstardist(filename,ra,dec):
+     catalog = SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='icrs')
+     with h5py.File(filename, 'r') as f:
+         ras, decs = f['ra'][:], f['dec'][:]
+     c = SkyCoord(ra=ras*u.degree, dec=decs*u.degree,frame='icrs')
+     idx,sep,_ = catalog.match_to_catalog_sky(c)
+     return sep.arcsec
+
+def slicestardist(lightcurves, coordinates):
+
+    ras, decs = [], []
+    for coordinate in coordinates:
+        ras.append(coordinate[0])
+        decs.append(coordinate[1])
+    ras, decs = np.array(decs), np.array(decs)
+
+    filename = "../catalogs/bsc5.hdf5"
+    sep = brightstardist(filename,ras,decs)
+    idx1 = np.where(sep >= opts.stardist)[0]
+    filename = "../catalogs/Gaia.hdf5"
+    sep = brightstardist(filename,ras,decs)
+    idx2 = np.where(sep >= opts.stardist)[0]
+    idx = np.union1d(idx1,idx2).astype(int)
+
+    return [lightcurves[i] for i in idx], [coordinates[i] for i in idx]
 
 def touch(fname):
     if os.path.exists(fname):
@@ -112,17 +145,34 @@ if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
         catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
         lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow)
+        if opts.doRemoveBrightStars:
+            lightcurves, coordinates = slicestardist(lightcurves, coordinates)
+
     elif opts.source_type == "catalog":
         catalog_file = opts.catalog_file
-        lines = [line.rstrip('\n') for line in open(catalog_file)]
-        ras, decs = [], []
-        for line in lines:
-            lineSplit = line.split(" ")
-            ras.append(float(lineSplit[1]))
-            decs.append(float(lineSplit[2]))
-        ras, decs = np.array(ras), np.array(decs)
+        if ".dat" in catalog_file:
+            lines = [line.rstrip('\n') for line in open(catalog_file)]
+            ras, decs = [], []
+            for line in lines:
+                lineSplit = line.split(" ")
+                ras.append(float(lineSplit[1]))
+                decs.append(float(lineSplit[2]))
+            ras, decs = np.array(ras), np.array(decs)
+        elif ".hdf5" in catalog_file:
+            with h5py.File(catalog_file, 'r') as f:
+                ras, decs = f['ra'][:], f['dec'][:]
 
-        catalog_file_split = catalog_file.replace(".dat","").split("/")[-1]
+        if opts.doRemoveBrightStars:
+            filename = "../catalogs/bsc5.hdf5" 
+            sep = brightstardist(filename,ras,decs)
+            idx1 = np.where(sep >= opts.stardist)[0]
+            filename = "../catalogs/Gaia.hdf5"
+            sep = brightstardist(filename,ras,decs)
+            idx2 = np.where(sep >= opts.stardist)[0]
+            idx = np.union1d(idx1,idx2)
+            ras, decs = ras[idx], decs[idx]
+
+        catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").split("/")[-1]
         catalogFile = os.path.join(catalogDir,"%s.dat"%(catalog_file_split))
         lightcurves, coordinates, baseline = get_kowalski_list(ras, decs, kow)
     else:
@@ -138,6 +188,8 @@ elif opts.lightcurve_source == "matchfiles":
     catalogFile = os.path.join(catalogDir,matchFileEnd)
 
     lightcurves, coordinates, baseline = get_matchfile(matchFile)
+    if opts.doRemoveBrightStars:
+        lightcurves, coordinates = slicestardist(lightcurves, coordinates)
 
     if len(lightcurves) == 0:
         print("No data available...")
@@ -169,6 +221,9 @@ elif opts.lightcurve_source == "h5files":
         if newbaseline>baseline:
             baseline=newbaseline
     f.close()
+
+    if opts.doRemoveBrightStars:
+        lightcurves, coordinates = slicestardist(lightcurves, coordinates)
 
 if len(lightcurves) == 0:
     touch(catalogFile)
