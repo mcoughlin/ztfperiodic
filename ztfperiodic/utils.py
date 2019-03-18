@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import tables
 import glob
+import time
 
 import matplotlib
 matplotlib.use('Agg')
@@ -13,7 +14,8 @@ import matplotlib.image as mpimg
 
 from astropy.io import ascii
 from astropy import units as u
-from astropy.coordinates import SkyCoord
+from astropy.time import Time
+from astropy.coordinates import SkyCoord, BarycentricTrueEcliptic, EarthLocation
 
 import requests
 import tqdm
@@ -372,3 +374,15 @@ def database_query(kow, qu, nquery = 5):
             break
         cnt = cnt + 1
     return r
+
+def BJDConvert(mjd, RA, Dec):
+        times=mjd
+        t = Time(times,format='mjd',scale='utc')
+        t2=t.tdb
+        c = SkyCoord(RA,Dec, unit="deg")
+        d=c.transform_to(BarycentricTrueEcliptic)
+        Palomar=EarthLocation.of_site('Palomar')
+        delta=t2.light_travel_time(c,kind='barycentric',location=Palomar)
+        BJD_TDB=t2+delta
+
+        return BJD_TDB
