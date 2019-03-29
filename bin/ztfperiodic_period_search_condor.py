@@ -77,7 +77,7 @@ if opts.lightcurve_source == "Kowalski":
         for field in fields:
             for ccd in ccds:
                 for quadrant in quadrants:
-                    fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size,opts.algorithm))
+                    fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type quadrant --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size,opts.algorithm))
     
                     fid.write('JOB %d condor.sub\n'%(job_number))
                     fid.write('RETRY %d 3\n'%(job_number))
@@ -86,7 +86,7 @@ if opts.lightcurve_source == "Kowalski":
                     job_number = job_number + 1
     elif opts.source_type == "catalog":
         for ii in range(opts.Ncatalog):
-            fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --user %s --pwd %s --batch_size %d -l Kowalski --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --catalog_file %s --doPlots --Ncatalog %d --Ncatindex %d\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, opts.user, opts.pwd,opts.batch_size, opts.algorithm, opts.catalog_file,opts.Ncatalog,ii))
+            fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --user %s --pwd %s --batch_size %d -l Kowalski --source_type catalog --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --catalog_file %s --doPlots --Ncatalog %d --Ncatindex %d\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, opts.user, opts.pwd,opts.batch_size, opts.algorithm, opts.catalog_file,opts.Ncatalog,ii))
 
             fid.write('JOB %d condor.sub\n'%(job_number))
             fid.write('RETRY %d 3\n'%(job_number))
