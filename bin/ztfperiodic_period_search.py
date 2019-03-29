@@ -60,11 +60,15 @@ def parse_commandline():
     parser.add_option("-l","--lightcurve_source",default="matchfiles")
     parser.add_option("-s","--source_type",default="quadrant")
     parser.add_option("--catalog_file",default="../input/xray.dat")
+    parser.add_option("--Ncatalog",default=1,type=int)
+    parser.add_option("--Ncatindex",default=0,type=int)
 
     parser.add_option("--stardist",default=100.0,type=float)
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
+
+    parser.add_option("-p","--program_ids",default="2,3")
 
     opts, args = parser.parse_args()
 
@@ -120,6 +124,7 @@ batch_size = opts.batch_size
 field = opts.field
 ccd = opts.ccd
 quadrant = opts.quadrant
+program_ids = list(map(int,opts.program_ids.split(",")))
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
@@ -138,6 +143,7 @@ if not os.path.isdir(catalogDir):
 lightcurves = []
 coordinates = []
 baseline=0
+fil = 'all'
 
 print('Organizing lightcurves...')
 if opts.lightcurve_source == "Kowalski":
@@ -148,7 +154,7 @@ if opts.lightcurve_source == "Kowalski":
 
     if opts.source_type == "quadrant":
         catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
-        lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow, batch_size = opts.kowalski_batch_size)
+        lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow, batch_size = opts.kowalski_batch_size, program_ids=program_ids)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates = slicestardist(lightcurves, coordinates)
 
@@ -176,9 +182,17 @@ if opts.lightcurve_source == "Kowalski":
             idx = np.union1d(idx1,idx2)
             ras, decs = ras[idx], decs[idx]
 
+        ras_split = np.array_split(ras,opts.Ncatalog)
+        decs_split = np.array_split(decs,opts.Ncatalog)
+        
+        ras = ras_split[opts.Ncatindex]
+        decs = decs_split[opts.Ncatindex]
+
         catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").split("/")[-1]
-        catalogFile = os.path.join(catalogDir,"%s.dat"%(catalog_file_split))
-        lightcurves, coordinates, baseline = get_kowalski_list(ras, decs, kow)
+        catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(catalog_file_split,
+                                                           opts.Ncatindex))
+        lightcurves, coordinates, baseline = get_kowalski_list(ras, decs, kow,
+                                                               program_ids=program_ids)
     else:
         print("Source type unknown...")
         exit(0)
