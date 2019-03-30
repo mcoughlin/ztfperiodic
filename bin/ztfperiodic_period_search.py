@@ -447,6 +447,12 @@ for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,
         ax=fig.add_subplot(1,1,1)
         ax.errorbar(phases, magnitude,err,ls='none',c='k')
         period2=period
+        ymed = np.nanmedian(magnitude)
+        y10, y90 = np.nanpercentile(magnitude,10), np.nanpercentile(magnitude,90)
+        ystd = np.nanmedian(err)
+        ymin = y10 - 3*ystd
+        ymax = y90 + 3*ystd
+        plt.ylim([ymin,ymax])
         ax.set_title(str(period2)+"_"+str(RA)+"_"+str(Dec))
 
         figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec, 
