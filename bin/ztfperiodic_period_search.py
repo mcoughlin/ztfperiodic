@@ -136,6 +136,9 @@ if opts.doCPU and algorithm=="BLS":
 period_ranges = [0,0.002777778,0.0034722,0.0041666,0.004861111,0.006944444,0.020833333,0.041666667,0.083333333,0.166666667,0.5,3.0,10.0,50.0,np.inf]
 folders = [None,"4min","5min","6min","7_10min","10_30min","30_60min","1_2hours","2_4hours","4_12hours","12_72hours","3_10days","10_50days","50_baseline"]
 
+epoch_ranges = [0,100,500,np.inf]
+epoch_folders = ["0-100","100-500","500-all"]
+
 catalogDir = os.path.join(outputDir,'catalog',algorithm)
 if not os.path.isdir(catalogDir):
     os.makedirs(catalogDir)
@@ -480,7 +483,13 @@ for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,
         idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
         if folders[idx.astype(int)] == None:
             continue
-        folder = os.path.join(basefolder,folders[idx.astype(int)])
+
+        nepoch = np.array(len(copy[:,0]))
+        idx2 = np.where((nepoch>=epoch_ranges[:-1]) & (nepoch<=epoch_ranges[1:]))[0][0]
+        if epoch_folders[idx2.astype(int)] == None:
+            continue
+
+        folder = os.path.join(basefolder,folders[idx.astype(int)],epoch_folders[idx2.astype(int)])
         if not os.path.isdir(folder):
             os.makedirs(folder)
         pngfile = os.path.join(folder,figfile)
