@@ -405,6 +405,26 @@ elif opts.doCPU:
         periods_best.append(period)
         significances.append(significance)
 
+    elif opts.algorithm == "AOV":
+        from ztfperiodic.pyaov.pyaov import aovw
+        for ii,data in enumerate(lightcurves):
+            if np.mod(ii,10) == 0:
+                print("%d/%d"%(ii,len(lightcurves)))
+
+            copy = np.ma.copy(data).T
+            copy[:,1] = (copy[:,1]  - np.min(copy[:,1])) \
+               / (np.max(copy[:,1]) - np.min(copy[:,1]))
+
+            aov, fr, _ = aovw(copy[:,0], copy[:,1], copy[:,2],
+                              fstop=np.max(1.0/periods),
+                              fstep=1/periods[0])
+
+            significance = np.abs(np.mean(aov)-np.max(aov))/np.std(aov)
+            period = periods[np.argmax(aov)]
+
+        periods_best.append(period)
+        significances.append(significance)
+
 if opts.doLightcurveStats:
     print('Running lightcurve stats...')
 
