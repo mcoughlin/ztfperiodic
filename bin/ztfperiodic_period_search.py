@@ -69,6 +69,7 @@ def parse_commandline():
     parser.add_option("-w","--pwd")
 
     parser.add_option("-p","--program_ids",default="2,3")
+    parser.add_option("--min_epochs",default=50,type=int)
 
     opts, args = parser.parse_args()
 
@@ -125,6 +126,7 @@ field = opts.field
 ccd = opts.ccd
 quadrant = opts.quadrant
 program_ids = list(map(int,opts.program_ids.split(",")))
+min_epochs = opts.min_epochs
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
@@ -157,7 +159,7 @@ if opts.lightcurve_source == "Kowalski":
 
     if opts.source_type == "quadrant":
         catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
-        lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow, batch_size = opts.kowalski_batch_size, program_ids=program_ids)
+        lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow, batch_size = opts.kowalski_batch_size, program_ids=program_ids, min_epochs=min_epochs)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates = slicestardist(lightcurves, coordinates)
 
@@ -199,7 +201,8 @@ if opts.lightcurve_source == "Kowalski":
         catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(catalog_file_split,
                                                            opts.Ncatindex))
         lightcurves, coordinates, baseline = get_kowalski_list(ras, decs, kow,
-                                                               program_ids=program_ids)
+                                                               program_ids=program_ids,
+                                                               min_epochs=min_epochs)
     else:
         print("Source type unknown...")
         exit(0)
@@ -238,7 +241,7 @@ elif opts.lightcurve_source == "h5files":
 
         data = list(f[key])
         data = np.array(data).T
-        if len(data[:,0]) < 50: continue
+        if len(data[:,0]) < min_epochs: continue
         lightcurve=(data[:,0],data[:,1],data[:,2])
         lightcurves.append(lightcurve)
 
@@ -339,7 +342,7 @@ if opts.doGPU:
             for data, out in zip(lightcurves,results):
                 freqs, powers = out
                 copy = np.ma.copy(data).T
-                fap = fap_baluev(copy[:,0], copy[:,1], powers, np.max(freqs))
+                fap = fap_baluev(copy[:,0], copy[:,2], powers, np.max(freqs))
                 idx = np.argmin(fap)
 
                 period = 1./freqs[idx]
@@ -470,7 +473,6 @@ for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,
         RA, Dec = coordinate
 
         fig = plt.figure(figsize=(10,10))
-        plt.gca().invert_yaxis()
         ax=fig.add_subplot(1,1,1)
         ax.errorbar(phases, magnitude,err,ls='none',c='k')
         period2=period
@@ -480,6 +482,7 @@ for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,
         ymin = y10 - 3*ystd
         ymax = y90 + 3*ystd
         plt.ylim([ymin,ymax])
+        plt.gca().invert_yaxis()
         ax.set_title(str(period2)+"_"+str(RA)+"_"+str(Dec))
 
         figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec, 
