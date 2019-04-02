@@ -169,7 +169,7 @@ if opts.lightcurve_source == "Kowalski":
             lines = [line.rstrip('\n') for line in open(catalog_file)]
             ras, decs = [], []
             for line in lines:
-                lineSplit = line.split(" ")
+                lineSplit = list(filter(None,line.split(" ")))
                 if "blue" in catalog_file:
                     ras.append(float(lineSplit[0]))
                     decs.append(float(lineSplit[1]))
