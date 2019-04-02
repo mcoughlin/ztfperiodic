@@ -146,7 +146,7 @@ def haversine_np(lon1, lat1, lon2, lat2):
     c = 2 * np.arcsin(np.sqrt(a))
     return c
 
-def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3]):
+def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], min_epochs = 1):
 
     qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20181220": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.fid': 1, 'data.programid': 1}" } } }
     r = database_query(kow, qu, nquery = 10)
@@ -174,6 +174,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3]):
             hjd.append(dic["hjd"])
             mag.append(dic["mag"])
             magerr.append(dic["magerr"])
+        if len(hjd) < min_epochs: continue
 
         lightcurves[objid] = {}
         lightcurves[objid]["hjd"] = np.array(hjd)
@@ -182,7 +183,8 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3]):
 
     return lightcurves
 
-def get_kowalski_list(ras, decs, kow, program_ids = [2,3]):
+def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
+                      max_error = 2.0):
 
     baseline=0
     cnt=0
@@ -196,9 +198,17 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3]):
         for lkey in ls.keys():
             l = ls[lkey]
             hjd, mag, magerr = l["hjd"], l["mag"], l["magerr"]
-            if len(hjd) == 0: continue
+            hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
 
-            lightcurve=(np.array(hjd),np.array(mag),np.array(magerr))
+            idx = np.where(~np.isnan(mag) & ~np.isnan(magerr))[0]
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+
+            idx = np.where(magerr<=max_error)[0]
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+
+            if len(hjd) < min_epochs: continue
+
+            lightcurve=(hjd,mag,magerr)
             lightcurves.append(lightcurve)
 
             coordinate=(np.median(ra),np.median(dec))
@@ -212,7 +222,7 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3]):
     return lightcurves, coordinates, baseline
 
 def get_kowalski_bulk(field, ccd, quadrant, kow, batch_size = 100,
-                      program_ids = [2,3]):
+                      program_ids = [2,3], min_epochs = 1, max_error = 2.0):
 
     qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
     r = database_query(kow, qu, nquery = 10)
@@ -255,9 +265,17 @@ def get_kowalski_bulk(field, ccd, quadrant, kow, batch_size = 100,
                 magerr.append(dic["magerr"])
                 ra.append(dic["ra"])
                 dec.append(dic["dec"])
-            if len(hjd) == 0: continue
 
-            lightcurve=(np.array(hjd),np.array(mag),np.array(magerr))
+            hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
+            idx = np.where(~np.isnan(mag) & ~np.isnan(magerr))[0]
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+
+            idx = np.where(magerr<=max_error)[0]
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+
+            if len(hjd) < min_epochs: continue
+
+            lightcurve=(hjd,mag,magerr)
             lightcurves.append(lightcurve)
 
             coordinate=(np.median(ra),np.median(dec))
