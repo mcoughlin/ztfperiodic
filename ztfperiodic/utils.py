@@ -184,16 +184,19 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
     return lightcurves
 
 def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
-                      max_error = 2.0):
+                      max_error = 2.0, errs = None):
 
     baseline=0
     cnt=0
     lightcurves, coordinates = [], []
     
-    for ra, dec in zip(ras, decs):
+    if errs is None:
+        errs = 5.0*np.ones(ras.shape)
+ 
+    for ra, dec, err in zip(ras, decs, errs):
         if np.mod(cnt,100) == 0:
             print('%d/%d'%(cnt,len(ras)))       
-        ls = get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
+        ls = get_kowalski(ra, dec, kow, radius = err, oid = None,
                           program_ids = program_ids)
         for lkey in ls.keys():
             l = ls[lkey]
