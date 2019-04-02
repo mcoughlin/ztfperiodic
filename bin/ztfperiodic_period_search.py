@@ -168,8 +168,12 @@ if opts.lightcurve_source == "Kowalski":
             ras, decs = [], []
             for line in lines:
                 lineSplit = line.split(" ")
-                ras.append(float(lineSplit[1]))
-                decs.append(float(lineSplit[2]))
+                if "blue" in catalog_file:
+                    ras.append(float(lineSplit[0]))
+                    decs.append(float(lineSplit[1]))
+                else:
+                    ras.append(float(lineSplit[1]))
+                    decs.append(float(lineSplit[2]))
             ras, decs = np.array(ras), np.array(decs)
         elif ".hdf5" in catalog_file:
             with h5py.File(catalog_file, 'r') as f:
