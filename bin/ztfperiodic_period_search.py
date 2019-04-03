@@ -179,7 +179,7 @@ if opts.lightcurve_source == "Kowalski":
                     decs.append(float(lineSplit[2]))
                     err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
                     errs.append(err)
-                elif ("swift" in catalog_file) or ("xmm" in catalog_file):
+                elif ("swift" in catalog_file) or ("xmm" in catalog_file) or ("rosat" in catalog_file):
                     ras.append(float(lineSplit[1]))
                     decs.append(float(lineSplit[2]))
                     err = float(lineSplit[3])
