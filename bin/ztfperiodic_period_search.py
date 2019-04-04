@@ -59,7 +59,7 @@ def parse_commandline():
 
     parser.add_option("-l","--lightcurve_source",default="matchfiles")
     parser.add_option("-s","--source_type",default="quadrant")
-    parser.add_option("--catalog_file",default="../input/xray.dat")
+    parser.add_option("--catalog_file",default="../catalogs/swift.dat")
     parser.add_option("--Ncatalog",default=1,type=int)
     parser.add_option("--Ncatindex",default=0,type=int)
 
@@ -304,12 +304,10 @@ significances, periods_best = [], []
 
 print('Period finding lightcurves...')
 if opts.doGPU:
-    from cuvarbase.ce import ConditionalEntropyAsyncProcess
-    from cuvarbase.bls import eebls_gpu_fast
-    from cuvarbase.lombscargle import LombScargleAsyncProcess, fap_baluev
-    from cuvarbase.pdm import PDMAsyncProcess
 
     if algorithm == "CE":
+        from cuvarbase.ce import ConditionalEntropyAsyncProcess
+     
         proc = ConditionalEntropyAsyncProcess(use_double=True, use_fast=True, phase_bins=phase_bins, mag_bins=mag_bins, phase_overlap=1, mag_overlap=1, only_keep_best_freq=True)
 
         if opts.doSaveMemory:
@@ -326,6 +324,7 @@ if opts.doGPU:
                 significances.append(significance)  
 
     elif algorithm == "BLS":
+        from cuvarbase.bls import eebls_gpu_fast
         for ii,data in enumerate(lightcurves):
             if np.mod(ii,10) == 0:
                 print("%d/%d"%(ii,len(lightcurves)))
@@ -342,6 +341,8 @@ if opts.doGPU:
             significances.append(significance)
 
     elif algorithm == "LS":
+        from cuvarbase.lombscargle import LombScargleAsyncProcess, fap_baluev
+
         nfft_sigma, spp = 5, 3
 
         ls_proc = LombScargleAsyncProcess(use_double=True,
@@ -370,6 +371,8 @@ if opts.doGPU:
         ls_proc.finish()
 
     elif algorithm == "PDM":
+        from cuvarbase.pdm import PDMAsyncProcess
+
         kind, nbins = 'binned_linterp', 10
 
         pdm_proc = PDMAsyncProcess()
