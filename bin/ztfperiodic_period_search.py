@@ -170,7 +170,7 @@ if opts.lightcurve_source == "Kowalski":
             ras, decs, errs = [], [], []
             for line in lines:
                 lineSplit = list(filter(None,line.split(" ")))
-                if "blue" in catalog_file:
+                if ("blue" in catalog_file) or ("uvex" in catalog_file):
                     ras.append(float(lineSplit[0]))
                     decs.append(float(lineSplit[1]))
                     errs.append(5.0)
