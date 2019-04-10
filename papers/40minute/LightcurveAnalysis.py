@@ -247,7 +247,7 @@ plt.xlabel('time')
 guess = model_pars
 plt.plot(t[:],basic_model(t[:],model_pars),zorder=4)
 plt.show()
-plotName = os.path.join(baseplotDir,'fit.png')
+plotName = os.path.join(baseplotDir,'fit.pdf')
 plt.savefig(plotName)
 plt.close()
 

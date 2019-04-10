@@ -40,7 +40,8 @@ def gaia_query(ra_deg, dec_deg, rad_deg, maxmag=25,
     """
     vquery = Vizier(columns=['Source', 'RA_ICRS', 'DE_ICRS',
                              'phot_g_mean_mag','phot_r_mean_mag',
-                             'Plx', 'e_Plx', 'BP-RP'],
+                             'Plx', 'e_Plx', 'BP-RP',
+                             'Teff', 'Rad', 'Lum'],
                     column_filters={"phot_g_mean_mag":
                                     ("<%f" % maxmag),
                                    "phot_r_mean_mag":
@@ -50,9 +51,13 @@ def gaia_query(ra_deg, dec_deg, rad_deg, maxmag=25,
     field = SkyCoord(ra=ra_deg, dec=dec_deg,
                            unit=(u.deg, u.deg),
                            frame='icrs')
-    return vquery.query_region(field,
+    try:
+        source = vquery.query_region(field,
                                width=("%fd" % rad_deg),
-                               catalog="I/345/gaia2")[0]
+                               catalog="I/345/gaia2")
+        return source[0]
+    except:
+        return []
 
 def ps1_query(ra_deg, dec_deg, rad_deg, maxmag=25,
                maxsources=1):
@@ -75,9 +80,14 @@ def ps1_query(ra_deg, dec_deg, rad_deg, maxmag=25,
     field = SkyCoord(ra=ra_deg, dec=dec_deg,
                            unit=(u.deg, u.deg),
                            frame='icrs')
-    return vquery.query_region(field,
+
+    try:
+        source = vquery.query_region(field,
                                width=("%fd" % rad_deg),
-                               catalog="II/349/ps1")[0]
+                               catalog="II/349/ps1")
+        return source[0]
+    except:
+        return []
  
 def get_cookie(username, password):
     """Get a cookie from the IPAC login service
