@@ -24,6 +24,7 @@ def parse_commandline():
     parser.add_option("-b","--batch_size",default=1,type=int)
     parser.add_option("-a","--algorithm",default="CE")
 
+    parser.add_option("--doLightcurveStats",  action="store_true", default=False)
     parser.add_option("--doLongPeriod",  action="store_true", default=False)
 
     parser.add_option("-l","--lightcurve_source",default="Kowalski")
@@ -55,6 +56,11 @@ if opts.doLongPeriod:
 else:
     long_period_flag = ""
 
+if opts.doLightcurveStats:
+    stats_flag = "--doLightcurveStats"
+else:
+    stats_flag = ""
+
 dataDir = opts.dataDir
 outputDir = opts.outputDir
 batch_size = opts.batch_size
@@ -84,7 +90,7 @@ if opts.lightcurve_source == "Kowalski":
         for field in fields:
             for ccd in ccds:
                 for quadrant in quadrants:
-                    fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type quadrant --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size,opts.algorithm,long_period_flag))
+                    fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type quadrant --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size,opts.algorithm,long_period_flag,stats_flag))
     
                     fid.write('JOB %d condor.sub\n'%(job_number))
                     fid.write('RETRY %d 3\n'%(job_number))
@@ -93,7 +99,7 @@ if opts.lightcurve_source == "Kowalski":
                     job_number = job_number + 1
     elif opts.source_type == "catalog":
         for ii in range(opts.Ncatalog):
-            fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --user %s --pwd %s --batch_size %d -l Kowalski --source_type catalog --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --catalog_file %s --doPlots --Ncatalog %d --Ncatindex %d %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, opts.user, opts.pwd,opts.batch_size, opts.algorithm, opts.catalog_file,opts.Ncatalog,ii,long_period_flag))
+            fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --user %s --pwd %s --batch_size %d -l Kowalski --source_type catalog --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --catalog_file %s --doPlots --Ncatalog %d --Ncatindex %d %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, opts.user, opts.pwd,opts.batch_size, opts.algorithm, opts.catalog_file,opts.Ncatalog,ii,long_period_flag,stats_flag))
 
             fid.write('JOB %d condor.sub\n'%(job_number))
             fid.write('RETRY %d 3\n'%(job_number))
@@ -104,7 +110,7 @@ if opts.lightcurve_source == "Kowalski":
 elif opts.lightcurve_source == "matchfiles":
     directory="%s/*/*/*"%opts.dataDir
     for f in glob.iglob(directory):
-        fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --matchFile %s -l matchfiles --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats --algorithm %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, f, opts.algorithm,long_period_flag))
+        fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --matchFile %s -l matchfiles --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats --algorithm %s %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, f, opts.algorithm,long_period_flag,stats_flag))
 
         fid.write('JOB %d condor.sub\n'%(job_number))
         fid.write('RETRY %d 3\n'%(job_number))
@@ -121,11 +127,11 @@ fid.write('output = logs/out.$(jobNumber)\n');
 fid.write('error = logs/err.$(jobNumber)\n');
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('arguments = %s --outputDir %s --batch_size %d --field $(field) --ccd $(ccd) --quadrant $(quadrant) --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats --algorithm %s %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.algorithm,long_period_flag))
+        fid.write('arguments = %s --outputDir %s --batch_size %d --field $(field) --ccd $(ccd) --quadrant $(quadrant) --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats --algorithm %s %s %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.algorithm,long_period_flag,stats_flag))
     elif opts.source_type == "catalog":
-        fid.write('arguments = %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --Ncatindex $(Ncatindex) --algorithm %s %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,opts.algorithm,long_period_flag))
+        fid.write('arguments = %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --Ncatindex $(Ncatindex) --algorithm %s %s %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,opts.algorithm,long_period_flag,stats_flag))
 else:
-    fid.write('arguments = %s --outputDir %s --batch_size %d --matchFile $(matchFile) -l matchfiles --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats --algorithm %s %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.algorithm,long_period_flag))
+    fid.write('arguments = %s --outputDir %s --batch_size %d --matchFile $(matchFile) -l matchfiles --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats --algorithm %s %s %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.algorithm,long_period_flag,stats_flag))
 fid.write('requirements = OpSys == "LINUX"\n');
 fid.write('request_memory = 8192\n');
 if opts.doCPU:
