@@ -24,28 +24,52 @@ from astroplan import observability_table
 
 from astroquery.simbad import Simbad
 
+import ztfperiodic
+from ztfperiodic.utils import gaia_query
+from ztfperiodic.utils import ps1_query
+
 def parse_commandline():
     """
     Parse the options given on the command-line.
     """
     parser = optparse.OptionParser()
 
-    parser.add_option("-o","--outfile",default="/Users/mcoughlin/Code/KP84/KevinPeriods/NewSearch/obj.dat")
-    parser.add_option("-i","--inputDir",default="/Users/mcoughlin/Code/KP84/KevinPeriods/NewSearch/ForFollowUp/")
+    parser.add_option("-o","--outfile",default="/Users/mcoughlin/Desktop/CE/CE_rosat/obj.dat")
+    parser.add_option("-i","--inputDir",default="/Users/mcoughlin/Desktop/CE/CE_rosat/")
     parser.add_option("-z","--ztfperiodicInputDir",default="../input")
+
+    parser.add_option("--doGaia",  action="store_true", default=False)
 
     parser.add_option("--doXray",  action="store_true", default=False)
     parser.add_option("--doCheckObservable",  action="store_true", default=False)
     parser.add_option("--doMagnitudeCut",  action="store_true", default=False)
    
+    parser.add_option("-c","--significance_cut",default=0.0,type=float)
     parser.add_option("-m","--magnitude",default=16.0,type=float)
-
     parser.add_option("-s","--deltat_start",default=0.0,type=float)
     parser.add_option("-e","--deltat_end",default=24.0,type=float)
 
     opts, args = parser.parse_args()
 
     return opts
+
+def get_filepaths(directory):
+    """
+    This function will generate the file names in a directory 
+    tree by walking the tree either top-down or bottom-up. For each 
+    directory in the tree rooted at directory top (including top itself), 
+    it yields a 3-tuple (dirpath, dirnames, filenames).
+    """
+    file_paths = []  # List which will store all of the full filepaths.
+
+    # Walk the tree.
+    for root, directories, files in os.walk(directory):
+        for filename in files:
+            # Join the two strings in order to form the full filepath.
+            filepath = os.path.join(root, filename)
+            file_paths.append(filepath)  # Add it to the list.
+
+    return file_paths  # Self-explanatory.
 
 def convert_to_hex(val, delimiter=':', force_sign=False):
     """
@@ -83,30 +107,9 @@ def convert_to_hex(val, delimiter=':', force_sign=False):
         deg_str = '{:02d}'.format(degree * s_factor)
     return '{0:s}{3:s}{1:02d}{3:s}{2:.2f}'.format(deg_str, minute, second, delimiter)
 
-def ps1_query(ra_deg, dec_deg, rad_deg, maxmag=25,
-               maxsources=1):
-    """
-    Query Pan-STARRS @ VizieR using astroquery.vizier
-    parameters: ra_deg, dec_deg, rad_deg: RA, Dec, field
-                                          radius in degrees
-                maxmag: upper limit G magnitude (optional)
-                maxsources: maximum number of sources
-    returns: astropy.table object
-    """
-    vquery = Vizier(columns=['Source', 'RAJ2000', 'DEJ2000',
-                             'gmag','rmag','imag','zmag','ymag'],
-                    column_filters={"gmag":
-                                    ("<%f" % maxmag),
-                                   "imag":
-                                    ("<%f" % maxmag)},
-                    row_limit = maxsources)
-
-    field = SkyCoord(ra=ra_deg, dec=dec_deg,
-                           unit=(u.deg, u.deg),
-                           frame='icrs')
-    return vquery.query_region(field,
-                               width=("%fd" % rad_deg),
-                               catalog="II/349/ps1")[0]
+def mass_luminosity(L):
+    M = L**(1/3.5)
+    return M
 
 # Parse command line
 opts = parse_commandline()
@@ -123,13 +126,14 @@ if opts.doXray:
 observed = ["ZTFJ20071648","ZTFJ19274408","ZTFJ18320856","ZTFJ19385841","ZTFJ19541818","ZTFJ18492550","ZTFJ18390938","ZTFJ17182524","ZTFJ17483237","ZTFJ18174120","ZTFJ19244707","ZTFJ20062220","ZTFJ19243104","ZTFJ1913-1205","ZTFJ1909-0654","ZTFJ18494132","ZTFJ18461355","ZTFJ1913-1105","ZTFJ1921-0815","ZTFJ1905-1910","ZTFJ1843-2041","ZTFJ1924-1258","ZTFJ1914-0718","ZTFJ1909-1437","ZTFJ18261000","ZTFJ18221209","ZTFJ1903-1730","ZTFJ1903-0721","ZTFJ1903-0721","ZTFJ18562916","ZTFJ18451515","ZTFJ18321130"]
 observed = []
 
-fid = open(outfile,'w')
-filenames = glob.glob(os.path.join(inputDir,"*.png"))
+filenames = get_filepaths(inputDir)
+filenames = [x for x in filenames if "png" in x]
+
 sigs = []
 for filename in filenames:
     filenameSplit = filename.split("/")[-1].replace(".png","").split("_")
     sig, ra, dec, period = float(filenameSplit[0]), float(filenameSplit[1]), float(filenameSplit[2]), float(filenameSplit[3])
- 
+
     coord = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
     tar = FixedTarget(coord=coord, name="tmp")
 
@@ -151,7 +155,7 @@ location = EarthLocation.from_geodetic(-111.5967*u.deg, 31.9583*u.deg,
                                        2096*u.m)
 
 kp = Observer(location=location, name="Kitt Peak",timezone="US/Arizona")
-kp = Observer(location=location, name="Mauna Kea",timezone="US/Hawaii")
+#kp = Observer(location=location, name="Mauna Kea",timezone="US/Hawaii")
 
 #observe_time = Time('2018-11-04 1:00:00')
 observe_time = Time.now()
@@ -161,12 +165,15 @@ tstart, tend = observe_time[0],observe_time[-1]
 global_constraints = [AirmassConstraint(max = 1.5, boolean_constraint = False),
     AtNightConstraint.twilight_civil()]
 
+fid = open(outfile,'w')
 FixedTargets = []
 for filename in filenames:
     filenameSplit = filename.split("/")[-1].replace(".png","").split("_")
     sig, ra, dec, period = float(filenameSplit[0]), float(filenameSplit[1]), float(filenameSplit[2]), float(filenameSplit[3])
     ra_hex, dec_hex = convert_to_hex(ra*24/360.0,delimiter=''), convert_to_hex(dec,delimiter='')
-  
+ 
+    if sig < opts.significance_cut: continue
+ 
     if np.abs(period - 1.0) < 0.01:
         continue
  
@@ -188,10 +195,13 @@ for filename in filenames:
             continue 
 
     ps1 = ps1_query(ra, dec, 5/3600.0)
-    gmag = ps1["gmag"]
-    if opts.doMagnitudeCut:
-        if gmag < opts.magnitude:
-            continue
+    if not ps1:
+        gmag = np.nan
+    else:
+        gmag = ps1["gmag"]
+        if opts.doMagnitudeCut:
+            if gmag < opts.magnitude:
+                continue
 
     FixedTargets.append(tar)
 
@@ -205,6 +215,23 @@ for filename in filenames:
     except:
         name = "NA"
 
+    col, mag, P_min = np.nan, np.nan, np.nan
+    if opts.doGaia:
+        gaia = gaia_query(ra, dec, 5/3600.0)
+        if gaia:
+            col = gaia['BP-RP'][0]
+            mag = gaia['Gmag'][0] + 5*(np.log10(gaia['Plx'][0]) - 2)
+
+            L, rad = gaia['Lum'][0], gaia['Rad'][0]
+            # mass-luminosity
+            M = L**(1/3.5)
+            M = M * 2*1e33 # grams
+
+            V = (4/3)*np.pi*(rad * 7.0*1e10)**3.0 # cm^3
+            density = M / V
+
+            P_min = 12.6/24.0 * (density)**(-1/2.0)
+
     if opts.doXray:
         idx1 = np.where(np.abs(xray["ras"] - ra)<=2e-3)[0]
         idx2 = np.where(np.abs(xray["decs"] - dec)<=2e-3)[0]
@@ -215,9 +242,9 @@ for filename in filenames:
         else:
             appflux, absflux = np.nan, np.nan
 
-        fid.write('%s %.5f %.5f %.5f %.5f %.5f %.5e %.5e "%s"\n'%(objname, ra, dec, period, sig, gmag, appflux, absflux, name))
+        print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5e %.5e "%s"'%(objname, ra, dec, period, sig, gmag, col, mag, P_min, appflux, absflux, name),file=fid,flush=True)
     else:
-        fid.write('%s %.5f %.5f %.5f %.5f %.5f "%s"\n'%(objname, ra, dec, period, sig, gmag, name))
+        print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f "%s"'%(objname, ra, dec, period, sig, gmag, col, mag, P_min, name),file=fid,flush=True)
 
 fid.close()
 
