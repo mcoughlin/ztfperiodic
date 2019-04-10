@@ -160,7 +160,7 @@ if opts.lightcurve_source == "Kowalski":
     kow = Kowalski(username=opts.user, password=opts.pwd)
 
     if opts.source_type == "quadrant":
-        catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
+        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.dat"%(field, ccd, quadrant,opts.Ncatindex))
         lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow, program_ids=program_ids, min_epochs=min_epochs, num_batches=opts.Ncatalog, nb=opts.Ncatindex)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates = slicestardist(lightcurves, coordinates)
@@ -308,6 +308,7 @@ if opts.doGPU and (algorithm == "PDM"):
         lightcurves_pdm.append((t, y, weights(np.ones(dy.shape)), freqs))
     lightcurves = lightcurves_pdm 
 
+print('Analyzing %d lightcurves...' % len(lightcurves))
 periods_best, significances = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU)
 
 if opts.doLightcurveStats:
