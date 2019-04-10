@@ -234,8 +234,9 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
 
     return lightcurves, coordinates, baseline
 
-def get_kowalski_bulk(field, ccd, quadrant, kow, batch_size = 100,
-                      program_ids = [2,3], min_epochs = 1, max_error = 2.0):
+def get_kowalski_bulk(field, ccd, quadrant, kow,
+                      program_ids = [2,3], min_epochs = 1, max_error = 2.0,
+                      num_batches=1, nb=0):
 
     qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
     r = database_query(kow, qu, nquery = 10)
@@ -245,15 +246,15 @@ def get_kowalski_bulk(field, ccd, quadrant, kow, batch_size = 100,
         return [], [], []
 
     nlightcurves = r['result_data']['query_result']
-
-    num_batches = np.ceil(nlightcurves/batch_size).astype(int)
+    batch_size = np.ceil(nlightcurves/num_batches).astype(int)
 
     baseline=0
     cnt=0
     lightcurves, coordinates = [], []
 
     objdata = {}
-    for nb in range(num_batches):
+    #for nb in range(num_batches):
+    for nb in [nb]:
         print("Querying batch number %d/%d..."%(nb, num_batches))
 
         qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}

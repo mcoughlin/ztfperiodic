@@ -161,7 +161,7 @@ if opts.lightcurve_source == "Kowalski":
 
     if opts.source_type == "quadrant":
         catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
-        lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow, batch_size = opts.kowalski_batch_size, program_ids=program_ids, min_epochs=min_epochs)
+        lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow, program_ids=program_ids, min_epochs=min_epochs, num_batches=opts.Ncatalog, nb=opts.Ncatindex)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates = slicestardist(lightcurves, coordinates)
 
