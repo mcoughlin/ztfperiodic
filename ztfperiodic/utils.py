@@ -158,6 +158,8 @@ def haversine_np(lon1, lat1, lon2, lat2):
 
 def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], min_epochs = 1):
 
+    tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
+
     qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20181220": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.fid': 1, 'data.programid': 1}" } } }
     r = database_query(kow, qu, nquery = 10)
 
@@ -181,6 +183,8 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
 
         for dic in dat:
             if not dic["programid"] in program_ids: continue
+            if (dic["programid"]==1) and (dic["hjd"] > tmax): continue
+
             hjd.append(dic["hjd"])
             mag.append(dic["mag"])
             magerr.append(dic["magerr"])
@@ -238,6 +242,8 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                       program_ids = [2,3], min_epochs = 1, max_error = 2.0,
                       num_batches=1, nb=0):
 
+    tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
+
     qu = {"query_type":"general_search","query":"db['ZTF_sources_20181220'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
     r = database_query(kow, qu, nquery = 10)
 
@@ -274,6 +280,8 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
             data = data["data"]
             for dic in data:
                 if not dic["programid"] in program_ids: continue
+                if (dic["programid"]==1) and (dic["hjd"] > tmax): continue
+
                 hjd.append(dic["hjd"])
                 mag.append(dic["mag"])
                 magerr.append(dic["magerr"])
