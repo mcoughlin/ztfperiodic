@@ -55,6 +55,11 @@ deltat_end = opts.deltat_end
 
 names = ["objname", "ra", "dec", "period", "sig", "gmag", "col", "mag", "P_min", "name"]
 data = astropy.io.ascii.read(infile,names=names)
+data.add_row(["1815f", 234.884000, 50.460778, 7.2*60.0, 100, -1, -1, -1, -1, "NA"])
+data.add_row(["ZTFJ1858-2024", 284.5247891, -20.4135043, 8.6*60.0, 100, -1, -1, -1, -1, "NA"])
+data.sort("sig")
+data.reverse()
+data = astropy.table.unique(data, keys=["objname"])
 
 location = EarthLocation.from_geodetic(-111.5967*u.deg, 31.9583*u.deg,
                                        2096*u.m)
