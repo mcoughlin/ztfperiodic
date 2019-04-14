@@ -135,8 +135,8 @@ def AB2AmpPhi(input_arr):
         arr : array of fourier components, A&B
     
     output:
-        arr : array of fourier amplitudes and phases (normalised to the first)
-
+        arr : array of fourier amplitudes and phases. The phase differences are 
+                normalised between 0 and 1.
     """
 
     arr = copy.deepcopy(input_arr)
@@ -150,8 +150,12 @@ def AB2AmpPhi(input_arr):
 
     # normalise
     arr[2::2] /= arr[0] # normalise amplitudes
-    arr[3::2] -= arr[1] # remove phase 0
-    arr[3::2] = arr[3::2]%(2*np.pi) # [0,2pi>
+
+    # report phase shift
+
+    maxk = int(np.size(input_arr)/2)
+    for k in range(2,maxk+1,1):
+        arr[k*2-1] = (arr[k*2-1]/k-arr[1])/(2.*np.pi/k)%1
 
     return arr
 
