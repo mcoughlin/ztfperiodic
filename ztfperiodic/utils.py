@@ -161,7 +161,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
-    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190412": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.fid': 1, 'data.programid': 1}" } } }
+    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190412": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.fid': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1}" } } }
     r = database_query(kow, qu, nquery = 10)
 
     if not "result_data" in r:
@@ -216,8 +216,9 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
 
     for ra, dec, err in zip(ras, decs, errs):
         if amaj is not None:
-            ellipse = patches.Ellipse((ra, dec), amaj[cnt], amin[cnt], angle=-phi[cnt])
- 
+            ellipse = patches.Ellipse((ra, dec), amaj[cnt], amin[cnt],
+                                      angle=phi[cnt]) 
+
         if np.mod(cnt,100) == 0:
             print('%d/%d'%(cnt,len(ras)))       
         ls = get_kowalski(ra, dec, kow, radius = err, oid = None,
