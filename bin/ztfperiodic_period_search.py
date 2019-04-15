@@ -170,17 +170,27 @@ if opts.lightcurve_source == "Kowalski":
         if ".dat" in catalog_file:
             lines = [line.rstrip('\n') for line in open(catalog_file)]
             ras, decs, errs = [], [], []
+            if ("fermi" in catalog_file):
+                amaj, amin, phi = [], [], []
             for line in lines:
                 lineSplit = list(filter(None,line.split(" ")))
                 if ("blue" in catalog_file) or ("uvex" in catalog_file):
                     ras.append(float(lineSplit[0]))
                     decs.append(float(lineSplit[1]))
                     errs.append(5.0)
-                elif ("vlss" in catalog_file) or ("fermi" in catalog_file):
+                elif ("vlss" in catalog_file):
                     ras.append(float(lineSplit[1]))
                     decs.append(float(lineSplit[2]))
                     err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
                     errs.append(err)
+                elif ("fermi" in catalog_file):
+                    ras.append(float(lineSplit[1]))
+                    decs.append(float(lineSplit[2]))
+                    err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
+                    errs.append(err)
+                    amaj.append(float(lineSplit[3]))
+                    amin.append(float(lineSplit[4]))
+                    phi.append(float(lineSplit[5]))
                 elif ("swift" in catalog_file) or ("xmm" in catalog_file) or ("rosat" in catalog_file):
                     ras.append(float(lineSplit[1]))
                     decs.append(float(lineSplit[2]))
@@ -191,6 +201,8 @@ if opts.lightcurve_source == "Kowalski":
                     decs.append(float(lineSplit[2]))
                     errs.append(5.0)
             ras, decs, errs = np.array(ras), np.array(decs), np.array(errs)
+            if ("fermi" in catalog_file):
+                amaj, amin, phi = np.array(amaj), np.array(amin), np.array(phi)
         elif ".hdf5" in catalog_file:
             with h5py.File(catalog_file, 'r') as f:
                 ras, decs = f['ra'][:], f['dec'][:]
@@ -205,14 +217,25 @@ if opts.lightcurve_source == "Kowalski":
             idx2 = np.where(sep >= opts.stardist)[0]
             idx = np.union1d(idx1,idx2)
             ras, decs, errs = ras[idx], decs[idx], errs[idx]
+            if ("fermi" in catalog_file):
+                amaj, amin, phi = amaj[idx], amin[idx], phi[idx]
 
         ras_split = np.array_split(ras,opts.Ncatalog)
         decs_split = np.array_split(decs,opts.Ncatalog)
-        errs_split = np.array_split(errs,opts.Ncatalog)        
+        errs_split = np.array_split(errs,opts.Ncatalog)
 
         ras = ras_split[opts.Ncatindex]
         decs = decs_split[opts.Ncatindex]
         errs = errs_split[opts.Ncatindex]
+
+        if ("fermi" in catalog_file):
+            amaj_split = np.array_split(amaj,opts.Ncatalog)
+            amin_split = np.array_split(amin,opts.Ncatalog)
+            phi_split = np.array_split(phi,opts.Ncatalog)
+
+            amaj = amaj_split[opts.Ncatindex]
+            amin = amin_split[opts.Ncatindex]
+            phi = phi_split[opts.Ncatindex]
 
         catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").split("/")[-1]
         catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(catalog_file_split,
@@ -220,7 +243,8 @@ if opts.lightcurve_source == "Kowalski":
         lightcurves, coordinates, baseline = get_kowalski_list(ras, decs, kow,
                                                  program_ids=program_ids,
                                                  min_epochs=min_epochs,
-                                                 errs=errs)
+                                                 errs=errs,
+                                                 amaj=amaj, amin=amin, phi=phi)
     else:
         print("Source type unknown...")
         exit(0)
