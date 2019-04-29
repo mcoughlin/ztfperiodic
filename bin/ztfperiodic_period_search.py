@@ -166,6 +166,8 @@ if opts.lightcurve_source == "Kowalski":
             lightcurves, coordinates = slicestardist(lightcurves, coordinates)
 
     elif opts.source_type == "catalog":
+
+        amaj, amin, phi = None, None, None
         catalog_file = opts.catalog_file
         if ".dat" in catalog_file:
             lines = [line.rstrip('\n') for line in open(catalog_file)]
