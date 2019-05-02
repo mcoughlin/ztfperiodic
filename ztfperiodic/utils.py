@@ -340,7 +340,6 @@ def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
     load_file(url+querystr, outf=tmpfile, auth=(user, pwd), showpbar=True)
 
     data = ascii.read(tmpfile)
-    print(tmpfile)
 
     for f in glob.iglob(directory):
         fsplit = f.split("/")[-1].split("_")
