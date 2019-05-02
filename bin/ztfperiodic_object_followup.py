@@ -97,7 +97,12 @@ if not (opts.doCPU or opts.doGPU):
     print("--doCPU or --doGPU required")
     exit(0)
 
-path_out_dir='%s/%.5f_%.5f'%(outputDir,opts.ra,opts.declination)
+if not opts.objid is None:
+    path_out_dir='%s/%.5f_%.5f/%d'%(outputDir, opts.ra, 
+                                    opts.declination, opts.objid)
+else:
+    path_out_dir='%s/%.5f_%.5f'%(outputDir, opts.ra,
+                                    opts.declination)
 
 if opts.doOverwrite:
     rm_command = "rm -rf %s"%path_out_dir
@@ -111,20 +116,21 @@ gaia = gaia_query(opts.ra, opts.declination, 5/3600.0)
 ps1 = ps1_query(opts.ra, opts.declination, 5/3600.0)
 
 if opts.doPlots:
-    gaiaimage = os.path.join(inputDir,'ESA_Gaia_DR2_HRD_Gaia_625.png')
-    img=mpimg.imread(gaiaimage)
-    img=np.flipud(img)
-    plotName = os.path.join(path_out_dir,'gaia.pdf')
-    plt.figure(figsize=(12,12))
-    plt.imshow(img,origin='lower')
-
-    xval, yval = gaia['BP-RP'], gaia['Gmag'] + 5*(np.log10(gaia['Plx']) - 2)
-    xval = 162 + (235-162)*xval/1.0
-    yval = 625 + (145-625)*yval/15.0
-
-    plt.plot(xval,yval,'kx')
-    plt.savefig(plotName)
-    plt.close()
+    if len(gaia) > 0:
+        gaiaimage = os.path.join(inputDir,'ESA_Gaia_DR2_HRD_Gaia_625.png')
+        img=mpimg.imread(gaiaimage)
+        img=np.flipud(img)
+        plotName = os.path.join(path_out_dir,'gaia.pdf')
+        plt.figure(figsize=(12,12))
+        plt.imshow(img,origin='lower')
+    
+        xval, yval = gaia['BP-RP'], gaia['Gmag'] + 5*(np.log10(gaia['Plx']) - 2)
+        xval = 162 + (235-162)*xval/1.0
+        yval = 625 + (145-625)*yval/15.0
+    
+        plt.plot(xval,yval,'kx')
+        plt.savefig(plotName)
+        plt.close()
 
 if opts.doJustHR:
     exit(0)
@@ -138,7 +144,9 @@ if opts.lightcurve_source == "Kowalski":
         for objid in lightcurves.keys():
             print("Object ID: %s"%objid)
         exit(0)
-
+    elif len(lightcurves.keys()) == 0:
+        print("No objects... sorry.")
+        exit(0)
     key = list(lightcurves.keys())[0]
     hjd, mag, magerr = lightcurves[key]["hjd"], lightcurves[key]["mag"], lightcurves[key]["magerr"]
 
@@ -172,6 +180,12 @@ period = ls.best_period
 LCfit = fdecomp.fit_best(np.c_[hjd,mag,magerr],period,5,plotname=False)
 
 if opts.doPlots:
+    photFile = os.path.join(path_out_dir,'phot.dat')
+    fid = open(photFile,'w')
+    for a, b, c in zip(hjd, mag, magerr):
+        fid.write('%s %.10f %.10f\n' % (a, b, c))
+    fid.close()
+
     plotName = os.path.join(path_out_dir,'phot.pdf')
     plt.figure(figsize=(12,8))
     plt.errorbar(hjd-hjd[0],mag,yerr=magerr,fmt='bo')
