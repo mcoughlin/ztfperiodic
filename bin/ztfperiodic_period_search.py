@@ -305,13 +305,13 @@ if len(lightcurves) == 0:
 if baseline<10:
     basefolder = os.path.join(outputDir,'%sHC'%algorithm)
     if opts.doLongPeriod:
-        fmin, fmax = 18, 72
+        fmin, fmax = 18, 48
     else:
         fmin, fmax = 18, 1440
 else:
     basefolder = os.path.join(outputDir,'%s'%algorithm)
     if opts.doLongPeriod:
-        fmin, fmax = 2/baseline, 72
+        fmin, fmax = 2/baseline, 48
     else:
         fmin, fmax = 2/baseline, 480
 
