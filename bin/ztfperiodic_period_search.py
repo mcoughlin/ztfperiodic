@@ -44,6 +44,7 @@ def parse_commandline():
     parser.add_option("--doLightcurveStats",  action="store_true", default=False)
     parser.add_option("--doRemoveBrightStars",  action="store_true", default=False)
     parser.add_option("--doLongPeriod",  action="store_true", default=False)
+    parser.add_option("--doCombineFilt",  action="store_true", default=False)
 
     parser.add_option("--doParallel",  action="store_true", default=False)
     parser.add_option("-n","--Ncore",default=4,type=int)
@@ -129,6 +130,7 @@ ccd = opts.ccd
 quadrant = opts.quadrant
 program_ids = list(map(int,opts.program_ids.split(",")))
 min_epochs = opts.min_epochs
+doCombineFilt = opts.doCombineFilt
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
@@ -169,6 +171,11 @@ if opts.lightcurve_source == "Kowalski":
 
         amaj, amin, phi = None, None, None
         catalog_file = opts.catalog_file
+        if doCombineFilt:
+            default_err = 3.0
+        else:
+            default_err = 5.0
+
         if ".dat" in catalog_file:
             lines = [line.rstrip('\n') for line in open(catalog_file)]
             ras, decs, errs = [], [], []
@@ -176,10 +183,10 @@ if opts.lightcurve_source == "Kowalski":
                 amaj, amin, phi = [], [], []
             for line in lines:
                 lineSplit = list(filter(None,line.split(" ")))
-                if ("blue" in catalog_file) or ("uvex" in catalog_file):
+                if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file):
                     ras.append(float(lineSplit[0]))
                     decs.append(float(lineSplit[1]))
-                    errs.append(5.0)
+                    errs.append(default_err)
                 elif ("vlss" in catalog_file):
                     ras.append(float(lineSplit[1]))
                     decs.append(float(lineSplit[2]))
@@ -201,14 +208,14 @@ if opts.lightcurve_source == "Kowalski":
                 else:
                     ras.append(float(lineSplit[1]))
                     decs.append(float(lineSplit[2]))
-                    errs.append(5.0)
+                    errs.append(default_err)
             ras, decs, errs = np.array(ras), np.array(decs), np.array(errs)
             if ("fermi" in catalog_file):
                 amaj, amin, phi = np.array(amaj), np.array(amin), np.array(phi)
         elif ".hdf5" in catalog_file:
             with h5py.File(catalog_file, 'r') as f:
                 ras, decs = f['ra'][:], f['dec'][:]
-            errs = 5.0*np.ones(ras.shape)
+            errs = default_err*np.ones(ras.shape)
 
         if opts.doRemoveBrightStars:
             filename = "%s/bsc5.hdf5" % starCatalogDir
@@ -246,7 +253,8 @@ if opts.lightcurve_source == "Kowalski":
                                                  program_ids=program_ids,
                                                  min_epochs=min_epochs,
                                                  errs=errs,
-                                                 amaj=amaj, amin=amin, phi=phi)
+                                                 amaj=amaj, amin=amin, phi=phi,
+                                                 doCombineFilt=doCombineFilt)
     else:
         print("Source type unknown...")
         exit(0)
