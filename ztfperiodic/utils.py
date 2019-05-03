@@ -205,7 +205,8 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
 
 def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
                       max_error = 2.0, errs = None,
-                      amaj=None, amin=None, phi=None):
+                      amaj=None, amin=None, phi=None,
+                      doCombineFilt=False):
 
     baseline=0
     cnt=0
@@ -223,9 +224,16 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
             print('%d/%d'%(cnt,len(ras)))       
         ls = get_kowalski(ra, dec, kow, radius = err, oid = None,
                           program_ids = program_ids)
-        for lkey in ls.keys():
+        if len(ls.keys()) == 0: continue
+
+        if doCombineFilt:
+            ls = combine_lcs(ls)
+
+        for ii, lkey in enumerate(ls.keys()):
             l = ls[lkey]
             raobj, decobj = l["ra"], l["dec"]
+            if len(raobj) == 0:
+                continue
 
             if amaj is not None:
                 if not ellipse.contains_point((np.median(raobj),np.median(decobj))): continue
@@ -255,6 +263,31 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
         cnt = cnt + 1
 
     return lightcurves, coordinates, baseline
+
+def combine_lcs(ls):
+
+    ras, decs = [], []
+    hjds, mags, magerrs = [], [], []
+    for ii, lkey in enumerate(ls.keys()):
+        l = ls[lkey]
+        if ii == 0:
+            raobj, decobj = l["ra"], l["dec"]
+            hjd, mag, magerr = l["hjd"], l["mag"]-np.median(l["mag"]), l["magerr"]
+        else:
+            raobj = np.hstack((raobj,l["ra"]))
+            decobj = np.hstack((decobj,l["dec"]))
+            hjd = np.hstack((hjd,l["hjd"]))
+            mag = np.hstack((mag,l["mag"]-np.median(l["mag"])))
+            magerr = np.hstack((magerr,l["magerr"]))
+
+    data = {}
+    data["ra"] = raobj
+    data["dec"] = decobj
+    data["hjd"] = hjd
+    data["mag"] = mag
+    data["magerr"] = magerr
+
+    return {'combined': data}
 
 def get_kowalski_bulk(field, ccd, quadrant, kow,
                       program_ids = [2,3], min_epochs = 1, max_error = 2.0,
