@@ -183,7 +183,7 @@ if opts.lightcurve_source == "Kowalski":
                 amaj, amin, phi = [], [], []
             for line in lines:
                 lineSplit = list(filter(None,line.split(" ")))
-                if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file):
+                if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file) or ("rosat" in catalog_file):
                     ras.append(float(lineSplit[0]))
                     decs.append(float(lineSplit[1]))
                     errs.append(default_err)
@@ -200,7 +200,7 @@ if opts.lightcurve_source == "Kowalski":
                     amaj.append(float(lineSplit[5]))
                     amin.append(float(lineSplit[6]))
                     phi.append(float(lineSplit[7]))
-                elif ("swift" in catalog_file) or ("xmm" in catalog_file) or ("rosat" in catalog_file):
+                elif ("swift" in catalog_file) or ("xmm" in catalog_file):
                     ras.append(float(lineSplit[1]))
                     decs.append(float(lineSplit[2]))
                     err = float(lineSplit[3])
