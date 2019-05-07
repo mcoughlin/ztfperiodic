@@ -130,6 +130,7 @@ ccd = opts.ccd
 quadrant = opts.quadrant
 program_ids = list(map(int,opts.program_ids.split(",")))
 min_epochs = opts.min_epochs
+catalog_file = opts.catalog_file
 doCombineFilt = opts.doCombineFilt
 
 scriptpath = os.path.realpath(__file__)
@@ -139,8 +140,12 @@ if opts.doCPU and algorithm=="BLS":
     print("BLS only available for --doGPU")
     exit(0)
 
-period_ranges = [0,0.002777778,0.0034722,0.0041666,0.004861111,0.006944444,0.020833333,0.041666667,0.083333333,0.166666667,0.5,3.0,10.0,50.0,np.inf]
-folders = [None,"4min","5min","6min","7_10min","10_30min","30_60min","1_2hours","2_4hours","4_12hours","12_72hours","3_10days","10_50days","50_baseline"]
+if (opts.source_type == "catalog") and ("blue" in catalog_file):
+    period_ranges = [0,0.0020833333333333333,0.002777778,0.0034722,0.0041666,0.004861111,0.006944444,0.020833333,0.041666667,0.083333333,0.166666667,0.5,3.0,10.0,50.0,np.inf]
+    folders = [None,"3min","4min","5min","6min","7_10min","10_30min","30_60min","1_2hours","2_4hours","4_12hours","12_72hours","3_10days","10_50days","50_baseline"]
+else:
+    period_ranges = [0,0.002777778,0.0034722,0.0041666,0.004861111,0.006944444,0.020833333,0.041666667,0.083333333,0.166666667,0.5,3.0,10.0,50.0,np.inf]
+    folders = [None,"4min","5min","6min","7_10min","10_30min","30_60min","1_2hours","2_4hours","4_12hours","12_72hours","3_10days","10_50days","50_baseline"]
 
 epoch_ranges = [0,100,500,np.inf]
 epoch_folders = ["0-100","100-500","500-all"]
@@ -163,14 +168,13 @@ if opts.lightcurve_source == "Kowalski":
 
     if opts.source_type == "quadrant":
         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.dat"%(field, ccd, quadrant,opts.Ncatindex))
-        lightcurves, coordinates, baseline = get_kowalski_bulk(field, ccd, quadrant, kow, program_ids=program_ids, min_epochs=min_epochs, num_batches=opts.Ncatalog, nb=opts.Ncatindex)
+        lightcurves, coordinates, filters, baseline = get_kowalski_bulk(field, ccd, quadrant, kow, program_ids=program_ids, min_epochs=min_epochs, num_batches=opts.Ncatalog, nb=opts.Ncatindex)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates = slicestardist(lightcurves, coordinates)
 
     elif opts.source_type == "catalog":
 
         amaj, amin, phi = None, None, None
-        catalog_file = opts.catalog_file
         if doCombineFilt:
             default_err = 3.0
         else:
@@ -249,7 +253,8 @@ if opts.lightcurve_source == "Kowalski":
         catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").split("/")[-1]
         catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(catalog_file_split,
                                                            opts.Ncatindex))
-        lightcurves, coordinates, baseline = get_kowalski_list(ras, decs, kow,
+        lightcurves, coordinates, filters, baseline = get_kowalski_list(ras, decs,
+                                                 kow,
                                                  program_ids=program_ids,
                                                  min_epochs=min_epochs,
                                                  errs=errs,
@@ -366,14 +371,14 @@ if opts.doLightcurveStats:
 print('Cataloging / Plotting lightcurves...')
 cnt = 0
 fid = open(catalogFile,'w')
-for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,periods_best,significances):
+for lightcurve, filt, coordinate, period, significance in zip(lightcurves,filters,coordinates,periods_best,significances):
     if opts.doLightcurveStats:
         fid.write('%.10f %.10f %.10f %.10f '%(coordinate[0], coordinate[1], period, significance))
         fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
     else:
         fid.write('%.10f %.10f %.10f %.10f\n'%(coordinate[0], coordinate[1], period, significance))
 
-    if opts.doPlots and (significance>6):
+    if opts.doPlots and (significance>7):
         if opts.doGPU and (algorithm == "PDM"):
             copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
         else:
@@ -396,7 +401,7 @@ for lightcurve, coordinate, period, significance in zip(lightcurves,coordinates,
         ax.set_title(str(period2)+"_"+str(RA)+"_"+str(Dec))
 
         figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec, 
-                                                  period, fil)
+                                                  period, "".join(filt))
         idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
         if folders[idx.astype(int)] == None:
             continue
