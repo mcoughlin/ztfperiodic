@@ -53,6 +53,8 @@ airmass_limit = opts.airmass
 deltat_start = opts.deltat_start
 deltat_end = opts.deltat_end
 
+observed = ["ZTFJ0713-0126"]
+
 names = ["objname", "ra", "dec", "period", "sig", "gmag", "col", "mag", "P_min", "name"]
 data = astropy.io.ascii.read(infile,names=names)
 data.add_row(["1815f", 234.884000, 50.460778, 7.2*60.0, 100, -1, -1, -1, -1, "NA"])
@@ -81,6 +83,8 @@ exposure_segment = 1
 fid = open(outfile,'w')
 fid.write('# name ra dec mode filter exposure_time exposure_segment window_start window_end priority\n')
 for row in data:
+    if row["objname"] in observed: continue
+
     coord = SkyCoord(ra=row["ra"]*u.deg, dec=row["dec"]*u.deg)
     tar = FixedTarget(coord=coord, name="tmp")
 

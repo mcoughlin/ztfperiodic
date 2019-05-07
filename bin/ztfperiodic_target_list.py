@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 matplotlib.rcParams.update({'font.size': 22})
+import matplotlib.colors as colors
 from matplotlib import pyplot as plt
 
 from astroquery.vizier import Vizier
@@ -165,6 +166,8 @@ tstart, tend = observe_time[0],observe_time[-1]
 global_constraints = [AirmassConstraint(max = 1.5, boolean_constraint = False),
     AtNightConstraint.twilight_civil()]
 
+cols, mags, periods = [], [], []
+
 fid = open(outfile,'w')
 FixedTargets = []
 for filename in filenames:
@@ -196,9 +199,9 @@ for filename in filenames:
 
     ps1 = ps1_query(ra, dec, 5/3600.0)
     if not ps1:
-        gmag = np.nan
+        gmag, rmag = np.nan, np.nan
     else:
-        gmag = ps1["gmag"]
+        gmag, rmag = ps1["gmag"], ps1["rmag"]
         if opts.doMagnitudeCut:
             if gmag < opts.magnitude:
                 continue
@@ -232,6 +235,10 @@ for filename in filenames:
 
             P_min = 12.6/24.0 * (density)**(-1/2.0)
 
+            cols.append(col)
+            mags.append(mag)
+            periods.append(period)
+
     if opts.doXray:
         idx1 = np.where(np.abs(xray["ras"] - ra)<=2e-3)[0]
         idx2 = np.where(np.abs(xray["decs"] - dec)<=2e-3)[0]
@@ -247,6 +254,20 @@ for filename in filenames:
         print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f "%s"'%(objname, ra, dec, period, sig, gmag, col, mag, P_min, name),file=fid,flush=True)
 
 fid.close()
+
+if opts.doGaia:
+    plt.figure(figsize=(30,20))
+    sc = plt.scatter(cols, mags, s=60, c=periods, alpha=0.8,
+                     norm=colors.LogNorm(vmin=np.min(periods),
+                                         vmax=np.max(periods)),
+                     cmap='PuBu_r')
+    cbar = plt.colorbar(sc, extend='max')
+    cbar.set_label('Period [days]')
+    plt.xlabel('Gaia BP-RP color')
+    plt.ylabel('Gaia G absolute magnitude')
+    plotName = outfile.replace(".dat","_hr.png").replace(".txt","_hr.png")
+    plt.savefig(plotName)
+    plt.close()
 
 table = observability_table(global_constraints, kp, FixedTargets,
                             time_range=[tstart,tend])
