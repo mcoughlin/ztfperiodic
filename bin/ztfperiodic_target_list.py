@@ -166,7 +166,7 @@ tstart, tend = observe_time[0],observe_time[-1]
 global_constraints = [AirmassConstraint(max = 1.5, boolean_constraint = False),
     AtNightConstraint.twilight_civil()]
 
-cols, mags, periods = [], [], []
+cols, mags, ecols, emags, periods = [], [], [], [], []
 
 fid = open(outfile,'w')
 FixedTargets = []
@@ -223,7 +223,9 @@ for filename in filenames:
         gaia = gaia_query(ra, dec, 5/3600.0)
         if gaia:
             col = gaia['BP-RP'][0]
+            ecol = np.sqrt(gaia['e_BPmag'][0]**2 + gaia['e_RPmag'][0]**2)
             mag = gaia['Gmag'][0] + 5*(np.log10(gaia['Plx'][0]) - 2)
+            emag = np.sqrt(gaia['e_Gmag'][0]**2 + (5*gaia['e_Plx'][0]/(gaia['Plx'][0]*np.log(10)))**2)
 
             L, rad = gaia['Lum'][0], gaia['Rad'][0]
             # mass-luminosity
@@ -238,6 +240,8 @@ for filename in filenames:
             cols.append(col)
             mags.append(mag)
             periods.append(period)
+            ecols.append(ecol)
+            emags.append(emag)
 
     if opts.doXray:
         idx1 = np.where(np.abs(xray["ras"] - ra)<=2e-3)[0]
@@ -257,7 +261,8 @@ fid.close()
 
 if opts.doGaia:
     plt.figure(figsize=(30,20))
-    sc = plt.scatter(cols, mags, s=60, c=periods, alpha=0.8,
+    plt.errorbar(cols, mags, xerr=ecols, yerr=emags, marker='p', markerfacecolor='w', markeredgecolor='w', fmt='ko', markersize=0)
+    sc = plt.scatter(cols, mags, s=200, c=periods, alpha=1.0,
                      norm=colors.LogNorm(vmin=np.min(periods),
                                          vmax=np.max(periods)),
                      cmap='PuBu_r')
@@ -265,6 +270,8 @@ if opts.doGaia:
     cbar.set_label('Period [days]')
     plt.xlabel('Gaia BP-RP color')
     plt.ylabel('Gaia G absolute magnitude')
+    plt.ylim([-5,10])
+    plt.gca().invert_yaxis()
     plotName = outfile.replace(".dat","_hr.png").replace(".txt","_hr.png")
     plt.savefig(plotName)
     plt.close()
