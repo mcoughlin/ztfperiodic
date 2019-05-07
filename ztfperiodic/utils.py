@@ -162,7 +162,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
-    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190412": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.fid': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1}" } } }
+    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190412": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
     r = database_query(kow, qu, nquery = 10)
 
     if not "result_data" in r:
@@ -181,7 +181,8 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
             if not objid == str(oid):
                 continue
         dat = datlist["data"]
-        hjd, mag, magerr = [], [], []
+        filt = datlist["filter"]
+        hjd, mag, magerr, fid = [], [], [], []
         ra, dec = [], []
 
         for dic in dat:
@@ -193,6 +194,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
             magerr.append(dic["magerr"])
             ra.append(dic["ra"])
             dec.append(dic["dec"])
+            fid.append(filt)
         if len(hjd) < min_epochs: continue
 
         lightcurves[objid] = {}
@@ -201,6 +203,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
         lightcurves[objid]["magerr"] = np.array(magerr)
         lightcurves[objid]["ra"] = np.array(ra)
         lightcurves[objid]["dec"] = np.array(dec)
+        lightcurves[objid]["fid"] = np.array(fid)
 
     return lightcurves
 
@@ -211,7 +214,7 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
 
     baseline=0
     cnt=0
-    lightcurves, coordinates = [], []
+    lightcurves, filters, coordinates = [], [], []
     
     if errs is None:
         errs = 5.0*np.ones(ras.shape)
@@ -239,16 +242,19 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
             if amaj is not None:
                 if not ellipse.contains_point((np.median(raobj),np.median(decobj))): continue
 
-            hjd, mag, magerr = l["hjd"], l["mag"], l["magerr"]
+            hjd, mag, magerr, fid = l["hjd"], l["mag"], l["magerr"], l["fid"]
             hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
+            fid = np.array(fid)
 
             idx = np.where(~np.isnan(mag) & ~np.isnan(magerr))[0]
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
             raobj, decobj = raobj[idx], decobj[idx]
+            fid = fid[idx]
 
             idx = np.where(magerr<=max_error)[0]
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
             raobj, decobj = raobj[idx], decobj[idx]
+            fid = fid[idx]
 
             if len(hjd) < min_epochs: continue
 
@@ -258,12 +264,14 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
             coordinate=(np.median(raobj),np.median(decobj))
             coordinates.append(coordinate)
 
+            filters.append(np.unique(fid).tolist())
+
             newbaseline = max(hjd)-min(hjd)
             if newbaseline>baseline:
                 baseline=newbaseline
         cnt = cnt + 1
 
-    return lightcurves, coordinates, baseline
+    return lightcurves, coordinates, filters, baseline
 
 def combine_lcs(ls):
 
@@ -274,12 +282,14 @@ def combine_lcs(ls):
         if ii == 0:
             raobj, decobj = l["ra"], l["dec"]
             hjd, mag, magerr = l["hjd"], l["mag"]-np.median(l["mag"]), l["magerr"]
+            fid = l["fid"]
         else:
             raobj = np.hstack((raobj,l["ra"]))
             decobj = np.hstack((decobj,l["dec"]))
             hjd = np.hstack((hjd,l["hjd"]))
             mag = np.hstack((mag,l["mag"]-np.median(l["mag"])))
             magerr = np.hstack((magerr,l["magerr"]))
+            fid = np.hstack((fid,l["fid"]))
 
     data = {}
     data["ra"] = raobj
@@ -287,6 +297,7 @@ def combine_lcs(ls):
     data["hjd"] = hjd
     data["mag"] = mag
     data["magerr"] = magerr
+    data["fid"] = fid
 
     return {'combined': data}
 
@@ -301,21 +312,21 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
     if not "result_data" in r:
         print("Query for field: %d, CCD: %d, quadrant %d failed... returning."%(field, ccd, quadrant))
-        return [], [], []
+        return [], [], [], []
 
     nlightcurves = r['result_data']['query_result']
     batch_size = np.ceil(nlightcurves/num_batches).astype(int)
 
     baseline=0
     cnt=0
-    lightcurves, coordinates = [], []
+    lightcurves, coordinates, filters = [], [], []
 
     objdata = {}
     #for nb in range(num_batches):
     for nb in [nb]:
         print("Querying batch number %d/%d..."%(nb, num_batches))
 
-        qu = {"query_type":"general_search","query":"db['ZTF_sources_20190412'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
+        qu = {"query_type":"general_search","query":"db['ZTF_sources_20190412'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
         r = database_query(kow, qu, nquery = 10)
 
         if not "result_data" in r:
@@ -327,8 +338,9 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
         datas = r["result_data"]["query_result"]
         for data in datas:
-            hjd, mag, magerr, ra, dec = [], [], [], [], []
+            hjd, mag, magerr, ra, dec, fid = [], [], [], [], [], []
             objid = data["_id"]
+            filt = data["filter"]
             data = data["data"]
             for dic in data:
                 if not dic["programid"] in program_ids: continue
@@ -339,13 +351,17 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                 magerr.append(dic["magerr"])
                 ra.append(dic["ra"])
                 dec.append(dic["dec"])
+                fid.append(filt)
 
             hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
+            fid = np.array(fid)
             idx = np.where(~np.isnan(mag) & ~np.isnan(magerr))[0]
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            fid = fid[idx]
 
             idx = np.where(magerr<=max_error)[0]
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            fid = fid[idx]
 
             if len(hjd) < min_epochs: continue
 
@@ -355,12 +371,14 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
             coordinate=(np.median(ra),np.median(dec))
             coordinates.append(coordinate)
 
+            filters.append(np.unique(fid).tolist())
+
             newbaseline = max(hjd)-min(hjd)
             if newbaseline>baseline:
                 baseline=newbaseline
             cnt = cnt + 1
 
-    return lightcurves, coordinates, baseline
+    return lightcurves, coordinates, filters, baseline
 
 def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
 
