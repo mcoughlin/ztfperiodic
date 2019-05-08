@@ -400,8 +400,9 @@ for lightcurve, filt, coordinate, period, significance in zip(lightcurves,filter
         plt.gca().invert_yaxis()
         ax.set_title(str(period2)+"_"+str(RA)+"_"+str(Dec))
 
+        filt_str = [str(x) for x in filt]
         figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec, 
-                                                  period, "".join(filt))
+                                                  period, "".join(filt_str))
         idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
         if folders[idx.astype(int)] == None:
             continue
