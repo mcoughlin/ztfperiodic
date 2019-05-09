@@ -71,7 +71,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
     
                     period = 1./freqs[idx]
                     significance = 1./fap[idx]
-    
+
                     periods_best.append(period)
                     significances.append(significance)
     
