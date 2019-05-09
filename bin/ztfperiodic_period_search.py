@@ -355,7 +355,7 @@ if opts.doGPU and (algorithm == "PDM"):
 
 print('Analyzing %d lightcurves...' % len(lightcurves))
 start_time = time.time()
-periods_best, significances = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU)
+periods_best, significances = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU, doSaveMemory=opts.doSaveMemory)
 end_time = time.time()
 print('Lightcurve analysis took %.2f seconds' % (end_time - start_time))
 
