@@ -54,13 +54,14 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                                                   sigma=nfft_sigma)
     
             if doSaveMemory:
-                periods_best, significances = ls_proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, use_fft=True, samples_per_peak=spp, returnBestFreq=True)
+                periods_best, significances = ls_proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, use_fft=True, samples_per_peak=spp, returnBestFreq=True, freqs = freqs)
             else:
                 results = ls_proc.batched_run_const_nfreq(lightcurves,
                                                           batch_size=batch_size,
                                                           use_fft=True,
                                                           samples_per_peak=spp,
-                                                          returnBestFreq=False)
+                                                          returnBestFreq=False,
+                                                          freqs = freqs)
     
                 for data, out in zip(lightcurves,results):
                     freqs, powers = out
