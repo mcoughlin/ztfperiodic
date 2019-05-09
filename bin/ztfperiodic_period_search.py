@@ -371,6 +371,11 @@ if opts.doLightcurveStats:
             stat = calc_stats(t, mag, magerr, period)
             stats.append(stat)
 
+if algorithm == "LS":
+    sigthresh = 100
+else:
+    sigthresh = 7
+
 print('Cataloging / Plotting lightcurves...')
 cnt = 0
 fid = open(catalogFile,'w')
@@ -381,7 +386,7 @@ for lightcurve, filt, coordinate, period, significance in zip(lightcurves,filter
     else:
         fid.write('%.10f %.10f %.10f %.10f\n'%(coordinate[0], coordinate[1], period, significance))
 
-    if opts.doPlots and (significance>7):
+    if opts.doPlots and (significance>sigthresh):
         if opts.doGPU and (algorithm == "PDM"):
             copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
         else:
