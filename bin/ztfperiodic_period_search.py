@@ -339,7 +339,7 @@ df = 1./(samples_per_peak * baseline)
 nf = int(np.ceil((fmax - fmin) / df))
 freqs = fmin + df * np.arange(nf)
 
-if opts.doRemoveTerrestrial:
+if opts.doRemoveTerrestrial and not (algorithm=="LS"):
     idx = np.where((freqs < 0.95) | (freqs > 1.05))[0]
     freqs = freqs[idx]
     idx = np.where((freqs < 0.48) | (freqs > 0.52))[0]
@@ -355,7 +355,7 @@ if opts.doGPU and (algorithm == "PDM"):
 
 print('Analyzing %d lightcurves...' % len(lightcurves))
 start_time = time.time()
-periods_best, significances = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU, doSaveMemory=opts.doSaveMemory)
+periods_best, significances = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU, doSaveMemory=opts.doSaveMemory, doRemoveTerrestrial=opts.doRemoveTerrestrial)
 end_time = time.time()
 print('Lightcurve analysis took %.2f seconds' % (end_time - start_time))
 
@@ -379,6 +379,7 @@ if opts.doLightcurveStats:
 
 if algorithm == "LS":
     sigthresh = 100
+    sigthresh = 0
 else:
     sigthresh = 7
 
