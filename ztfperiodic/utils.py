@@ -210,7 +210,8 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
 def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
                       max_error = 2.0, errs = None,
                       amaj=None, amin=None, phi=None,
-                      doCombineFilt=False):
+                      doCombineFilt=False,
+                      doRemoveHC=False):
 
     baseline=0
     cnt=0
@@ -255,6 +256,19 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
             raobj, decobj = raobj[idx], decobj[idx]
             fid = fid[idx]
+
+            idx = np.argsort(hjd)
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            raobj, decobj = raobj[idx], decobj[idx]
+            fid = fid[idx]
+
+            if doRemoveHC:
+                dt = np.diff(hjd)
+                idx = np.setdiff1d(np.arange(len(hjd)),
+                                   np.where(dt < 30.0*60.0/86400.0)[0])
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                raobj, decobj = raobj[idx], decobj[idx]
+                fid = fid[idx]
 
             if len(hjd) < min_epochs: continue
 

@@ -43,6 +43,7 @@ def parse_commandline():
     parser.add_option("--doRemoveTerrestrial",  action="store_true", default=False)
     parser.add_option("--doLightcurveStats",  action="store_true", default=False)
     parser.add_option("--doRemoveBrightStars",  action="store_true", default=False)
+    parser.add_option("--doRemoveHC",  action="store_true", default=False)
     parser.add_option("--doLongPeriod",  action="store_true", default=False)
     parser.add_option("--doCombineFilt",  action="store_true", default=False)
 
@@ -132,6 +133,7 @@ program_ids = list(map(int,opts.program_ids.split(",")))
 min_epochs = opts.min_epochs
 catalog_file = opts.catalog_file
 doCombineFilt = opts.doCombineFilt
+doRemoveHC = opts.doRemoveHC
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
@@ -259,7 +261,8 @@ if opts.lightcurve_source == "Kowalski":
                                                  min_epochs=min_epochs,
                                                  errs=errs,
                                                  amaj=amaj, amin=amin, phi=phi,
-                                                 doCombineFilt=doCombineFilt)
+                                                 doCombineFilt=doCombineFilt,
+                                                 doRemoveHC=doRemoveHC)
     else:
         print("Source type unknown...")
         exit(0)
