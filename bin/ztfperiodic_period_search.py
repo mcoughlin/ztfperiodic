@@ -340,7 +340,9 @@ nf = int(np.ceil((fmax - fmin) / df))
 freqs = fmin + df * np.arange(nf)
 
 if opts.doRemoveTerrestrial:
-    idx = np.where((freqs < 0.99) | (freqs > 1.01))[0]
+    idx = np.where((freqs < 0.95) | (freqs > 1.05))[0]
+    freqs = freqs[idx]
+    idx = np.where((freqs < 0.48) | (freqs > 0.52))[0]
     freqs = freqs[idx]
 
 if opts.doGPU and (algorithm == "PDM"):
