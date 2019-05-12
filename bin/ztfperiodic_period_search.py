@@ -378,7 +378,7 @@ if opts.doLightcurveStats:
             stats.append(stat)
 
 if algorithm == "LS":
-    sigthresh = 100
+    sigthresh = 1e6
 else:
     sigthresh = 7
 
