@@ -340,7 +340,7 @@ nf = int(np.ceil((fmax - fmin) / df))
 freqs = fmin + df * np.arange(nf)
 
 if opts.doRemoveTerrestrial and not (algorithm=="LS"):
-    idx = np.where((freqs < 1.98) | (freqs > 2.02))[0]
+    idx = np.where((freqs < 1.95) | (freqs > 2.05))[0]
     freqs = freqs[idx]
     idx = np.where((freqs < 0.95) | (freqs > 1.05))[0]
     freqs = freqs[idx]
