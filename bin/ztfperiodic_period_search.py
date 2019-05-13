@@ -340,6 +340,8 @@ nf = int(np.ceil((fmax - fmin) / df))
 freqs = fmin + df * np.arange(nf)
 
 if opts.doRemoveTerrestrial and not (algorithm=="LS"):
+    idx = np.where((freqs < 1.98) | (freqs > 2.02))[0]
+    freqs = freqs[idx]
     idx = np.where((freqs < 0.95) | (freqs > 1.05))[0]
     freqs = freqs[idx]
     idx = np.where((freqs < 0.48) | (freqs > 0.52))[0]
@@ -408,8 +410,8 @@ for lightcurve, filt, coordinate, period, significance in zip(lightcurves,filter
         ymed = np.nanmedian(magnitude)
         y10, y90 = np.nanpercentile(magnitude,10), np.nanpercentile(magnitude,90)
         ystd = np.nanmedian(err)
-        ymin = y10 - 3*ystd
-        ymax = y90 + 3*ystd
+        ymin = y10 - 7*ystd
+        ymax = y90 + 7*ystd
         plt.ylim([ymin,ymax])
         plt.gca().invert_yaxis()
         ax.set_title(str(period2)+"_"+str(RA)+"_"+str(Dec))
