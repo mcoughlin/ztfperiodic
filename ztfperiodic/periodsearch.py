@@ -72,6 +72,9 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 for data, out in zip(lightcurves,results):
                     freqs, powers = out
                     if doRemoveTerrestrial:
+                        idx = np.where((freqs < 1.98) | (freqs > 2.02))[0]
+                        freqs = freqs[idx]
+                        powers = powers[idx]
                         idx = np.where((freqs < 0.95) | (freqs > 1.05))[0]
                         freqs = freqs[idx]
                         powers = powers[idx]
