@@ -16,7 +16,7 @@ import matplotlib.cm as cm
 from matplotlib.colors import Normalize
 
 import astropy
-from astropy.table import vstack
+from astropy.table import Table, vstack
 from astropy.io import ascii
 from astropy import units as u
 from astropy.coordinates import SkyCoord
@@ -71,11 +71,23 @@ catalog1 = opts.catalog1
 catalog2 = opts.catalog2
 outputDir = opts.outputDir
 
-cat1 = load_catalog(catalog1)
-cat2 = load_catalog(catalog2)
-
 if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
+
+cat1file = os.path.join(outputDir,'catalog_%s.fits' % catalog1.split("/")[-1])
+cat2file = os.path.join(outputDir,'catalog_%s.fits' % catalog2.split("/")[-1])
+
+if not os.path.isfile(cat1file):
+    cat1 = load_catalog(catalog1)
+    cat1.write(cat1file, format='fits')
+else:
+    cat1 = Table.read(cat1file, format='fits')
+
+if not os.path.isfile(cat2file):
+    cat2 = load_catalog(catalog2)
+    cat2.write(cat2file, format='fits')
+else:
+    cat2 = Table.read(cat2file, format='fits')
 
 catalog1 = SkyCoord(ra=cat1["ra"]*u.degree, dec=cat1["dec"]*u.degree, frame='icrs')
 catalog2 = SkyCoord(ra=cat2["ra"]*u.degree, dec=cat2["dec"]*u.degree, frame='icrs')
