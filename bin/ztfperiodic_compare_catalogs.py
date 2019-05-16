@@ -107,8 +107,8 @@ for i,ii,s in zip(np.arange(len(sep)),idx,sep):
     if sig1 < opts.sig1: continue
     if sig2 < opts.sig2: continue
 
-    xs.append(period1)
-    ys.append(period2)
+    xs.append(1.0/period1)
+    ys.append(1.0/period2)
     ratio = np.min([sigsort1/sigsort2,sigsort2/sigsort1])
     zs.append(ratio)
 
@@ -130,8 +130,8 @@ if opts.doPlots:
     ax.set_yscale('log')
     cbar = plt.colorbar(sc)
     cbar.set_label('min(LS/CE,CE/LS) significance')
-    plt.xlabel('LS Period [days]')
-    plt.ylabel('CE Period [days]')
+    plt.xlabel('LS Frequency [1/days]')
+    plt.ylabel('CE Frequency [1/days]')
     fig.savefig(pdffile)
     plt.close()
 

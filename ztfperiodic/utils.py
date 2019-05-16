@@ -215,7 +215,7 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
 
     baseline=0
     cnt=0
-    lightcurves, filters, coordinates = [], [], []
+    lightcurves, filters, ids, coordinates = [], [], [], []
     
     if errs is None:
         errs = 5.0*np.ones(ras.shape)
@@ -279,13 +279,14 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
             coordinates.append(coordinate)
 
             filters.append(np.unique(fid).tolist())
+            ids.append(int(lkey))
 
             newbaseline = max(hjd)-min(hjd)
             if newbaseline>baseline:
                 baseline=newbaseline
         cnt = cnt + 1
 
-    return lightcurves, coordinates, filters, baseline
+    return lightcurves, coordinates, filters, ids, baseline
 
 def combine_lcs(ls):
 
@@ -313,7 +314,7 @@ def combine_lcs(ls):
     data["magerr"] = magerr
     data["fid"] = fid
 
-    return {'combined': data}
+    return {lkey: data}
 
 def get_kowalski_bulk(field, ccd, quadrant, kow,
                       program_ids = [2,3], min_epochs = 1, max_error = 2.0,
@@ -333,7 +334,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
     baseline=0
     cnt=0
-    lightcurves, coordinates, filters = [], [], []
+    lightcurves, coordinates, filters, ids = [], [], [], []
 
     objdata = {}
     #for nb in range(num_batches):
@@ -386,13 +387,14 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
             coordinates.append(coordinate)
 
             filters.append(np.unique(fid).tolist())
+            ids.append(objid)
 
             newbaseline = max(hjd)-min(hjd)
             if newbaseline>baseline:
                 baseline=newbaseline
             cnt = cnt + 1
 
-    return lightcurves, coordinates, filters, baseline
+    return lightcurves, coordinates, filters, ids, baseline
 
 def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
 

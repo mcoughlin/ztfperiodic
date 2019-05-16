@@ -8,7 +8,14 @@ import matplotlib.pyplot as plt
 def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                  doGPU=False, doCPU=False, doSaveMemory=False,
                  doRemoveTerrestrial=False,
+                 doRemoveWindow=False,
+                 freqs_to_remove=None,
                  phase_bins=20, mag_bins=10):
+
+    if doRemoveTerrestrial and (freqs_to_remove is not None) and not (algorithm=="LS"):
+        for pair in freqs_to_remove:
+            idx = np.where((freqs < pair[0]) | (freqs > pair[1]))[0]
+            freqs = freqs[idx]
 
     periods_best, significances = [], []
     print('Period finding lightcurves...')
@@ -22,11 +29,13 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             if doSaveMemory:
                 periods_best, significances = proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, freqs = freqs, only_keep_best_freq=True,show_progress=True,returnBestFreq=True)
             else:
+
                 results = proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, freqs = freqs, only_keep_best_freq=True,show_progress=True,returnBestFreq=False)
-                for out in results:
+                cnt = 0
+                for lightcurve, out in zip(lightcurves,results):
                     periods = 1./out[0]
                     entropies = out[1]
-    
+
                     significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
                     period = periods[np.argmin(entropies)]
     
@@ -59,28 +68,22 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                                                   sigma=nfft_sigma)
     
             if doSaveMemory:
-                periods_best, significances = ls_proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, use_fft=True, samples_per_peak=spp, returnBestFreq=True, freqs = freqs, doRemoveTerrestrial=doRemoveTerrestrial)
+                periods_best, significances = ls_proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, use_fft=True, samples_per_peak=spp, returnBestFreq=True, freqs = freqs, doRemoveTerrestrial=doRemoveTerrestrial, freqs_to_remove=freqs_to_remove)
             else:
                 results = ls_proc.batched_run_const_nfreq(lightcurves,
                                                           batch_size=batch_size,
                                                           use_fft=True,
                                                           samples_per_peak=spp,
                                                           returnBestFreq=False,
-                                                          freqs = freqs,
-                                                          doRemoveTerrestrial=doRemoveTerrestrial)
+                                                          freqs = freqs)
     
                 for data, out in zip(lightcurves,results):
                     freqs, powers = out
-                    if doRemoveTerrestrial:
-                        idx = np.where((freqs < 1.95) | (freqs > 2.05))[0]
-                        freqs = freqs[idx]
-                        powers = powers[idx]
-                        idx = np.where((freqs < 0.95) | (freqs > 1.05))[0]
-                        freqs = freqs[idx]
-                        powers = powers[idx]
-                        idx = np.where((freqs < 0.48) | (freqs > 0.52))[0]
-                        freqs = freqs[idx]
-                        powers = powers[idx]
+                    if doRemoveTerrestrial and (freqs_to_remove is not None):
+                        for pair in freqs_to_remove:
+                            idx = np.where((freqs < pair[0]) | (freqs > pair[1]))[0]
+                            freqs = freqs[idx]
+                            powers = powers[idx]
 
                     copy = np.ma.copy(data).T
                     fap = fap_baluev(copy[:,0], copy[:,2], powers, np.max(freqs))
