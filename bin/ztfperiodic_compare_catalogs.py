@@ -42,7 +42,7 @@ def parse_commandline():
 def load_catalog(catalog):
     filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1]
     #filenames = filenames[:100]
-    names = ["ra", "dec", "period", "sig", 
+    names = ["objid", "ra", "dec", "period", "sig", 
              "stats0", "stats1", "stats2", "stats3", "stats4",
              "stats5", "stats6", "stats7", "stats8", "stats9",
              "stats10", "stats11", "stats12", "stats13", "stats14",
@@ -99,6 +99,8 @@ filename = os.path.join(outputDir,'catalog.dat')
 fid = open(filename,'w')
 for i,ii,s in zip(np.arange(len(sep)),idx,sep):
     if s.arcsec > 1: continue
+   
+    objid = cat1["objid"][i]
     ra, dec = cat1["ra"][i], cat1["dec"][i]
     sig1, sig2 = cat1["sig"][i], cat2["sig"][ii]
     sigsort1, sigsort2 = cat1["sigsort"][i], cat2["sigsort"][ii]
@@ -112,9 +114,9 @@ for i,ii,s in zip(np.arange(len(sep)),idx,sep):
     ratio = np.min([sigsort1/sigsort2,sigsort2/sigsort1])
     zs.append(ratio)
 
-    fid.write('%.5f %.5f %.5f %.5f %.5e %.5e\n' % (ra, dec,
-                                                   period1, period2,
-                                                   sig1, sig2))
+    fid.write('%d %.5f %.5f %.5f %.5f %.5e %.5e\n' % (objid, ra, dec,
+                                                      period1, period2,
+                                                      sig1, sig2))
 fid.close() 
 
 if opts.doPlots:
