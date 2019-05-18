@@ -1,9 +1,21 @@
 
 import numpy as np
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                  doGPU=False, doCPU=False, doSaveMemory=False,
+                 doRemoveTerrestrial=False,
+                 doRemoveWindow=False,
+                 freqs_to_remove=None,
                  phase_bins=20, mag_bins=10):
+
+    if doRemoveTerrestrial and (freqs_to_remove is not None) and not (algorithm=="LS"):
+        for pair in freqs_to_remove:
+            idx = np.where((freqs < pair[0]) | (freqs > pair[1]))[0]
+            freqs = freqs[idx]
 
     periods_best, significances = [], []
     print('Period finding lightcurves...')
@@ -17,11 +29,13 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             if doSaveMemory:
                 periods_best, significances = proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, freqs = freqs, only_keep_best_freq=True,show_progress=True,returnBestFreq=True)
             else:
+
                 results = proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, freqs = freqs, only_keep_best_freq=True,show_progress=True,returnBestFreq=False)
-                for out in results:
+                cnt = 0
+                for lightcurve, out in zip(lightcurves,results):
                     periods = 1./out[0]
                     entropies = out[1]
-    
+
                     significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
                     period = periods[np.argmin(entropies)]
     
@@ -48,32 +62,39 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
         elif algorithm == "LS":
             from cuvarbase.lombscargle import LombScargleAsyncProcess, fap_baluev
     
-            nfft_sigma, spp = 5, 3
+            nfft_sigma, spp = 10, 10
     
             ls_proc = LombScargleAsyncProcess(use_double=True,
                                                   sigma=nfft_sigma)
     
             if doSaveMemory:
-                periods_best, significances = ls_proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, use_fft=True, samples_per_peak=spp, returnBestFreq=True)
+                periods_best, significances = ls_proc.batched_run_const_nfreq(lightcurves, batch_size=batch_size, use_fft=True, samples_per_peak=spp, returnBestFreq=True, freqs = freqs, doRemoveTerrestrial=doRemoveTerrestrial, freqs_to_remove=freqs_to_remove)
             else:
                 results = ls_proc.batched_run_const_nfreq(lightcurves,
                                                           batch_size=batch_size,
                                                           use_fft=True,
                                                           samples_per_peak=spp,
-                                                          returnBestFreq=False)
+                                                          returnBestFreq=False,
+                                                          freqs = freqs)
     
                 for data, out in zip(lightcurves,results):
                     freqs, powers = out
+                    if doRemoveTerrestrial and (freqs_to_remove is not None):
+                        for pair in freqs_to_remove:
+                            idx = np.where((freqs < pair[0]) | (freqs > pair[1]))[0]
+                            freqs = freqs[idx]
+                            powers = powers[idx]
+
                     copy = np.ma.copy(data).T
                     fap = fap_baluev(copy[:,0], copy[:,2], powers, np.max(freqs))
                     idx = np.argmin(fap)
     
                     period = 1./freqs[idx]
                     significance = 1./fap[idx]
-    
+
                     periods_best.append(period)
                     significances.append(significance)
-    
+
             ls_proc.finish()
     
         elif algorithm == "PDM":
@@ -137,8 +158,8 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
                 period = periods[np.argmin(entropies)]
     
-            periods_best.append(period)
-            significances.append(significance)
+                periods_best.append(period)
+                significances.append(significance)
     
         elif algorithm == "AOV":
             from ztfperiodic.pyaov.pyaov import aovw
@@ -157,7 +178,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 significance = np.abs(np.mean(aov)-np.max(aov))/np.std(aov)
                 period = periods[np.argmax(aov)]
     
-            periods_best.append(period)
-            significances.append(significance)
+                periods_best.append(period)
+                significances.append(significance)
     
-    return periods_best, significances
+    return np.array(periods_best), np.array(significances)
