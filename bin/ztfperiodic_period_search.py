@@ -375,11 +375,12 @@ print('Cataloging / Plotting lightcurves...')
 cnt = 0
 fid = open(catalogFile,'w')
 for lightcurve, filt, coordinate, period, significance in zip(lightcurves,filters,coordinates,periods_best,significances):
+    filt_str = [str(x) for x in filt]
     if opts.doLightcurveStats:
-        fid.write('%.10f %.10f %.10f %.10f '%(coordinate[0], coordinate[1], period, significance))
+        fid.write('%.10f %.10f %.10f %.10f %s '%(coordinate[0], coordinate[1], period, significance, filt_str))
         fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
     else:
-        fid.write('%.10f %.10f %.10f %.10f\n'%(coordinate[0], coordinate[1], period, significance))
+        fid.write('%.10f %.10f %.10f %.10f %s\n'%(coordinate[0], coordinate[1], period, significance, filt_str))
 
     if opts.doPlots and (significance>7):
         if opts.doGPU and (algorithm == "PDM"):
@@ -403,7 +404,6 @@ for lightcurve, filt, coordinate, period, significance in zip(lightcurves,filter
         plt.gca().invert_yaxis()
         ax.set_title(str(period2)+"_"+str(RA)+"_"+str(Dec))
 
-        filt_str = [str(x) for x in filt]
         figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec, 
                                                   period, "".join(filt_str))
         idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
