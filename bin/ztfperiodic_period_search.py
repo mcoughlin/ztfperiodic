@@ -14,6 +14,9 @@ from scipy.signal import lombscargle
 
 import matplotlib
 matplotlib.use('Agg')
+matplotlib.rcParams.update({'font.size': 16})
+matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
+from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 
 from astropy import units as u
@@ -89,7 +92,7 @@ def brightstardist(filename,ra,dec):
      idx,sep,_ = catalog.match_to_catalog_sky(c)
      return sep.arcsec
 
-def slicestardist(lightcurves, coordinates, filters, ids):
+def slicestardist(lightcurves, coordinates, filters, ids, absmags, bp_rps):
 
     ras, decs = [], []
     for coordinate in coordinates:
@@ -105,7 +108,7 @@ def slicestardist(lightcurves, coordinates, filters, ids):
     idx2 = np.where(sep >= opts.stardist)[0]
     idx = np.union1d(idx1,idx2).astype(int)
 
-    return [lightcurves[i] for i in idx], [coordinates[i] for i in idx], [filters[i] for i in idx], [ids[i] for i in idx]
+    return [lightcurves[i] for i in idx], [coordinates[i] for i in idx], [filters[i] for i in idx], [ids[i] for i in idx], [absmags[i] for i in idx], [bp_rps[i] for i in idx]
 
 def touch(fname):
     if os.path.exists(fname):
@@ -140,6 +143,15 @@ doRemoveHC = opts.doRemoveHC
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
 
+WDcat = os.path.join(starCatalogDir,'GaiaWD.hdf5')
+with h5py.File(WDcat, 'r') as f:
+    gmag, bpmag, rpmag = f['gmag'][:], f['bpmag'][:], f['rpmag'][:]
+    parallax, parallax_error = f['parallax'][:], f['parallax_error'][:]
+snr = 5
+idx = np.where(parallax/parallax_error >= snr)[0]
+bprpWD=bpmag[idx]-rpmag[idx]
+absmagWD=gmag[idx]+5*(np.log10(np.abs(parallax[idx]))-2)
+
 if opts.doCPU and algorithm=="BLS":
     print("BLS only available for --doGPU")
     exit(0)
@@ -172,10 +184,14 @@ if opts.lightcurve_source == "Kowalski":
 
     if opts.source_type == "quadrant":
         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.dat"%(field, ccd, quadrant,opts.Ncatindex))
-        lightcurves, coordinates, filters, ids, baseline = get_kowalski_bulk(field, ccd, quadrant, kow, program_ids=program_ids, min_epochs=min_epochs, num_batches=opts.Ncatalog, nb=opts.Ncatindex)
+        lightcurves, coordinates, filters, ids, absmags, bp_rps, baseline =\
+            get_kowalski_bulk(field, ccd, quadrant, kow, 
+                              program_ids=program_ids, min_epochs=min_epochs,
+                              num_batches=opts.Ncatalog, nb=opts.Ncatindex)
         if opts.doRemoveBrightStars:
-            lightcurves, coordinates, filters, ids =\
-                slicestardist(lightcurves, coordinates, filters, ids)
+            lightcurves, coordinates, filters, ids, absmags, bp_rps =\
+                slicestardist(lightcurves, coordinates, filters,
+                              ids, absmags, bp_rps)
 
     elif opts.source_type == "catalog":
 
@@ -258,7 +274,7 @@ if opts.lightcurve_source == "Kowalski":
         catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").split("/")[-1]
         catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(catalog_file_split,
                                                            opts.Ncatindex))
-        lightcurves, coordinates, filters, ids, baseline =\
+        lightcurves, coordinates, filters, ids, absmags, bp_rps, baseline =\
             get_kowalski_list(ras, decs,
                               kow,
                               program_ids=program_ids,
@@ -395,7 +411,7 @@ else:
 print('Cataloging / Plotting lightcurves...')
 cnt = 0
 fid = open(catalogFile,'w')
-for lightcurve, filt, objid, coordinate, period, significance in zip(lightcurves,filters,coordinates,periods_best,significances):
+for lightcurve, filt, objid, coordinate, absmag, bp_rp, period, significance in zip(lightcurves,filters,ids,coordinates,absmags,bp_rps,periods_best,significances):
     filt_str = [str(x) for x in filt]
     if opts.doLightcurveStats:
         fid.write('%d %.10f %.10f %.10f %.10f %s '%(objid, coordinate[0], coordinate[1], period, significance, filt_str))
@@ -405,28 +421,8 @@ for lightcurve, filt, objid, coordinate, period, significance in zip(lightcurves
         fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
 
     if opts.doPlots and (significance>sigthresh):
-        if opts.doGPU and (algorithm == "PDM"):
-            copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
-        else:
-            copy = np.ma.copy(lightcurve).T
-        phases = np.mod(copy[:,0],2*period)/(2*period)
-        magnitude, err = copy[:,1], copy[:,2]
         RA, Dec = coordinate
-
-        fig = plt.figure(figsize=(10,10))
-        ax=fig.add_subplot(1,1,1)
-        ax.errorbar(phases, magnitude,err,ls='none',c='k')
-        period2=period
-        ymed = np.nanmedian(magnitude)
-        y10, y90 = np.nanpercentile(magnitude,10), np.nanpercentile(magnitude,90)
-        ystd = np.nanmedian(err)
-        ymin = y10 - 7*ystd
-        ymax = y90 + 7*ystd
-        plt.ylim([ymin,ymax])
-        plt.gca().invert_yaxis()
-        ax.set_title(str(period2)+"_"+str(RA)+"_"+str(Dec))
-
-        figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec, 
+        figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec,
                                                   period, "".join(filt_str))
         idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
         if folders[idx.astype(int)] == None:
@@ -441,6 +437,33 @@ for lightcurve, filt, objid, coordinate, period, significance in zip(lightcurves
         if not os.path.isdir(folder):
             os.makedirs(folder)
         pngfile = os.path.join(folder,figfile)
+
+        if opts.doGPU and (algorithm == "PDM"):
+            copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
+        else:
+            copy = np.ma.copy(lightcurve).T
+        phases = np.mod(copy[:,0],2*period)/(2*period)
+        magnitude, err = copy[:,1], copy[:,2]
+
+        fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
+        ax1.errorbar(phases, magnitude,err,ls='none',c='k')
+        period2=period
+        ymed = np.nanmedian(magnitude)
+        y10, y90 = np.nanpercentile(magnitude,10), np.nanpercentile(magnitude,90)
+        ystd = np.nanmedian(err)
+        ymin = y10 - 7*ystd
+        ymax = y90 + 7*ystd
+        ax1.set_ylim([ymin,ymax])
+        ax1.invert_yaxis()
+        asymmetric_error = [absmag[1], absmag[2]]
+        hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
+        ax2.errorbar(bp_rp,absmag[0],yerr=[asymmetric_error],
+                     c='c',zorder=1,fmt='o')
+        ax2.set_xlim([-1,1.7])
+        ax2.set_ylim([4,18])
+        ax2.invert_yaxis()
+        fig.colorbar(hist2[3],ax=ax2)
+        plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
         fig.savefig(pngfile)
         plt.close()
 
