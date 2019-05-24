@@ -213,6 +213,8 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
             dat2 = dat2[0]
             parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
             g_mag, bp_mag, rp_mag = dat2["phot_g_mean_mag"], dat2["phot_bp_mean_mag"], dat2["phot_rp_mean_mag"]
+            if (parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None): continue
+
             lightcurves[objid]["absmag"] = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
             lightcurves[objid]["bp_rp"] = bp_mag-rp_mag
             break
