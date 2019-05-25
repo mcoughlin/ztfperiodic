@@ -158,12 +158,21 @@ def haversine_np(lon1, lat1, lon2, lat2):
     c = 2 * np.arcsin(np.sqrt(a))
     return c
 
+def get_catalog(data):
+
+    ras, decs = [], []
+    for dat in data:
+        ras.append(dat["ra"])
+        decs.append(dat["dec"])
+
+    return SkyCoord(ra=np.array(ras)*u.degree, dec=np.array(decs)*u.degree, frame='icrs')
+
 def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], min_epochs = 1):
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
     #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190412": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
-    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190412": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1}" } } }
+    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190412": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}" } } }
 
     r = database_query(kow, qu, nquery = 10)
 
@@ -175,7 +184,12 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
     data1, data2 = r["result_data"][key1], r["result_data"][key2]
     key = list(data1.keys())[0]
     data = data1[key]
+    key = list(data2.keys())[0]
+    data2 = data2[key]
 
+    
+
+    cat = get_catalog(data2)
     lightcurves = {}
     for datlist in data:
         objid = str(datlist["_id"])
@@ -207,17 +221,29 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
         lightcurves[objid]["dec"] = np.array(dec)
         lightcurves[objid]["fid"] = np.array(fid)
 
-        for key2 in data2.iterkeys():
-            dat2 = data2[key]
-            if len(dat2) == 0: continue
-            dat2 = dat2[0]
+    objids = []
+    ras, decs = [], []
+    for objid in lightcurves.keys():
+        objids.append(objid)
+        ras.append(np.median(lightcurves[objid]["ra"]))
+        decs.append(np.median(lightcurves[objid]["dec"]))
+    ras, decs = np.array(ras), np.array(decs)
+
+    coords = SkyCoord(ra=ras*u.degree, dec=decs*u.degree, frame='icrs')
+    idx,sep,_ = coords.match_to_catalog_sky(cat)
+
+    for objid, ii, s in zip(objids, idx, sep):
+        if s.arcsec > 1:
+            lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
+            lightcurves[objid]["bp_rp"] = np.nan
+        else:     
+            dat2 = data2[ii]
             parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
             g_mag, bp_mag, rp_mag = dat2["phot_g_mean_mag"], dat2["phot_bp_mean_mag"], dat2["phot_rp_mean_mag"]
-            if (parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None): continue
+            if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None)):
+                lightcurves[objid]["absmag"] = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
+                lightcurves[objid]["bp_rp"] = bp_mag-rp_mag
 
-            lightcurves[objid]["absmag"] = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
-            lightcurves[objid]["bp_rp"] = bp_mag-rp_mag
-            break
         if not "absmag" in lightcurves[objid]:
             lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
             lightcurves[objid]["bp_rp"] = np.nan
