@@ -143,14 +143,11 @@ doRemoveHC = opts.doRemoveHC
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
 
-WDcat = os.path.join(starCatalogDir,'GaiaWD.hdf5')
+WDcat = os.path.join(starCatalogDir,'GaiaHRSet.hdf5')
 with h5py.File(WDcat, 'r') as f:
-    gmag, bpmag, rpmag = f['gmag'][:], f['bpmag'][:], f['rpmag'][:]
-    parallax, parallax_error = f['parallax'][:], f['parallax_error'][:]
-snr = 5
-idx = np.where(parallax/parallax_error >= snr)[0]
-bprpWD=bpmag[idx]-rpmag[idx]
-absmagWD=gmag[idx]+5*(np.log10(np.abs(parallax[idx]))-2)
+    gmag, bprpWD = f['gmag'][:], f['bp_rp'][:]
+    parallax = f['parallax'][:]
+absmagWD=gmag+5*(np.log10(np.abs(parallax))-2)
 
 if opts.doCPU and algorithm=="BLS":
     print("BLS only available for --doGPU")
@@ -460,8 +457,8 @@ for lightcurve, filt, objid, coordinate, absmag, bp_rp, period, significance in 
         if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
             ax2.errorbar(bp_rp,absmag[0],yerr=[asymmetric_error],
                          c='c',zorder=1,fmt='o')
-        ax2.set_xlim([-1,1.7])
-        ax2.set_ylim([4,18])
+        ax2.set_xlim([-1,4.0])
+        ax2.set_ylim([-5,18])
         ax2.invert_yaxis()
         fig.colorbar(hist2[3],ax=ax2)
         plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
