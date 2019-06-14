@@ -167,7 +167,7 @@ def get_catalog(data):
 
     return SkyCoord(ra=np.array(ras)*u.degree, dec=np.array(decs)*u.degree, frame='icrs')
 
-def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], min_epochs = 1):
+def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], min_epochs = 1, name = None):
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
@@ -186,8 +186,6 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
     data = data1[key]
     key = list(data2.keys())[0]
     data2 = data2[key]
-
-    
 
     cat = get_catalog(data2)
     lightcurves = {}
@@ -221,6 +219,16 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
         lightcurves[objid]["dec"] = np.array(dec)
         lightcurves[objid]["fid"] = np.array(fid)
 
+        if name is None:
+            ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
+            if dec_hex[0] == "-":
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+            else:
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+            lightcurves[objid]["name"] = objname
+        else:
+            lightcurves[objid]["name"] = name
+
     objids = []
     ras, decs = [], []
     for objid in lightcurves.keys():
@@ -251,20 +259,30 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
     return lightcurves
 
 def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
-                      max_error = 2.0, errs = None,
+                      max_error = 2.0, errs = None, names = None,
                       amaj=None, amin=None, phi=None,
                       doCombineFilt=False,
                       doRemoveHC=False):
 
     baseline=0
     cnt=0
+    lnames = []
     lightcurves, filters, ids, coordinates = [], [], [], []
     absmags, bp_rps = [], []   
  
     if errs is None:
         errs = 5.0*np.ones(ras.shape)
+    if names is None:
+        names = []
+        for ra, dec in zip(ras, decs):
+            ra_hex, dec_hex = convert_to_hex(ra*24/360.0,delimiter=''), convert_to_hex(dec,delimiter='')
+            if dec_hex[0] == "-":
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+            else:
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+            names.append(objname)
 
-    for ra, dec, err in zip(ras, decs, errs):
+    for name, ra, dec, err in zip(names, ras, decs, errs):
         if amaj is not None:
             ellipse = patches.Ellipse((ra, dec), amaj[cnt], amin[cnt],
                                       angle=phi[cnt]) 
@@ -272,7 +290,7 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
         if np.mod(cnt,100) == 0:
             print('%d/%d'%(cnt,len(ras)))       
         ls = get_kowalski(ra, dec, kow, radius = err, oid = None,
-                          program_ids = program_ids)
+                          program_ids = program_ids, name = name)
         if len(ls.keys()) == 0: continue
 
         if doCombineFilt:
@@ -328,12 +346,14 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
             absmags.append(l["absmag"])
             bp_rps.append(l["bp_rp"])
 
+            lnames.append(l["name"])
+ 
             newbaseline = max(hjd)-min(hjd)
             if newbaseline>baseline:
                 baseline=newbaseline
         cnt = cnt + 1
 
-    return lightcurves, coordinates, filters, ids, absmags, bp_rps, baseline
+    return lightcurves, coordinates, filters, ids, absmags, bp_rps, lnames, baseline
 
 def combine_lcs(ls):
 
@@ -342,6 +362,7 @@ def combine_lcs(ls):
     for ii, lkey in enumerate(ls.keys()):
         l = ls[lkey]
         if ii == 0:
+            name = l["name"]
             raobj, decobj = l["ra"], l["dec"]
             hjd, mag, magerr = l["hjd"], l["mag"]-np.median(l["mag"]), l["magerr"]
             fid = l["fid"]
@@ -363,6 +384,7 @@ def combine_lcs(ls):
     data["fid"] = fid
     data["absmag"] = absmag
     data["bp_rp"] = bp_rp
+    data["name"] = name
 
     return {lkey: data}
 
@@ -384,6 +406,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
     baseline=0
     cnt=0
+    names = []
     lightcurves, coordinates, filters, ids = [], [], [], []
     absmags, bp_rps = [], []
 
@@ -420,14 +443,18 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                 fid.append(filt)
 
             hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
+            ra, dec = np.array(ra), np.array(dec)
+
             fid = np.array(fid)
             idx = np.where(~np.isnan(mag) & ~np.isnan(magerr))[0]
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
             fid = fid[idx]
+            ra, dec = ra[idx], dec[idx]
 
             idx = np.where(magerr<=max_error)[0]
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
             fid = fid[idx]
+            ra, dec = ra[idx], dec[idx]
 
             if len(hjd) < min_epochs: continue
 
@@ -443,12 +470,19 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
             absmags.append([np.nan, np.nan, np.nan])
             bp_rps.append(np.nan)
 
+            ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
+            if dec_hex[0] == "-":
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+            else:
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+            names.append(objname)
+
             newbaseline = max(hjd)-min(hjd)
             if newbaseline>baseline:
                 baseline=newbaseline
             cnt = cnt + 1
 
-    return lightcurves, coordinates, filters, ids, absmags, bp_rps, baseline
+    return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
 
 def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
 
@@ -565,3 +599,40 @@ def BJDConvert(mjd, RA, Dec):
         BJD_TDB=t2+delta
 
         return BJD_TDB
+
+def convert_to_hex(val, delimiter=':', force_sign=False):
+    """
+    Converts a numerical value into a hexidecimal string
+
+    Parameters:
+    ===========
+    - val:           float
+                     The decimal number to convert to hex.
+
+    - delimiter:     string
+                     The delimiter between hours, minutes, and seconds
+                     in the output hex string.
+
+    - force_sign:    boolean
+                     Include the sign of the string on the output,
+                     even if positive? Usually, you will set this to
+                     False for RA values and True for DEC
+
+    Returns:
+    ========
+    A hexadecimal representation of the input value.
+    """
+    s = np.sign(val)
+    s_factor = 1 if s > 0 else -1
+    val = np.abs(val)
+    degree = int(val)
+    minute = int((val  - degree)*60)
+    second = (val - degree - minute/60.0)*3600.
+    if degree == 0 and s_factor < 0:
+        return '-00{2:s}{0:02d}{2:s}{1:.2f}'.format(minute, second, delimiter)
+    elif force_sign or s_factor < 0:
+        deg_str = '{:+03d}'.format(degree * s_factor)
+    else:
+        deg_str = '{:02d}'.format(degree * s_factor)
+    return '{0:s}{3:s}{1:02d}{3:s}{2:.2f}'.format(deg_str, minute, second, delimiter)
+

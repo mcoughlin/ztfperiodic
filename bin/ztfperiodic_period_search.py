@@ -28,6 +28,7 @@ from ztfperiodic.lcstats import calc_stats
 from ztfperiodic.utils import get_kowalski_bulk
 from ztfperiodic.utils import get_kowalski_list
 from ztfperiodic.utils import get_matchfile
+from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.periodsearch import find_periods
 
 try:
@@ -84,6 +85,7 @@ def parse_commandline():
 
     return opts
 
+
 def brightstardist(filename,ra,dec):
      catalog = SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='icrs')
      with h5py.File(filename, 'r') as f:
@@ -92,7 +94,8 @@ def brightstardist(filename,ra,dec):
      idx,sep,_ = catalog.match_to_catalog_sky(c)
      return sep.arcsec
 
-def slicestardist(lightcurves, coordinates, filters, ids, absmags, bp_rps):
+
+def slicestardist(lightcurves, coordinates, filters, ids, absmags, bp_rps, names):
 
     ras, decs = [], []
     for coordinate in coordinates:
@@ -108,7 +111,8 @@ def slicestardist(lightcurves, coordinates, filters, ids, absmags, bp_rps):
     idx2 = np.where(sep >= opts.stardist)[0]
     idx = np.union1d(idx1,idx2).astype(int)
 
-    return [lightcurves[i] for i in idx], [coordinates[i] for i in idx], [filters[i] for i in idx], [ids[i] for i in idx], [absmags[i] for i in idx], [bp_rps[i] for i in idx]
+    return [lightcurves[i] for i in idx], [coordinates[i] for i in idx], [filters[i] for i in idx], [ids[i] for i in idx], [absmags[i] for i in idx], [bp_rps[i] for i in idx], [names[i] for i in idx]
+
 
 def touch(fname):
     if os.path.exists(fname):
@@ -181,14 +185,15 @@ if opts.lightcurve_source == "Kowalski":
 
     if opts.source_type == "quadrant":
         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.dat"%(field, ccd, quadrant,opts.Ncatindex))
-        lightcurves, coordinates, filters, ids, absmags, bp_rps, baseline =\
+        lightcurves, coordinates, filters, ids,\
+        absmags, bp_rps, names, baseline =\
             get_kowalski_bulk(field, ccd, quadrant, kow, 
                               program_ids=program_ids, min_epochs=min_epochs,
                               num_batches=opts.Ncatalog, nb=opts.Ncatindex)
         if opts.doRemoveBrightStars:
-            lightcurves, coordinates, filters, ids, absmags, bp_rps =\
+            lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\
                 slicestardist(lightcurves, coordinates, filters,
-                              ids, absmags, bp_rps)
+                              ids, absmags, bp_rps, names)
 
     elif opts.source_type == "catalog":
 
@@ -200,21 +205,29 @@ if opts.lightcurve_source == "Kowalski":
 
         if ".dat" in catalog_file:
             lines = [line.rstrip('\n') for line in open(catalog_file)]
-            ras, decs, errs = [], [], []
+            names, ras, decs, errs = [], [], [], []
             if ("fermi" in catalog_file):
                 amaj, amin, phi = [], [], []
             for line in lines:
                 lineSplit = list(filter(None,line.split(" ")))
                 if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file):
+                    ra_hex, dec_hex = convert_to_hex(ra*24/360.0,delimiter=''), convert_to_hex(dec,delimiter='')
+                    if dec_hex[0] == "-":
+                        objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+                    else:
+                        objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+                    names.append(objname)
                     ras.append(float(lineSplit[0]))
                     decs.append(float(lineSplit[1]))
                     errs.append(default_err)
                 elif ("vlss" in catalog_file):
+                    names.append(lineSplit[0])
                     ras.append(float(lineSplit[1]))
                     decs.append(float(lineSplit[2]))
                     err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
                     errs.append(err)
                 elif ("fermi" in catalog_file):
+                    names.append(lineSplit[0])
                     ras.append(float(lineSplit[1]))
                     decs.append(float(lineSplit[2]))
                     err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
@@ -223,14 +236,17 @@ if opts.lightcurve_source == "Kowalski":
                     amin.append(float(lineSplit[6]))
                     phi.append(float(lineSplit[7]))
                 elif ("swift" in catalog_file) or ("xmm" in catalog_file):
+                    names.append(lineSplit[0])
                     ras.append(float(lineSplit[1]))
                     decs.append(float(lineSplit[2]))
                     err = float(lineSplit[3])
                     errs.append(err)
                 else:
+                    names.append(lineSplit[0])
                     ras.append(float(lineSplit[1]))
                     decs.append(float(lineSplit[2]))
                     errs.append(default_err)
+            names = np.array(names)
             ras, decs, errs = np.array(ras), np.array(decs), np.array(errs)
             if ("fermi" in catalog_file):
                 amaj, amin, phi = np.array(amaj), np.array(amin), np.array(phi)
@@ -238,6 +254,16 @@ if opts.lightcurve_source == "Kowalski":
             with h5py.File(catalog_file, 'r') as f:
                 ras, decs = f['ra'][:], f['dec'][:]
             errs = default_err*np.ones(ras.shape)
+
+            names = []
+            for ra, dec in zip(ras, decs):
+                ra_hex, dec_hex = convert_to_hex(ra*24/360.0,delimiter=''), convert_to_hex(dec,delimiter='')
+                if dec_hex[0] == "-":
+                    objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+                else:
+                    objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+                names.append(objname)
+            names = np.array(names)
 
         if opts.doRemoveBrightStars:
             filename = "%s/bsc5.hdf5" % starCatalogDir
@@ -247,14 +273,17 @@ if opts.lightcurve_source == "Kowalski":
             sep = brightstardist(filename,ras,decs)
             idx2 = np.where(sep >= opts.stardist)[0]
             idx = np.union1d(idx1,idx2)
+            names = names[idx]
             ras, decs, errs = ras[idx], decs[idx], errs[idx]
             if ("fermi" in catalog_file):
                 amaj, amin, phi = amaj[idx], amin[idx], phi[idx]
 
+        names_split = np.array_split(names,opts.Ncatalog)
         ras_split = np.array_split(ras,opts.Ncatalog)
         decs_split = np.array_split(decs,opts.Ncatalog)
         errs_split = np.array_split(errs,opts.Ncatalog)
 
+        names = names_split[opts.Ncatindex]
         ras = ras_split[opts.Ncatindex]
         decs = decs_split[opts.Ncatindex]
         errs = errs_split[opts.Ncatindex]
@@ -271,12 +300,14 @@ if opts.lightcurve_source == "Kowalski":
         catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").split("/")[-1]
         catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(catalog_file_split,
                                                            opts.Ncatindex))
-        lightcurves, coordinates, filters, ids, absmags, bp_rps, baseline =\
+        lightcurves, coordinates, filters, ids,\
+        absmags, bp_rps, names, baseline =\
             get_kowalski_list(ras, decs,
                               kow,
                               program_ids=program_ids,
                               min_epochs=min_epochs,
                               errs=errs,
+                              names=names,
                               amaj=amaj, amin=amin, phi=phi,
                               doCombineFilt=doCombineFilt,
                               doRemoveHC=doRemoveHC)
@@ -408,13 +439,13 @@ else:
 print('Cataloging / Plotting lightcurves...')
 cnt = 0
 fid = open(catalogFile,'w')
-for lightcurve, filt, objid, coordinate, absmag, bp_rp, period, significance in zip(lightcurves,filters,ids,coordinates,absmags,bp_rps,periods_best,significances):
-    filt_str = [str(x) for x in filt]
+for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significance in zip(lightcurves,filters,ids,names,coordinates,absmags,bp_rps,periods_best,significances):
+    filt_str = "_".join([str(x) for x in filt])
     if opts.doLightcurveStats:
-        fid.write('%d %.10f %.10f %.10f %.10f %s '%(objid, coordinate[0], coordinate[1], period, significance, filt_str))
+        fid.write('%s %d %.10f %.10f %.10f %.10f %s '%(name, objid, coordinate[0], coordinate[1], period, significance, filt_str))
         fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
     else:
-        fid.write('%d %.10f %.10f %.10f %.10f %s\n'%(objid, coordinate[0], coordinate[1], period, significance, filt_str))
+        fid.write('%s %d %.10f %.10f %.10f %.10f %s\n'%(name, objid, coordinate[0], coordinate[1], period, significance, filt_str))
         fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
 
     if opts.doPlots and (significance>sigthresh):
