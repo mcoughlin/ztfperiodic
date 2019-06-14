@@ -34,11 +34,15 @@ def parse_commandline():
 
     parser.add_option("-o","--outputDir",default="../../output")
     parser.add_option("-p","--plotDir",default="../../plots")
-    parser.add_option("-d","--dataDir",default="../../data/spectra/7minute")
-    parser.add_option("-N","--N",type=float,default=11)
-    parser.add_option("-s","--start",type=float,default=1750)
-    parser.add_option("-e","--end",type=float,default=2250)
+    parser.add_option("-d","--dataDir",default="../../data/spectra/40minute")
+    parser.add_option("-N","--N",type=int,default=100)
+    #parser.add_option("-s","--start",type=int,default=0)
+    #parser.add_option("-e","--end",type=int,default=1500)
+    parser.add_option("-s","--start",type=int,default=750)
+    parser.add_option("-e","--end",type=int,default=1050)
     parser.add_option("--errorbudget",type=float,default=0.1)
+
+    parser.add_option("--doMovie",  action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
@@ -84,17 +88,42 @@ def loadspectra(f):
     data=np.loadtxt(f)
     return(data[start:stop,1])
     
-def loadallspectra(N):
-    f='%s/1.txt'%dataDir
-    data=np.loadtxt(f)
-    FullData=[]
-    wavelengths=data[start:stop,0]
+def loadallspectra():
+    filenames = glob.glob(os.path.join(dataDir,'*txt'))
+    for ii, filename in enumerate(filenames):
+        data=np.loadtxt(filename)
+        if ii == 0:
+            FullData=[]
+            wavelengths=data[start:stop,0]
+            FullData.append(wavelengths)
+        FullData.append((10**17)*data[start:stop,1])
+    return FullData
+
+def interpallspectra(newdat, N):
+
+    wavelengths, spectra = newdat[0], newdat[1:]
+    nspectra = len(spectra)
+ 
+    FullData = []
     FullData.append(wavelengths)
-    i=0
-    while i<N+1:
-        f='%s/'%dataDir+str(i)+'.txt'
-        FullData.append((10**17)*loadspectra(f))
-        i=i+1
+    tt = np.linspace(0,N,nspectra)
+    for ii in range(N):
+        weights = 1./np.abs(tt-ii)
+        if np.any(~np.isfinite(weights)):
+            idx = np.where(~np.isfinite(weights))[0]
+            weights[:] = 0.0
+            weights[idx] = 1.0
+
+        weights = weights / np.sum(weights)
+        weights[weights<0.1] = 0.0
+        weights = weights / np.sum(weights)
+
+        newspec = np.zeros(wavelengths.shape)
+        for spec, weight in zip(spectra, weights):
+            newspec = newspec + spec*weight
+
+        FullData.append(newspec)
+      
     return FullData
 
 def func(x,p0,p1,p2,vel0,vel1,v1,v2,g1,g2):
@@ -106,7 +135,7 @@ def myprior_fit(cube, ndim, nparams):
         cube[0] = cube[0]*2000.0
         cube[1] = cube[1]*2000.0
         cube[2] = cube[2]*2*np.pi
-        cube[2] = np.pi
+        #cube[2] = np.pi
         cube[3] = cube[3]*2000.0 - 1000.0
         cube[4] = cube[4]*2000.0 - 1000.0
 
@@ -118,10 +147,11 @@ def myprior(cube, ndim, nparams):
         cube[3] = cube[3]*2000.0 - 1000.0
         cube[4] = cube[4]*2000.0 - 1000.0
         cube[5] = cube[5]*100.0 - 100.0
-        #cube[6] = cube[6]*25.0
-        cube[6] = cube[6]*1.0
-        cube[7] = cube[7]*100.0
-        cube[8] = cube[8]*25.0
+        #cube[6] = cube[6]*100.0
+        cube[6] = cube[6]*1.0 - 0.5 + 55.0 
+        #cube[6] = cube[6]*1.0
+        cube[7] = cube[7]*100.0 - 100.0
+        cube[8] = cube[8]*100.0
 
 def myloglike_fit(cube, ndim, nparams):
 
@@ -131,8 +161,8 @@ def myloglike_fit(cube, ndim, nparams):
     c = cube[3]
     d = cube[4]
 
-    if c<d:
-        return -np.inf
+    #if c<d:
+    #    return -np.inf
 
     prob = 0
     for key, color in zip(keys,colors):
@@ -166,8 +196,11 @@ def myloglike(cube, ndim, nparams):
     g1 = cube[7]
     g2 = cube[8]
 
-    v2_mu, v2_std = 20.0, 3.0
-    v2 = ss.norm(v2_mu, v2_std).ppf(v2)
+    if v2<g2:
+        return -np.inf
+
+    #v2_mu, v2_std = 20.0, 3.0
+    #v2 = ss.norm(v2_mu, v2_std).ppf(v2)
 
     model = func(wavelengths,p0,p1,p2,vel0,vel1,v1,v2,g1,g2)
     sigma = spec * errorbudget
@@ -188,12 +221,18 @@ start=opts.start
 stop=opts.end
 dataDir = opts.dataDir
 errorbudget = opts.errorbudget
-baseplotDir = os.path.join(opts.plotDir,'%.2f'%errorbudget)
+baseplotDir = os.path.join(opts.plotDir,'spec_40_%.2f'%errorbudget)
 
 if not os.path.isdir(baseplotDir):
     os.makedirs(baseplotDir)
 
-newdat=loadallspectra(N)
+moviedir = os.path.join(baseplotDir,'movie')
+if not os.path.isdir(moviedir):
+    os.makedirs(moviedir)
+
+newdat=loadallspectra()
+newdat=interpallspectra(newdat, N)
+
 n=1
 final=[]
 
@@ -208,22 +247,42 @@ wavelengths, spectra = newdat[0], newdat[1:]
 
 data_out = {}
 for ii,spec in enumerate(spectra):
-    parameters = ["p0","p1","p2","vel0","vel1","v1","v2","g1","g2"]
-    labels = [r"$p_0$",r"$p_1$",r"$p_2$",r"${\rm vel}_0$",r"${\rm vel}_1$",r"$v_1$",r"$v_2$",r"$g_1$",r"$g_2$"]
-    n_params = len(parameters)
 
     plotDir = os.path.join(baseplotDir,'%d'%ii)
     if not os.path.isdir(plotDir):
         os.makedirs(plotDir)
+
+    plotName = "%s/spec.pdf"%(plotDir)
+    fig = plt.figure(figsize=(22,28))
+    plt.plot(wavelengths,spec,'k--',linewidth=2)
+    plt.ylim([0,100])
+    plt.grid()
+    plt.yticks(fontsize=36)
+    plt.xticks(fontsize=36)
+    plt.savefig(plotName)
+    plotName = "%s/spec.png"%(plotDir)
+    plt.savefig(plotName)
+    plt.close()
+
+    if opts.doMovie:
+        plotNameMovie = "%s/movie-%04d.png"%(moviedir,ii)
+        cp_command = "cp %s %s" % (plotName, plotNameMovie)
+        os.system(cp_command)
+
+    #continue
+
+    parameters = ["p0","p1","p2","vel0","vel1","v1","v2","g1","g2"]
+    labels = [r"$p_0$",r"$p_1$",r"$p_2$",r"${\rm vel}_0$",r"${\rm vel}_1$",r"$v_1$",r"$v_2$",r"$g_1$",r"$g_2$"]
+    n_params = len(parameters)
 
     pymultinest.run(myloglike, myprior, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/2-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
 
     multifile = "%s/2-post_equal_weights.dat"%plotDir
     data = np.loadtxt(multifile)
 
-    v2_mu, v2_std = 20.0, 3.0
-    v2 = ss.norm(v2_mu, v2_std).ppf(data[:,6])
-    data[:,6] = v2
+    #v2_mu, v2_std = 20.0, 3.0
+    #v2 = ss.norm(v2_mu, v2_std).ppf(data[:,6])
+    #data[:,6] = v2
 
     p0,p1,p2,vel0,vel1,v1,v2,g1,g2,loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4], data[:,5], data[:,6], data[:,7], data[:,8], data[:,9]
     idx = np.argmax(loglikelihood)
@@ -241,7 +300,7 @@ for ii,spec in enumerate(spectra):
     data_out[key]["kdedir"] = greedy_kde_areas_2d(pts)
 
     plotName = "%s/corner.pdf"%(plotDir)
-    if os.path.isfile(plotName): continue
+    #if os.path.isfile(plotName): continue
 
     figure = corner.corner(data[:,:-1], labels=labels,
                        quantiles=[0.16, 0.5, 0.84],
@@ -259,8 +318,28 @@ for ii,spec in enumerate(spectra):
     plt.grid()
     plt.yticks(fontsize=36)
     plt.xticks(fontsize=36)
+    plt.ylim([0,100])
+    plt.savefig(plotName)
+    plotName = "%s/spec.png"%(plotDir)
     plt.savefig(plotName)
     plt.close()
+
+    if opts.doMovie:
+        plotNameMovie = "%s/movie-%04d.png"%(moviedir,ii)
+        cp_command = "cp %s %s" % (plotName, plotNameMovie)
+        os.system(cp_command)
+
+if opts.doMovie:
+    moviefiles = os.path.join(moviedir,"movie-%04d.png")
+    filename = os.path.join(moviedir,"spectra.mpg")
+    ffmpeg_command = 'ffmpeg -an -y -r 20 -i %s -b:v %s %s'%(moviefiles,'5000k',filename)
+    os.system(ffmpeg_command)
+    filename = os.path.join(moviedir,"spectra.gif")
+    ffmpeg_command = 'ffmpeg -an -y -r 20 -i %s -b:v %s %s'%(moviefiles,'5000k',filename)
+    os.system(ffmpeg_command)
+
+    rm_command = "rm %s/*.png"%(moviedir)
+    os.system(rm_command)
 
 keys = sorted(data_out.keys())
 colors=cm.rainbow(np.linspace(0,1,len(keys)))
@@ -280,7 +359,7 @@ pymultinest.run(myloglike_fit, myprior_fit, n_params, importance_nested_sampling
 
 multifile = "%s/2-post_equal_weights.dat"%plotDir
 data = np.loadtxt(multifile)
-data[:,2] = np.random.rand(len(data[:,2]))
+#data[:,2] = np.random.rand(len(data[:,2]))
 A,B,phi,c,d,loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4], data[:,5]
 idx = np.argmax(loglikelihood)
 A_best, B_best, phi_best, c_best, d_best = data[idx,0:-1]
@@ -336,7 +415,7 @@ plt.fill_between(xs,vel0s_10,vel0s_90,facecolor=color1,edgecolor=color1,alpha=0.
 plt.fill_between(xs,vel1s_10,vel1s_90,facecolor=color2,edgecolor=color2,alpha=0.2,linewidth=3)
 
 plt.xlabel('Phase Bin',fontsize=28)
-plt.xlabel('Velocity [km/s]',fontsize=28)
+plt.ylabel('Velocity [km/s]',fontsize=28)
 plt.grid()
 plt.yticks(fontsize=36)
 plt.xticks(fontsize=36)
