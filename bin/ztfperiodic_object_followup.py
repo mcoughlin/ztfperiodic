@@ -10,12 +10,16 @@ import os, sys
 import optparse
 import pandas as pd
 import numpy as np
+import h5py
 import glob
 
 import matplotlib
 matplotlib.use('Agg')
+matplotlib.rcParams.update({'font.size': 16})
+matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+from matplotlib.colors import LogNorm
 
 from astropy.io import ascii
 from astropy import units as u
@@ -75,7 +79,10 @@ def parse_commandline():
     parser.add_option("--program_ids",default="2,3")
     parser.add_option("--min_epochs",default=0,type=int)
 
+    parser.add_option("-n","--nstack",default=1,type=int)
     parser.add_option("--objid",type=int)
+
+    parser.add_option("--doRemoveHC",  action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
@@ -92,6 +99,15 @@ pwd = opts.pwd
 algorithms = opts.algorithms.split(",")
 program_ids = list(map(int,opts.program_ids.split(",")))
 min_epochs = opts.min_epochs
+
+scriptpath = os.path.realpath(__file__)
+starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
+
+WDcat = os.path.join(starCatalogDir,'GaiaHRSet.hdf5')
+with h5py.File(WDcat, 'r') as f:
+    gmag, bprpWD = f['gmag'][:], f['bp_rp'][:]
+    parallax = f['parallax'][:]
+absmagWD=gmag+5*(np.log10(np.abs(parallax))-2)
 
 if not (opts.doCPU or opts.doGPU):
     print("--doCPU or --doGPU required")
@@ -112,28 +128,7 @@ if not os.path.isdir(path_out_dir):
     os.makedirs(path_out_dir)
 
 # Gaia and PS1 
-gaia = gaia_query(opts.ra, opts.declination, 5/3600.0)
 ps1 = ps1_query(opts.ra, opts.declination, 5/3600.0)
-
-if opts.doPlots:
-    if len(gaia) > 0:
-        gaiaimage = os.path.join(inputDir,'ESA_Gaia_DR2_HRD_Gaia_625.png')
-        img=mpimg.imread(gaiaimage)
-        img=np.flipud(img)
-        plotName = os.path.join(path_out_dir,'gaia.pdf')
-        plt.figure(figsize=(12,12))
-        plt.imshow(img,origin='lower')
-    
-        xval, yval = gaia['BP-RP'], gaia['Gmag'] + 5*(np.log10(gaia['Plx']) - 2)
-        xval = 162 + (235-162)*xval/1.0
-        yval = 625 + (145-625)*yval/15.0
-    
-        plt.plot(xval,yval,'kx')
-        plt.savefig(plotName)
-        plt.close()
-
-if opts.doJustHR:
-    exit(0)
 
 if opts.lightcurve_source == "Kowalski":
     kow = Kowalski(username=opts.user, password=opts.pwd)
@@ -148,7 +143,29 @@ if opts.lightcurve_source == "Kowalski":
         print("No objects... sorry.")
         exit(0)
     key = list(lightcurves.keys())[0]
+
     hjd, mag, magerr = lightcurves[key]["hjd"], lightcurves[key]["mag"], lightcurves[key]["magerr"]
+    fid = lightcurves[key]["fid"]
+    ra, dec = lightcurves[key]["ra"], lightcurves[key]["dec"]
+    absmag, bp_rp = lightcurves[key]["absmag"], lightcurves[key]["bp_rp"]
+
+    idx = np.argsort(hjd)
+    hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+    ra, dec = ra[idx], dec[idx]
+    fid = fid[idx]
+
+    if opts.doRemoveHC:
+        dt = np.diff(hjd)
+        idx = np.setdiff1d(np.arange(len(hjd)),
+                           np.where(dt < 30.0*60.0/86400.0)[0])
+        hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+        ra, dec = ra[idx], dec[idx]
+        fid = fid[idx]
+
+    print('RA: %.5f, Dec: %.5f' % (np.median(ra), np.median(dec)))
+    filt_str = " ".join([str(x) for x in list(np.unique(fid))])
+    print("Filters:  %s" % filt_str)
+    print("Number of observations: %d" % len(ra))
 
     if hjd.size == 0:
         print("No data available...")
@@ -165,6 +182,27 @@ elif opts.lightcurve_source == "matchfiles":
     if len(df) == 0:
         print("No data available...")
         exit(0)
+
+if opts.doPlots:
+    plotName = os.path.join(path_out_dir,'gaia.pdf')
+    plt.figure(figsize=(12,12))
+    asymmetric_error = [absmag[1], absmag[2]]
+    hist2 = plt.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
+    if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
+        plt.errorbar(bp_rp,absmag[0],yerr=[asymmetric_error],
+                     c='c',zorder=1,fmt='x',markersize=20)
+    plt.xlim([-1,4.0])
+    plt.ylim([-5,18])
+    plt.gca().invert_yaxis()
+    cbar = plt.colorbar(hist2[3])
+    cbar.set_label('Object Count')
+    plt.xlabel('Gaia BP - RP color')
+    plt.ylabel('Gaia G absolute magnitude')
+    plt.savefig(plotName)
+    plt.close()
+
+if opts.doJustHR:
+    exit(0)
 
 lightcurves = []
 lightcurve=(hjd,mag,magerr)
@@ -217,13 +255,31 @@ if opts.doPlots:
     plt.close()
 
     if opts.doPhase:
-        hjd_mod = np.mod(hjd, phase)/phase
+        hjd_mod = np.mod(hjd, phase/2.0)/(phase/2.0)
+        idx = np.argsort(hjd_mod)
+        hjd_mod = hjd_mod[idx]
+        mag_mod = mag[idx]
+        magerr_mod = magerr[idx]
+        
+        if opts.nstack > 1:
+            idxs = np.array_split(np.arange(len(hjd_mod)),int(float(len(hjd_mod))/opts.nstack))
+            hjd_new, mag_new, magerr_new = [], [], []
+            for idx in idxs:
+                hjd_new.append(np.mean(hjd_mod[idx]))
+                mag_new.append(np.average(mag_mod[idx], weights=magerr_mod[idx]**2))
+                magerr_new.append(1/np.sqrt(np.sum(1.0/magerr_mod[idx]**2)))
+            hjd_mod, mag_mod, magerr_mod = np.array(hjd_new), np.array(mag_new), np.array(magerr_new)
+
         plotName = os.path.join(path_out_dir,'phase.pdf')
         plt.figure(figsize=(12,8))
-        plt.errorbar(hjd_mod,mag,yerr=magerr,fmt='bo')
+        plt.errorbar(hjd_mod,mag_mod,yerr=magerr_mod,fmt='bo')
         plt.xlabel('Phase')
         plt.ylabel('Magnitude [ab]')
-        plt.title('%.5f'%phase)
+        if not opts.objid is None:
+            if opts.objid == 10798192012899:
+                plt.ylim([18.1,18.5])
+            #elif opts.objid == 10798191008264:
+            #    plt.ylim([18.0,17.7])
         plt.gca().invert_yaxis()
         plt.savefig(plotName)
         plt.close()

@@ -379,7 +379,7 @@ for ii,spec in enumerate(spectra):
     data_out[key]["kdedir"] = greedy_kde_areas_2d(pts)
 
     plotName = "%s/corner.pdf"%(plotDir)
-    #if os.path.isfile(plotName): continue
+    if os.path.isfile(plotName): continue
 
     figure = corner.corner(data[:,:-1], labels=labels,
                        quantiles=[0.16, 0.5, 0.84],
@@ -464,8 +464,8 @@ for key, color in zip(keys,colors):
         plt.setp(ax1.get_xticklabels(), visible=False)
     else:
         plt.xticks(fontsize=36)
+        plt.xlabel(r'$\lambda [\AA]$',fontsize=48,labelpad=30)
 
 ax1.set_zorder(1)
-#ax2.set_xlabel(r'$\lambda [\AA]$',fontsize=48,labelpad=30)
 plt.savefig(plotName)
 plt.close()

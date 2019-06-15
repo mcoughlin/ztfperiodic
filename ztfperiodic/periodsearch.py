@@ -144,6 +144,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 significances.append(significance)
     
         elif algorithm == "CE":
+            from ztfperiodic.period import CE
             for ii,data in enumerate(lightcurves):
                 if np.mod(ii,10) == 0:
                     print("%d/%d"%(ii,len(lightcurves)))

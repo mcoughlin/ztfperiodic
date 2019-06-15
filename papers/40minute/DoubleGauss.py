@@ -42,11 +42,37 @@ def parse_commandline():
     parser.add_option("-e","--end",type=int,default=1050)
     parser.add_option("--errorbudget",type=float,default=0.1)
 
+    parser.add_option("--doInterp",  action="store_true", default=False)
     parser.add_option("--doMovie",  action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
     return opts
+
+def greedy_kde_areas_1d(pts):
+
+    pts = np.random.permutation(pts)
+    mu = np.mean(pts, axis=0)
+
+    Npts = pts.shape[0]
+    kde_pts = pts[:Npts/2]
+    den_pts = pts[Npts/2:]
+
+    kde = ss.gaussian_kde(kde_pts.T)
+
+    kdedir = {}
+    kdedir["kde"] = kde
+    kdedir["mu"] = mu
+
+    return kdedir
+
+def kde_eval_single(kdedir,truth):
+
+    kde = kdedir["kde"]
+    mu = kdedir["mu"]
+    td = kde(truth)
+
+    return td
 
 def greedy_kde_areas_2d(pts):
 
@@ -132,23 +158,23 @@ def func(x,p0,p1,p2,vel0,vel1,v1,v2,g1,g2):
 
 def myprior_fit(cube, ndim, nparams):
 
-        cube[0] = cube[0]*2000.0
-        cube[1] = cube[1]*2000.0
+        cube[0] = cube[0]*1000.0
+        cube[1] = cube[1]*1000.0
         cube[2] = cube[2]*2*np.pi
         #cube[2] = np.pi
-        cube[3] = cube[3]*2000.0 - 1000.0
-        cube[4] = cube[4]*2000.0 - 1000.0
+        cube[3] = cube[3]*1000.0 - 500.0
+        cube[4] = cube[4]*1000.0 - 500.0
 
 def myprior(cube, ndim, nparams):
 
         cube[0] = cube[0]*500 + 50
         cube[1] = cube[1]*2.0 - 1.0
         cube[2] = cube[2]*2e-4 - 1e-4
-        cube[3] = cube[3]*2000.0 - 1000.0
-        cube[4] = cube[4]*2000.0 - 1000.0
+        cube[3] = cube[3]*1000.0 - 500.0
+        cube[4] = cube[4]*1000.0 - 500.0
         cube[5] = cube[5]*100.0 - 100.0
-        #cube[6] = cube[6]*100.0
-        cube[6] = cube[6]*1.0 - 0.5 + 55.0 
+        cube[6] = cube[6]*100.0
+        #cube[6] = cube[6]*1.0 - 0.5 + 55.0 
         #cube[6] = cube[6]*1.0
         cube[7] = cube[7]*100.0 - 100.0
         cube[8] = cube[8]*100.0
@@ -231,7 +257,8 @@ if not os.path.isdir(moviedir):
     os.makedirs(moviedir)
 
 newdat=loadallspectra()
-newdat=interpallspectra(newdat, N)
+if opts.doInterp:
+    newdat=interpallspectra(newdat, N)
 
 n=1
 final=[]
@@ -288,6 +315,8 @@ for ii,spec in enumerate(spectra):
     idx = np.argmax(loglikelihood)
     p0_best, p1_best, p2_best, vel0_best, vel1_best, v1_best, v2_best, g1_best, g2_best = data[idx,0:-1]
     model = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,v1_best,v2_best,g1_best,g2_best)
+    model1 = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,v1_best,0,g1_best,g2_best)
+    model2 = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,0,v2_best,g1_best,g2_best)
 
     key = str(ii)
     data_out[key] = {}
@@ -315,6 +344,8 @@ for ii,spec in enumerate(spectra):
     fig = plt.figure(figsize=(22,28))
     plt.plot(data_out[key]["wavelengths"],data_out[key]["spec"],'k--',linewidth=2)
     plt.plot(data_out[key]["wavelengths"],data_out[key]["model"],'b-',linewidth=2)
+    plt.plot(data_out[key]["wavelengths"],model1,'g-',linewidth=2)
+    plt.plot(data_out[key]["wavelengths"],model2,'c-',linewidth=2)    
     plt.grid()
     plt.yticks(fontsize=36)
     plt.xticks(fontsize=36)
@@ -323,6 +354,8 @@ for ii,spec in enumerate(spectra):
     plotName = "%s/spec.png"%(plotDir)
     plt.savefig(plotName)
     plt.close()
+
+    print(noooooooo)
 
     if opts.doMovie:
         plotNameMovie = "%s/movie-%04d.png"%(moviedir,ii)

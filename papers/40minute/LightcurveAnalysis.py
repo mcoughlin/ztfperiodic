@@ -20,6 +20,8 @@ from astropy.coordinates import SkyCoord, BarycentricTrueEcliptic, EarthLocation
 
 import matplotlib
 matplotlib.use('Agg')
+matplotlib.rcParams.update({'font.size': 16})
+matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 import matplotlib.gridspec as gridspec
@@ -230,7 +232,6 @@ labels = [r"$r_1$",r"$r_2$","J","i",r"$t_0$","scale",r"${\rm heat}_2$","q","$ldc
 parameters = ["r1","r2","J","i","t0","scale","q"]
 labels = [r"$r_1$",r"$r_2$","J","i",r"$t_0$","scale","q"]
 
-
 n_params = len(parameters)
 
 plotDir = os.path.join(baseplotDir,'posteriors')
@@ -248,8 +249,11 @@ idx = np.argmax(loglikelihood)
 #r1_best, r2_best, J_best, i_best, t0_best, scale_best, heat_2_best, q_best, ldc_1_best, ldc_2_best, gdc_2_best = data[idx,0:-1]
 r1_best, r2_best, J_best, i_best, t0_best, scale_best, q_best = data[idx,0:-1]
 
+labels = labels[:4]
+data = data[:,:-4]
+
 plotName = "%s/corner.pdf"%(baseplotDir)
-figure = corner.corner(data[:,:-1], labels=labels,
+figure = corner.corner(data, labels=labels,
                        quantiles=[0.16, 0.5, 0.84],
                        show_titles=True, title_kwargs={"fontsize": title_fontsize},
                        label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
@@ -262,19 +266,22 @@ plt.close()
 
 model_pars = [r1_best, r2_best, J_best, i_best, t0_best, scale_best, q_best] # the parameters
 
+t0 = lc[:,0][0]
 fig = plt.figure(figsize=(8, 12))
 gs = gridspec.GridSpec(4, 1)
 ax1 = fig.add_subplot(gs[0:3, 0])
-ax2 = fig.add_subplot(gs[3, 0])
+ax2 = fig.add_subplot(gs[3, 0], sharex = ax1)
 plt.axes(ax1)
-plt.errorbar(lc[:,0],lc[:,1],lc[:,2],fmt='k.')
-plt.ylabel('flux')
-plt.xlabel('time')
+plt.errorbar(lc[:,0]-t0,lc[:,1],lc[:,2],fmt='k.')
+plt.ylabel('Flux')
 # my initial guess (r1,r2,J,i,t0,p,scale)
 guess = model_pars
-plt.plot(t[:],basic_model(t[:],model_pars),zorder=4)
+plt.plot(t[:]-t0,basic_model(t[:],model_pars),zorder=4)
+plt.setp(ax1.get_xticklabels(), visible=False)
 plt.axes(ax2)
-plt.errorbar(t[:],lc[:,1]-basic_model(t[:],model_pars),lc[:,2],fmt='k.')
+plt.errorbar(t[:]-t0,lc[:,1]-basic_model(t[:],model_pars),lc[:,2],fmt='k.')
+plt.ylabel('Model - Data')
+plt.xlabel('Time [HJD$_0$ = %.5f]' % t0)
 plt.show()
 plotName = os.path.join(baseplotDir,'fit.pdf')
 plt.savefig(plotName)
