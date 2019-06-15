@@ -34,8 +34,8 @@ def parse_commandline():
 
     parser.add_option("-o","--outputDir",default="../../output")
     parser.add_option("-p","--plotDir",default="../../plots")
-    parser.add_option("-d","--dataDir",default="../../data/spectra")
-    parser.add_option("-N","--N",type=float,default=12)
+    parser.add_option("-d","--dataDir",default="../../data/spectra/7minute")
+    parser.add_option("-N","--N",type=float,default=11)
     parser.add_option("-s","--start",type=float,default=1750)
     parser.add_option("-e","--end",type=float,default=2250)
     parser.add_option("--errorbudget",type=float,default=0.1)
@@ -90,7 +90,7 @@ def loadallspectra(N):
     FullData=[]
     wavelengths=data[start:stop,0]
     FullData.append(wavelengths)
-    i=1
+    i=0
     while i<N+1:
         f='%s/'%dataDir+str(i)+'.txt'
         FullData.append((10**17)*loadspectra(f))
@@ -106,6 +106,7 @@ def myprior_fit(cube, ndim, nparams):
         cube[0] = cube[0]*2000.0
         cube[1] = cube[1]*2000.0
         cube[2] = cube[2]*2*np.pi
+        cube[2] = np.pi
         cube[3] = cube[3]*2000.0 - 1000.0
         cube[4] = cube[4]*2000.0 - 1000.0
 
@@ -135,8 +136,8 @@ def myloglike_fit(cube, ndim, nparams):
 
     prob = 0
     for key, color in zip(keys,colors):
-        vel0 = A*np.cos((2*(np.pi/12.0)*float(key))+phi)+c
-        vel1 = B*np.cos((2*(np.pi/12.0)*float(key))+phi+np.pi)+d
+        vel0 = A*np.sin((2*(np.pi/12.0)*float(key))+phi)+c
+        vel1 = B*np.sin((2*(np.pi/12.0)*float(key))+phi+np.pi)+d
 
         kdedir = data_out[key]["kdedir"]
         vals = np.array([vel0,vel1]).T
@@ -279,6 +280,7 @@ pymultinest.run(myloglike_fit, myprior_fit, n_params, importance_nested_sampling
 
 multifile = "%s/2-post_equal_weights.dat"%plotDir
 data = np.loadtxt(multifile)
+data[:,2] = np.random.rand(len(data[:,2]))
 A,B,phi,c,d,loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4], data[:,5]
 idx = np.argmax(loglikelihood)
 A_best, B_best, phi_best, c_best, d_best = data[idx,0:-1]
@@ -292,8 +294,8 @@ xs, vel0s, vel1s = [], np.zeros((len(keys),len(A))), np.zeros((len(keys),len(A))
 for jj,key in enumerate(keys):
     x = float(key)
     for ii in range(len(A)):
-        vel0s[jj,ii] = A[ii]*np.cos(2*(np.pi/12.0)*float(key)+phi[ii])+c[ii] 
-        vel1s[jj,ii] = B[ii]*np.cos(2*(np.pi/12.0)*float(key)+phi[ii]+np.pi)+d[ii]
+        vel0s[jj,ii] = A[ii]*np.sin(2*(np.pi/12.0)*float(key)+phi[ii])+c[ii] 
+        vel1s[jj,ii] = B[ii]*np.sin(2*(np.pi/12.0)*float(key)+phi[ii]+np.pi)+d[ii]
     xs.append(x)
 
 idx = np.argsort(xs)
@@ -368,8 +370,8 @@ for key, color in zip(keys,colors):
 
 fid.close()
 
-plt.plot((xs+1)/12.0,vel0s_50,'x--',color=color1,linewidth=3)
-plt.plot((xs+1)/12.0,vel1s_50,'o--',color=color2,linewidth=3)
+plt.plot(xs/12.0,vel0s_50,'x--',color=color1,linewidth=3)
+plt.plot(xs/12.0,vel1s_50,'o--',color=color2,linewidth=3)
 plt.xlabel('Phase',fontsize=36)
 plt.ylabel('Velocity [km/s]',fontsize=36)
 plt.grid()
