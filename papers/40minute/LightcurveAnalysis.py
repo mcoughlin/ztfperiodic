@@ -13,6 +13,7 @@ import glob
 import optparse
 import ellc
 import time
+import scipy.signal
 
 from astropy.time import Time
 from astropy.coordinates import SkyCoord, BarycentricTrueEcliptic, EarthLocation
@@ -21,6 +22,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
+import matplotlib.gridspec as gridspec
 
 import scipy.stats as ss
 
@@ -72,18 +74,20 @@ def basic_model(t,pars,grid='default'):
                 sbratio=pars[2],
                 incl=pars[3],
                 t_zero=pars[4],
-                q=pars[7],
+                q=pars[6],
                 period=p,
                 shape_1='sphere',
-                shape_2='sphere',
-                ldc_1=pars[8],
-                ldc_2=pars[9],
-                gdc_2=pars[10],
+                shape_2='roche',
+                ldc_1=0.0,
+                ldc_2=0.0,
+                gdc_2=0.4,
                 f_c=0,
                 f_s=0,
                 t_exp=t_exp,
                 grid_1=grid,
-                grid_2=grid, heat_2 = pars[6],exact_grav=True,
+                grid_2=grid, 
+                heat_2 = 1.0,
+                exact_grav=True,
                 verbose=0)
         m *= pars[5]
 
@@ -100,12 +104,8 @@ def myprior(cube, ndim, nparams):
         cube[2] = cube[2]*1.0 + 0.0
         cube[3] = cube[3]*90.0 + 0.0
         cube[4] = cube[4]*(tmax-tmin) + tmin
-        cube[5] = cube[5]*1.0 + 0.0
-        cube[6] = cube[6]*10.0 + 0.0
-        cube[7] = cube[7]*2.0 + 0.0
-        cube[8] = cube[8]*0.4 + 0.0
-        cube[9] = cube[9]*0.4 + 0.0
-        cube[10] = cube[10]*0.2 + 0.3
+        cube[5] = cube[5]*2.0 - 1.0
+        cube[6] = cube[6]*5.0
 
 def myloglike(cube, ndim, nparams):
 
@@ -115,13 +115,10 @@ def myloglike(cube, ndim, nparams):
     i = cube[3]
     t0 = cube[4]
     scale = cube[5]
-    heat_2 = cube[6]
-    q = cube[7]
-    ldc_1=cube[8]
-    ldc_2=cube[9]
-    gdc_2=cube[10]
+    q = cube[6]
 
-    model_pars = [r1,r2,J,i,t0,scale,heat_2,q,ldc_1,ldc_2,gdc_2]
+    #model_pars = [r1,r2,J,i,t0,scale,heat_2,q,ldc_1,ldc_2,gdc_2]
+    model_pars = [r1,r2,J,i,t0,scale,q]
     model = basic_model(t[:],model_pars)
  
     x = model - y
@@ -144,14 +141,16 @@ baseplotDir = os.path.join(baseplotDir,"%.5f"%opts.errorbudget)
 if not os.path.isdir(baseplotDir):
     os.makedirs(baseplotDir)
 
-lightcurveFile = os.path.join(dataDir,'40minKPED.dat')
+lightcurveFile = os.path.join(dataDir,'40min-Chimera-g-20190429.dat')
 data=np.loadtxt(lightcurveFile,skiprows=1,delimiter=' ')
-data=data[:510,:]
+data=data[70:1700,:]
 
 data[:,4] = np.abs(data[:,4])
 #y, dy=Detrending.detrending(data)
 
 y=data[:,3]/np.max(data[:,3])
+y=(y-np.median(y)) + 1.0
+
 dy=np.sqrt(data[:,4]**2 + opts.errorbudget**2)/np.max(data[:,3])
 t=data[:,0]
 
@@ -159,20 +158,23 @@ RA, Dec = 285.3559192, 53.1581982
 t = BJDConvert(t, RA, Dec)
 t = np.array([x.value for x in t])
 t_exp=t[1]-t[0]
+fs = 1/(t_exp*86400)
 
-r1 = 0.125
-r2 = 0.3
-J = 1/15.0
-i = 85
-t0 = t[0]
-p = 0.029166666666666667
-scale = np.median(y)/1.3
-heat_2 = 5
-bfac_2 = 1.30
-q=0.3
-ldc_1=0.2
-ldc_2=0.4548
-gdc_2=0.61
+r1 = 0.2
+r2 = 0.125
+J = 0.25
+i = 90
+idx = np.argmin(y)
+t0 = t[idx]
+p = 0.02823
+p = 2*0.01409783493869
+scale = np.median(y)/1.0
+#scale = 1.0
+heat_2 = 0.0
+q=1.0
+ldc_1=0.0
+ldc_2=0.0
+gdc_2=0.0
 f_c=0
 f_s=0
 
@@ -181,7 +183,7 @@ tmin, tmax = np.min(t), np.min(t)+p
 
 # generate the test light curve given parameters
 
-model_pars = [r1,r2,J,i,t0,scale,heat_2,q,ldc_1,ldc_2,gdc_2] # the parameters
+model_pars = [r1,r2,J,i,t0,scale,q] # the parameters
 
 # and add errors
 
@@ -199,7 +201,20 @@ plt.xlabel('time')
 guess = model_pars
 plt.plot(t[:],basic_model(t[:],model_pars),zorder=4)
 plt.show()
-plotName = os.path.join(baseplotDir,'test.png')
+plotName = os.path.join(baseplotDir,'lightcurve.pdf')
+plt.savefig(plotName)
+plt.close()
+
+f, Pxx_den = scipy.signal.periodogram(lc[:,1], fs)
+period = 1/f #s
+period = period / 60.0 # minutes
+plt.loglog(period, Pxx_den)
+plt.plot([1/p, 1/p], [1e-6, 1e0], 'k--')
+#plt.ylim([1e-7, 1e2])
+plt.xlabel('Time [minutes]')
+plt.ylabel('PSD [V**2/Hz]')
+plt.show()
+plotName = os.path.join(baseplotDir,'periodogram.pdf')
 plt.savefig(plotName)
 plt.close()
 
@@ -211,6 +226,11 @@ label_fontsize = 30
 
 parameters = ["r1","r2","J","i","t0","scale","heat_2","q","ldc_1","ldc_2","gdc_2"]
 labels = [r"$r_1$",r"$r_2$","J","i",r"$t_0$","scale",r"${\rm heat}_2$","q","$ldc_1$","$ldc_2$","$gdc_2$"]
+
+parameters = ["r1","r2","J","i","t0","scale","q"]
+labels = [r"$r_1$",r"$r_2$","J","i",r"$t_0$","scale","q"]
+
+
 n_params = len(parameters)
 
 plotDir = os.path.join(baseplotDir,'posteriors')
@@ -222,11 +242,13 @@ pymultinest.run(myloglike, myprior, n_params, importance_nested_sampling = False
 multifile = "%s/2-post_equal_weights.dat"%plotDir
 data = np.loadtxt(multifile)
 
-r1, r2, J, i, t0,scale, heat_2, q, ldc_1, ldc_2, gdc_2, loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4], data[:,5], data[:,6], data[:,7], data[:,8], data[:,9], data[:,10], data[:,11] 
+#r1, r2, J, i, t0,scale, heat_2, q, ldc_1, ldc_2, gdc_2, loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4], data[:,5], data[:,6], data[:,7], data[:,8], data[:,9], data[:,10], data[:,11] 
+r1, r2, J, i, t0,scale, q, loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4], data[:,5], data[:,6], data[:,7]
 idx = np.argmax(loglikelihood)
-r1_best, r2_best, J_best, i_best, t0_best, scale_best, heat_2_best, q_best, ldc_1_best, ldc_2_best, gdc_2_best = data[idx,0:-1]
+#r1_best, r2_best, J_best, i_best, t0_best, scale_best, heat_2_best, q_best, ldc_1_best, ldc_2_best, gdc_2_best = data[idx,0:-1]
+r1_best, r2_best, J_best, i_best, t0_best, scale_best, q_best = data[idx,0:-1]
 
-plotName = "%s/corner.pdf"%(plotDir)
+plotName = "%s/corner.pdf"%(baseplotDir)
 figure = corner.corner(data[:,:-1], labels=labels,
                        quantiles=[0.16, 0.5, 0.84],
                        show_titles=True, title_kwargs={"fontsize": title_fontsize},
@@ -236,16 +258,23 @@ figure.set_size_inches(18.0,18.0)
 plt.savefig(plotName)
 plt.close()
 
-model_pars = [r1_best, r2_best, J_best, i_best, t0_best, scale_best, heat_2_best, q_best, ldc_1_best, ldc_2_best, gdc_2_best] # the parameters
+#model_pars = [r1_best, r2_best, J_best, i_best, t0_best, scale_best, heat_2_best, q_best, ldc_1_best, ldc_2_best, gdc_2_best] # the parameters
 
-plt.figure()
-# lets have a look:
+model_pars = [r1_best, r2_best, J_best, i_best, t0_best, scale_best, q_best] # the parameters
+
+fig = plt.figure(figsize=(8, 12))
+gs = gridspec.GridSpec(4, 1)
+ax1 = fig.add_subplot(gs[0:3, 0])
+ax2 = fig.add_subplot(gs[3, 0])
+plt.axes(ax1)
 plt.errorbar(lc[:,0],lc[:,1],lc[:,2],fmt='k.')
 plt.ylabel('flux')
 plt.xlabel('time')
 # my initial guess (r1,r2,J,i,t0,p,scale)
 guess = model_pars
 plt.plot(t[:],basic_model(t[:],model_pars),zorder=4)
+plt.axes(ax2)
+plt.errorbar(t[:],lc[:,1]-basic_model(t[:],model_pars),lc[:,2],fmt='k.')
 plt.show()
 plotName = os.path.join(baseplotDir,'fit.pdf')
 plt.savefig(plotName)

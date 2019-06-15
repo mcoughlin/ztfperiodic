@@ -202,7 +202,7 @@ def calc_basic_stats(t,mag,err):
     w = err**-2
     wmean, wstd = calc_weighted_mean_std(mag,w)
     chi2red = np.sum((wmean-mag)**2*w)/(N-1)
-    RoMS = np.sum(abs(mag-median/err))/(N-1)
+    RoMS = np.sum(abs(mag-median)/err)/(N-1)
 
     # deviation from median
     NormPeaktoPeakamp = calc_NormPeaktoPeakamp(mag,err)
