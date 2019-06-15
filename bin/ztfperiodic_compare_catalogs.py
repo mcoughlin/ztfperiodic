@@ -89,6 +89,11 @@ if not os.path.isfile(cat2file):
 else:
     cat2 = Table.read(cat2file, format='fits')
 
+idx1 = np.where(cat1["sig"] >= opts.sig1)[0]
+idx2 = np.where(cat2["sig"] >= opts.sig2)[0]
+print('Keeping %.5f %% of objects in catalog 1' % (100*len(idx1)/len(cat1)))
+print('Keeping %.5f %% of objects in catalog 2' % (100*len(idx2)/len(cat2)))
+
 catalog1 = SkyCoord(ra=cat1["ra"]*u.degree, dec=cat1["dec"]*u.degree, frame='icrs')
 catalog2 = SkyCoord(ra=cat2["ra"]*u.degree, dec=cat2["dec"]*u.degree, frame='icrs')
 idx,sep,_ = catalog1.match_to_catalog_sky(catalog2)
