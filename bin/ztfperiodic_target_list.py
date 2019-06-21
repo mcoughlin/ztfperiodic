@@ -274,12 +274,12 @@ for filename in filenames:
             appflux, absflux = np.nan, np.nan
 
         if opts.doKPED:
-            print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Michael Coughlin,comment'%(requestID, cnt, objname, ra_hex, dec_hex, gmag, tottime, filt, mode),file=fid,flush=True)
+            print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Coughlin,comment'%(requestID, cnt, objname, ra_hex, dec_hex, gmag, tottime, filt, mode),file=fid,flush=True)
         else:
             print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5e %.5e "%s"'%(objname, ra, dec, period, sig, gmag, col, mag, P_min, appflux, absflux, name),file=fid,flush=True)
     else:
         if opts.doKPED:
-            print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Michael Coughlin,comment'%(requestID, cnt, objname, ra_hex, dec_hex, gmag, tottime, filt, mode),file=fid,flush=True)
+            print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Coughlin,comment'%(requestID, cnt, objname, ra_hex, dec_hex, gmag, tottime, filt, mode),file=fid,flush=True)
         else:
             print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f "%s"'%(objname, ra, dec, period, sig, gmag, col, mag, P_min, name),file=fid,flush=True)
     cnt = cnt + 1
