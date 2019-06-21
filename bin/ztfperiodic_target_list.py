@@ -1,5 +1,7 @@
 
 import os, sys, glob, time
+import string
+import random
 import optparse
 import numpy as np
 import matplotlib
@@ -35,8 +37,8 @@ def parse_commandline():
     """
     parser = optparse.OptionParser()
 
-    parser.add_option("-o","--outfile",default="/Users/mcoughlin/Desktop/CE/CE_rosat/obj.dat")
-    parser.add_option("-i","--inputDir",default="/Users/mcoughlin/Desktop/CE/CE_rosat/")
+    parser.add_option("-o","--outfile",default="/Users/mcoughlin/Desktop/Kevin/Candidates/obj.dat")
+    parser.add_option("-i","--inputDir",default="/Users/mcoughlin/Desktop/Kevin/Candidates/")
     parser.add_option("-z","--ztfperiodicInputDir",default="../input")
 
     parser.add_option("--doGaia",  action="store_true", default=False)
@@ -44,6 +46,7 @@ def parse_commandline():
     parser.add_option("--doXray",  action="store_true", default=False)
     parser.add_option("--doCheckObservable",  action="store_true", default=False)
     parser.add_option("--doMagnitudeCut",  action="store_true", default=False)
+    parser.add_option("--doKPED",  action="store_true", default=False)
    
     parser.add_option("-c","--significance_cut",default=0.0,type=float)
     parser.add_option("-m","--magnitude",default=16.0,type=float)
@@ -112,6 +115,9 @@ def mass_luminosity(L):
     M = L**(1/3.5)
     return M
 
+def random_char(y):
+    return ''.join(random.choice(string.ascii_letters) for x in range(y))
+
 # Parse command line
 opts = parse_commandline()
 inputDir = opts.inputDir
@@ -133,6 +139,9 @@ filenames = [x for x in filenames if "png" in x]
 sigs = []
 for filename in filenames:
     filenameSplit = filename.split("/")[-1].replace(".png","").split("_")
+    if filenameSplit[0] == "obj":
+        continue
+
     sig, ra, dec, period = float(filenameSplit[0]), float(filenameSplit[1]), float(filenameSplit[2]), float(filenameSplit[3])
 
     coord = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
@@ -168,22 +177,33 @@ global_constraints = [AirmassConstraint(max = 1.5, boolean_constraint = False),
 
 cols, mags, ecols, emags, periods = [], [], [], [], []
 
+requestID = random_char(3).upper()
+
+tottime = 3600.0
+filt = 'FILTER_SLOAN_G'
+mode = 9
+
 fid = open(outfile,'w')
+cnt = 0
 FixedTargets = []
 for filename in filenames:
     filenameSplit = filename.split("/")[-1].replace(".png","").split("_")
+    if filenameSplit[0] == "obj": 
+        continue
+
     sig, ra, dec, period = float(filenameSplit[0]), float(filenameSplit[1]), float(filenameSplit[2]), float(filenameSplit[3])
-    ra_hex, dec_hex = convert_to_hex(ra*24/360.0,delimiter=''), convert_to_hex(dec,delimiter='')
- 
+    ra_hex, dec_hex = convert_to_hex(ra*24/360.0,delimiter=':'), convert_to_hex(dec,delimiter=':')
+    ra_hex_nodelim, dec_hex_nodelim = convert_to_hex(ra*24/360.0,delimiter=''), convert_to_hex(dec,delimiter='') 
+
     if sig < opts.significance_cut: continue
  
     if np.abs(period - 1.0) < 0.01:
         continue
  
     if dec_hex[0] == "-":
-        objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+        objname = "ZTFJ%s%s"%(ra_hex_nodelim[:4],dec_hex_nodelim[:5])
     else:
-        objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+        objname = "ZTFJ%s%s"%(ra_hex_nodelim[:4],dec_hex_nodelim[:4])
 
     if objname in observed: continue
 
@@ -253,9 +273,16 @@ for filename in filenames:
         else:
             appflux, absflux = np.nan, np.nan
 
-        print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5e %.5e "%s"'%(objname, ra, dec, period, sig, gmag, col, mag, P_min, appflux, absflux, name),file=fid,flush=True)
+        if opts.doKPED:
+            print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Michael Coughlin,comment'%(requestID, cnt, objname, ra_hex, dec_hex, gmag, tottime, filt, mode),file=fid,flush=True)
+        else:
+            print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5e %.5e "%s"'%(objname, ra, dec, period, sig, gmag, col, mag, P_min, appflux, absflux, name),file=fid,flush=True)
     else:
-        print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f "%s"'%(objname, ra, dec, period, sig, gmag, col, mag, P_min, name),file=fid,flush=True)
+        if opts.doKPED:
+            print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Michael Coughlin,comment'%(requestID, cnt, objname, ra_hex, dec_hex, gmag, tottime, filt, mode),file=fid,flush=True)
+        else:
+            print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f "%s"'%(objname, ra, dec, period, sig, gmag, col, mag, P_min, name),file=fid,flush=True)
+    cnt = cnt + 1
 
 fid.close()
 
