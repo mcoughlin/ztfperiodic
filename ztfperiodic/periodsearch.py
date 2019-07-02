@@ -5,6 +5,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+import ztfperiodic.utils
+
 def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                  doGPU=False, doCPU=False, doSaveMemory=False,
                  doRemoveTerrestrial=False,
@@ -114,7 +116,89 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
     
                 periods_best.append(period)
                 significances.append(significance)
-    
+
+
+        elif algorithm == "GCE":
+            from gcex.gce import ConditionalEntropy
+        
+            ce = ConditionalEntropy()
+            batch_size = 500
+  
+            lightcurves_stack = [] 
+            for lightcurve in lightcurves:
+                lightcurve_stack = np.vstack((lightcurve[0],lightcurve[1])).T
+                lightcurves_stack.append(lightcurve_stack)
+ 
+            results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, show_progress=False)
+            periods = 1./freqs
+            
+            cnt = 0
+            for lightcurve, entropies in zip(lightcurves,results):
+                significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
+                period = periods[np.argmin(entropies)]
+
+                periods_best.append(period)
+                significances.append(significance)
+   
+        elif algorithm == "FFT":
+            from cuvarbase.lombscargle import fap_baluev
+            from reikna import cluda
+            from reikna.fft.fft import FFT
+
+            T = 30.0/86400.0
+            fs = 1.0/T
+
+            api = cluda.get_api('cuda')
+            dev = api.get_platforms()[0].get_devices()[0]
+            thr = api.Thread(dev)
+
+            x = np.arange(0.0, 12.0/24.0, T).astype(np.complex128)
+            fft  = FFT(x, axes=(0,))
+            fftc = fft.compile(thr, fast_math=True)
+
+            lightcurves_stack = []
+
+            period_min, period_max = 60.0/86400.0, 12.0*3600.0/86400.0
+            freq_min, freq_max = 1/period_max, 1/period_min
+
+            for ii, lightcurve in enumerate(lightcurves):
+                bins_tmp = np.arange(np.min(lightcurve[0]), np.max(lightcurve[1]), 1/24.0)
+                bins = np.vstack((bins_tmp[:-12],bins_tmp[12:]))
+                n, bins_tmp = ztfperiodic.utils.overlapping_histogram(lightcurve[0], bins)
+                idx = np.argmax(n)
+                bins_max = bins[:,idx]
+
+                x = np.arange(bins_max[0], bins_max[0] + 12.0/24.0, T)
+                y = np.interp(x, lightcurve[0], lightcurve[1]).astype(np.complex128)
+                yerr = np.interp(x, lightcurve[0], lightcurve[2])
+                if len(y) == 0:
+                    periods_best.append(-1)
+                    significances.append(-1)
+                    continue                    
+                y = y - np.median(y)
+                y = y * np.hanning(len(y))
+
+                dev   = thr.to_device(y)
+                fftc(dev, dev)
+
+                Y = dev.get()
+                powers = np.abs(Y)
+                N = len(y)
+                freqs = np.linspace(0.0, 1.0/(2.0*T), N/2)
+
+                powers = powers[:int(N/2)]
+                idx = np.where((freqs >= freq_min) & (freqs <= freq_max))[0]
+
+                freqs, powers = freqs[idx], powers[idx]
+                powers = powers * freqs**2
+
+                significance = np.abs(np.median(powers)-np.max(powers))/np.std(powers)   
+                freq = freqs[np.argmax(powers)]
+                period = 1.0/freq
+
+                periods_best.append(period)
+                significances.append(significance)
+
     elif doCPU:
     
         periods = 1/freqs

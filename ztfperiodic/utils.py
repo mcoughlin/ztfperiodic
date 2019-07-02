@@ -6,6 +6,7 @@ import numpy as np
 import tables
 import glob
 import time
+import scipy.constants as ct
 
 import matplotlib
 matplotlib.use('Agg')
@@ -171,8 +172,8 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
-    #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190412": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
-    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190412": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}" } } }
+    #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190614": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
+    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190614": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}" } } }
 
     r = database_query(kow, qu, nquery = 10)
 
@@ -180,7 +181,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
         print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec)) 
         return {}
 
-    key1, key2 = 'ZTF_sources_20190412', 'Gaia_DR2'
+    key1, key2 = 'ZTF_sources_20190614', 'Gaia_DR2'
     data1, data2 = r["result_data"][key1], r["result_data"][key2]
     key = list(data1.keys())[0]
     data = data1[key]
@@ -355,6 +356,150 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
 
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, lnames, baseline
 
+def get_simulated(ra, dec, min_epochs = 1, name = None):
+
+    filters = [1,2]
+    num_lcs = len(filters)
+
+    min_period = 3 * 60.0/86400.0  # 3 minutes
+    max_period = 50.0*24*3600.0/86400.0  # 50 days
+    max_period = 1.0/2.0
+
+    min_freq = 1./max_period
+    max_freq = 1./min_period
+
+    baseline = 366.0
+    baseline = 1.0 
+    # 1*ct.Julian_year # 30 days
+
+    actual_freqs = np.random.uniform(low=min_freq, high=max_freq, size=num_lcs)
+    actual_freqs[:] = 128.0
+    number_of_pts = np.random.random_integers(80, 97, size=num_lcs)
+
+    max_mag_factor = 10.0
+    min_mag_factor = 1.0
+    min_mag_factor = 9.0
+    mag_factors = np.random.uniform(low=min_mag_factor, high=max_mag_factor, size=num_lcs)
+
+    lightcurves = {}
+    lcs = []
+    ce_checks = []
+    for i, (num_pts, freq, mag_fac) in enumerate(zip(number_of_pts, actual_freqs, mag_factors)):
+
+        objid = '%10d' % int(np.random.uniform(low=0.0, high=1e10))
+
+        hjd = np.random.uniform(low=0.0, high=baseline, size=num_pts)
+        initial_phase = np.random.uniform(low=0.0, high=2*np.pi)
+        vert_shift = np.random.uniform(low=mag_fac, high=3*mag_fac)
+        mag = mag_fac*np.sin(2*np.pi*freq*hjd + initial_phase) + vert_shift
+        magerr = 0.05*np.ones(mag.shape)
+
+        if len(hjd) < min_epochs: continue
+
+        lightcurves[objid] = {}
+        lightcurves[objid]["hjd"] = hjd
+        lightcurves[objid]["mag"] = mag
+        lightcurves[objid]["magerr"] = magerr
+        lightcurves[objid]["ra"] = ra*np.ones(mag.shape)
+        lightcurves[objid]["dec"] = dec*np.ones(mag.shape)
+        lightcurves[objid]["fid"] = filters[i]*np.ones(mag.shape)
+
+        if name is None:
+            ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
+            if dec_hex[0] == "-":
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+            else:
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+            lightcurves[objid]["name"] = objname
+        else:
+            lightcurves[objid]["name"] = name
+
+        lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
+        lightcurves[objid]["bp_rp"] = np.nan
+
+    return lightcurves
+
+def get_simulated_list(ras, decs, min_epochs = 1, names = None,
+                      doCombineFilt=False,
+                      doRemoveHC=False):
+
+    baseline=0
+    cnt=0
+    lnames = []
+    lightcurves, filters, ids, coordinates = [], [], [], []
+    absmags, bp_rps = [], []
+
+    if names is None:
+        names = []
+        for ra, dec in zip(ras, decs):
+            ra_hex, dec_hex = convert_to_hex(ra*24/360.0,delimiter=''), convert_to_hex(dec,delimiter='')
+            if dec_hex[0] == "-":
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+            else:
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+            names.append(objname)
+
+    for name, ra, dec in zip(names, ras, decs):
+
+        if np.mod(cnt,100) == 0:
+            print('%d/%d'%(cnt,len(ras)))
+        ls = get_simulated(ra, dec, min_epochs = min_epochs, name = name)
+        if len(ls.keys()) == 0: continue
+
+        if doCombineFilt:
+            ls = combine_lcs(ls)
+
+        for ii, lkey in enumerate(ls.keys()):
+            l = ls[lkey]
+            raobj, decobj = l["ra"], l["dec"]
+            if len(raobj) == 0:
+                continue
+
+            hjd, mag, magerr, fid = l["hjd"], l["mag"], l["magerr"], l["fid"]
+            hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
+            fid = np.array(fid)
+
+            idx = np.where(~np.isnan(mag) & ~np.isnan(magerr))[0]
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            raobj, decobj = raobj[idx], decobj[idx]
+            fid = fid[idx]
+
+            idx = np.argsort(hjd)
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            raobj, decobj = raobj[idx], decobj[idx]
+            fid = fid[idx]
+
+            if doRemoveHC:
+                dt = np.diff(hjd)
+                idx = np.setdiff1d(np.arange(len(hjd)),
+                                   np.where(dt < 30.0*60.0/86400.0)[0])
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                raobj, decobj = raobj[idx], decobj[idx]
+                fid = fid[idx]
+
+            if len(hjd) < min_epochs: continue
+
+            lightcurve=(hjd,mag,magerr)
+            lightcurves.append(lightcurve)
+
+            coordinate=(np.median(raobj),np.median(decobj))
+            coordinates.append(coordinate)
+
+            filters.append(np.unique(fid).tolist())
+            ids.append(int(lkey))
+
+            absmags.append(l["absmag"])
+            bp_rps.append(l["bp_rp"])
+
+            lnames.append(l["name"])
+
+            newbaseline = max(hjd)-min(hjd)
+            if newbaseline>baseline:
+                baseline=newbaseline
+        cnt = cnt + 1
+
+    return lightcurves, coordinates, filters, ids, absmags, bp_rps, lnames, baseline
+
 def combine_lcs(ls):
 
     ras, decs = [], []
@@ -394,7 +539,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
-    qu = {"query_type":"general_search","query":"db['ZTF_sources_20190412'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
+    qu = {"query_type":"general_search","query":"db['ZTF_sources_20190614'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
     r = database_query(kow, qu, nquery = 10)
 
     if not "result_data" in r:
@@ -415,14 +560,14 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
     for nb in [nb]:
         print("Querying batch number %d/%d..."%(nb, num_batches))
 
-        qu = {"query_type":"general_search","query":"db['ZTF_sources_20190412'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
+        qu = {"query_type":"general_search","query":"db['ZTF_sources_20190614'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
         r = database_query(kow, qu, nquery = 10)
 
         if not "result_data" in r:
             print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
             continue
 
-        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20190412'].find_one({})"}
+        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20190614'].find_one({})"}
         #r = kow.query(query=qu)
 
         datas = r["result_data"]["query_result"]
@@ -636,3 +781,12 @@ def convert_to_hex(val, delimiter=':', force_sign=False):
         deg_str = '{:02d}'.format(degree * s_factor)
     return '{0:s}{3:s}{1:02d}{3:s}{2:.2f}'.format(deg_str, minute, second, delimiter)
 
+def overlapping_histogram(a, bins): 
+    a =  a.ravel() 
+    n = np.zeros(len(bins), int) 
+
+    block = 65536 
+    for i in np.arange(0, len(a), block): 
+        sa = np.sort(a[i:i+block]) 
+        n += np.r_[sa.searchsorted(bins[:-1,1], 'left'), sa.searchsorted(bins[-1,1], 'right')] - np.r_[sa.searchsorted(bins[:-1,0], 'left'), sa.searchsorted(bins[-1,0], 'right')] 
+    return n, (bins[:,0]+bins[:,1])/2. 
