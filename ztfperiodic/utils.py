@@ -356,10 +356,13 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
 
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, lnames, baseline
 
-def get_simulated(ra, dec, min_epochs = 1, name = None):
+def get_simulated(ra, dec, min_epochs = 1, name = None, doUsePDot = False):
 
     filters = [1,2]
     num_lcs = len(filters)
+
+    max_pdot = 1e-10
+    min_pdot = 1e-12
 
     min_period = 3 * 60.0/86400.0  # 3 minutes
     max_period = 50.0*24*3600.0/86400.0  # 50 days
@@ -368,12 +371,16 @@ def get_simulated(ra, dec, min_epochs = 1, name = None):
     min_freq = 1./max_period
     max_freq = 1./min_period
 
+    if doUsePDot:
+        pdots = np.random.uniform(low=min_pdot, high=max_pdot, size=num_lcs)
+    else:
+        pdots = np.zeros((num_lcs,))
+
     baseline = 366.0
-    baseline = 1.0 
+    #baseline = 1.0 
     # 1*ct.Julian_year # 30 days
 
     actual_freqs = np.random.uniform(low=min_freq, high=max_freq, size=num_lcs)
-    actual_freqs[:] = 128.0
     number_of_pts = np.random.random_integers(80, 97, size=num_lcs)
 
     max_mag_factor = 10.0
@@ -391,8 +398,13 @@ def get_simulated(ra, dec, min_epochs = 1, name = None):
         hjd = np.random.uniform(low=0.0, high=baseline, size=num_pts)
         initial_phase = np.random.uniform(low=0.0, high=2*np.pi)
         vert_shift = np.random.uniform(low=mag_fac, high=3*mag_fac)
-        mag = mag_fac*np.sin(2*np.pi*freq*hjd + initial_phase) + vert_shift
+        pdot = pdots[i]
+        time_vals = hjd - np.min(hjd)
+        mag = mag_fac*np.sin(2*np.pi*freq*(time_vals - (1./2.)*pdot*freq*time_vals**2) + initial_phase) + vert_shift
         magerr = 0.05*np.ones(mag.shape)
+
+        P = 1/freq
+        phases=np.mod((time_vals-(1.0/2.0)*pdot*freq*(time_vals)**2), P)/P
 
         if len(hjd) < min_epochs: continue
 
@@ -421,7 +433,8 @@ def get_simulated(ra, dec, min_epochs = 1, name = None):
 
 def get_simulated_list(ras, decs, min_epochs = 1, names = None,
                       doCombineFilt=False,
-                      doRemoveHC=False):
+                      doRemoveHC=False,
+                      doUsePDot=False):
 
     baseline=0
     cnt=0
@@ -443,7 +456,8 @@ def get_simulated_list(ras, decs, min_epochs = 1, names = None,
 
         if np.mod(cnt,100) == 0:
             print('%d/%d'%(cnt,len(ras)))
-        ls = get_simulated(ra, dec, min_epochs = min_epochs, name = name)
+        ls = get_simulated(ra, dec, min_epochs = min_epochs, name = name,
+                           doUsePDot=doUsePDot)
         if len(ls.keys()) == 0: continue
 
         if doCombineFilt:
