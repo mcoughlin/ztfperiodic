@@ -11,6 +11,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                  doGPU=False, doCPU=False, doSaveMemory=False,
                  doRemoveTerrestrial=False,
                  doRemoveWindow=False,
+                 doUsePDot=False,
                  freqs_to_remove=None,
                  phase_bins=20, mag_bins=10):
 
@@ -20,6 +21,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             freqs = freqs[idx]
 
     periods_best, significances = [], []
+    pdots = np.zeros((len(lightcurves),))
     print('Period finding lightcurves...')
     if doGPU:
     
@@ -122,24 +124,39 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             from gcex.gce import ConditionalEntropy
         
             ce = ConditionalEntropy()
-            batch_size = 500
-  
+
+            if doUsePDot:
+                num_pdots = 10.0
+                max_pdot = 1e-10
+                min_pdot = 1e-12
+                pdots_to_test = np.logspace(np.log10(min_pdot), np.log10(max_pdot), num_pdots)
+                pdots_to_test = np.append(0,pdots_to_test)
+            else:
+                pdots_to_test = np.array([0.0])
+
             lightcurves_stack = [] 
             for lightcurve in lightcurves:
                 lightcurve_stack = np.vstack((lightcurve[0],lightcurve[1])).T
                 lightcurves_stack.append(lightcurve_stack)
- 
-            results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, show_progress=False)
-            periods = 1./freqs
-            
-            cnt = 0
-            for lightcurve, entropies in zip(lightcurves,results):
-                significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
-                period = periods[np.argmin(entropies)]
 
-                periods_best.append(period)
-                significances.append(significance)
-   
+            results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdots_to_test, show_progress=False)
+            periods = 1./freqs
+           
+            pdots = []
+            cnt = 0
+            for lightcurve, entropies2 in zip(lightcurves,results):
+                significance_tmp, period_tmp = [], []
+                for entropies in entropies2:
+                    significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
+                    period = periods[np.argmin(entropies)]
+                    significance_tmp.append(significance)
+                    period_tmp.append(period)
+
+                idx = np.argmax(significance_tmp)
+                periods_best.append(period_tmp[idx])
+                significances.append(significance_tmp[idx])
+                pdots.append(pdots_to_test[idx])
+
         elif algorithm == "FFT":
             from cuvarbase.lombscargle import fap_baluev
             from reikna import cluda
@@ -266,4 +283,4 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 periods_best.append(period)
                 significances.append(significance)
     
-    return np.array(periods_best), np.array(significances)
+    return np.array(periods_best), np.array(significances), np.array(pdots)

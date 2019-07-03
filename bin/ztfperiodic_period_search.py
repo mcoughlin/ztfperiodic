@@ -27,6 +27,7 @@ from ztfperiodic.period import CE
 from ztfperiodic.lcstats import calc_stats
 from ztfperiodic.utils import get_kowalski_bulk
 from ztfperiodic.utils import get_kowalski_list
+from ztfperiodic.utils import get_simulated_list
 from ztfperiodic.utils import get_matchfile
 from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.periodsearch import find_periods
@@ -55,6 +56,9 @@ def parse_commandline():
 
     parser.add_option("--doParallel",  action="store_true", default=False)
     parser.add_option("-n","--Ncore",default=4,type=int)
+
+    parser.add_option("--doSimulateLightcurves",  action="store_true", default=False)
+    parser.add_option("--doUsePDot",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     #parser.add_option("-m","--matchFile",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.pytable") 
@@ -143,6 +147,8 @@ min_epochs = opts.min_epochs
 catalog_file = opts.catalog_file
 doCombineFilt = opts.doCombineFilt
 doRemoveHC = opts.doRemoveHC
+doSimulateLightcurves = opts.doSimulateLightcurves
+doUsePDot = opts.doUsePDot
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
@@ -211,7 +217,7 @@ if opts.lightcurve_source == "Kowalski":
             for line in lines:
                 lineSplit = list(filter(None,line.split(" ")))
                 if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file):
-                    ra_hex, dec_hex = convert_to_hex(ra*24/360.0,delimiter=''), convert_to_hex(dec,delimiter='')
+                    ra_hex, dec_hex = convert_to_hex(float(lineSplit[0])*24/360.0,delimiter=''), convert_to_hex(float(lineSplit[1]),delimiter='')
                     if dec_hex[0] == "-":
                         objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
                     else:
@@ -300,17 +306,28 @@ if opts.lightcurve_source == "Kowalski":
         catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").split("/")[-1]
         catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(catalog_file_split,
                                                            opts.Ncatindex))
-        lightcurves, coordinates, filters, ids,\
-        absmags, bp_rps, names, baseline =\
-            get_kowalski_list(ras, decs,
-                              kow,
-                              program_ids=program_ids,
-                              min_epochs=min_epochs,
-                              errs=errs,
-                              names=names,
-                              amaj=amaj, amin=amin, phi=phi,
-                              doCombineFilt=doCombineFilt,
-                              doRemoveHC=doRemoveHC)
+
+        if doSimulateLightcurves:
+            lightcurves, coordinates, filters, ids,\
+            absmags, bp_rps, names, baseline =\
+                get_simulated_list(ras, decs,
+                                  min_epochs=min_epochs,
+                                  names=names,
+                                  doCombineFilt=doCombineFilt,
+                                  doRemoveHC=doRemoveHC,
+                                  doUsePDot=doUsePDot)
+        else:
+            lightcurves, coordinates, filters, ids,\
+            absmags, bp_rps, names, baseline =\
+                get_kowalski_list(ras, decs,
+                                  kow,
+                                  program_ids=program_ids,
+                                  min_epochs=min_epochs,
+                                  errs=errs,
+                                  names=names,
+                                  amaj=amaj, amin=amin, phi=phi,
+                                  doCombineFilt=doCombineFilt,
+                                  doRemoveHC=doRemoveHC)
     else:
         print("Source type unknown...")
         exit(0)
@@ -385,6 +402,7 @@ phase_bins, mag_bins = 20, 10
 
 df = 1./(samples_per_peak * baseline)
 nf = int(np.ceil((fmax - fmin) / df))
+
 freqs = fmin + df * np.arange(nf)
 
 if opts.doRemoveTerrestrial:
@@ -409,7 +427,14 @@ if opts.doGPU and (algorithm == "PDM"):
 
 print('Analyzing %d lightcurves...' % len(lightcurves))
 start_time = time.time()
-periods_best, significances = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU, doSaveMemory=opts.doSaveMemory, doRemoveTerrestrial=opts.doRemoveTerrestrial, freqs_to_remove=freqs_to_remove)
+periods_best, significances, pdots = find_periods(algorithm, lightcurves, 
+                                                  freqs, 
+                                                  doGPU=opts.doGPU,
+                                                  doCPU=opts.doCPU,
+                                                  doSaveMemory=opts.doSaveMemory,
+                                                  doRemoveTerrestrial=opts.doRemoveTerrestrial,
+                                                  freqs_to_remove=freqs_to_remove,
+                                                  doUsePDot=opts.doUsePDot)
 end_time = time.time()
 print('Lightcurve analysis took %.2f seconds' % (end_time - start_time))
 
@@ -433,19 +458,23 @@ if opts.doLightcurveStats:
 
 if algorithm == "LS":
     sigthresh = 1e6
+elif algorithm == "FFT":
+    sigthresh = 0
+elif algorithm == "GCE":
+    sigthresh = 0
 else:
     sigthresh = 7
 
 print('Cataloging / Plotting lightcurves...')
 cnt = 0
 fid = open(catalogFile,'w')
-for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significance in zip(lightcurves,filters,ids,names,coordinates,absmags,bp_rps,periods_best,significances):
+for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significance, pdot in zip(lightcurves,filters,ids,names,coordinates,absmags,bp_rps,periods_best,significances,pdots):
     filt_str = "_".join([str(x) for x in filt])
     if opts.doLightcurveStats:
-        fid.write('%s %d %.10f %.10f %.10f %.10f %s '%(name, objid, coordinate[0], coordinate[1], period, significance, filt_str))
+        fid.write('%s %d %.10f %.10f %.10f %.10f %.10e %s '%(name, objid, coordinate[0], coordinate[1], period, significance, pdot, filt_str))
         fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
     else:
-        fid.write('%s %d %.10f %.10f %.10f %.10f %s\n'%(name, objid, coordinate[0], coordinate[1], period, significance, filt_str))
+        fid.write('%s %d %.10f %.10f %.10f %.10f %.10e %s\n'%(name, objid, coordinate[0], coordinate[1], period, significance, pdot, filt_str))
         fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
 
     if opts.doPlots and (significance>sigthresh):
@@ -470,7 +499,12 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
             copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
         else:
             copy = np.ma.copy(lightcurve).T
-        phases = np.mod(copy[:,0],2*period)/(2*period)
+
+        if pdot > 0:
+            time_vals = copy[:,0] - np.min(copy[:,0])
+            phases=np.mod((time_vals-(1.0/2.0)*(pdot/period)*(time_vals)**2),2*period)/(2*period)
+        else:
+            phases = np.mod(copy[:,0],2*period)/(2*period)
         magnitude, err = copy[:,1], copy[:,2]
 
         fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
@@ -492,7 +526,10 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         ax2.set_ylim([-5,18])
         ax2.invert_yaxis()
         fig.colorbar(hist2[3],ax=ax2)
-        plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
+        if pdot > 0:
+            plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec)+"_"+str(pdot))
+        else:
+            plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
         fig.savefig(pngfile)
         plt.close()
 
