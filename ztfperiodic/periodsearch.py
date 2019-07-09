@@ -45,7 +45,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
     
                     periods_best.append(period)
                     significances.append(significance)
-    
+   
         elif algorithm == "BLS":
             from cuvarbase.bls import eebls_gpu_fast
             for ii,data in enumerate(lightcurves):
@@ -135,17 +135,15 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             else:
                 pdots_to_test = np.array([0.0])
 
-            n = 100
             lightcurves_stack = [] 
             for lightcurve in lightcurves:
-                if len(lightcurve[2]) >= n:
-                    idx = np.argsort(lightcurve[2])[:n]
-                    idx = np.sort(idx)
-                else:
-                    idx = np.arange(len(lightcurve[2]))
+                idx = np.argsort(lightcurve[0])
+                lightcurve = (lightcurve[0][idx],
+                              lightcurve[1][idx],
+                              lightcurve[2][idx])
 
-                lightcurve_stack = np.vstack((lightcurve[0][idx],
-                                              lightcurve[1][idx])).T
+                lightcurve_stack = np.vstack((lightcurve[0],
+                                              lightcurve[1])).T
                 lightcurves_stack.append(lightcurve_stack)
 
             results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdots_to_test, show_progress=False)
