@@ -87,8 +87,8 @@ def greedy_kde_areas_2d(pts):
     pts = np.linalg.solve(L, (pts - mu).T).T
 
     Npts = pts.shape[0]
-    kde_pts = pts[:Npts/2, :]
-    den_pts = pts[Npts/2:, :]
+    kde_pts = pts[:int(Npts/2), :]
+    den_pts = pts[int(Npts/2):, :]
 
     kde = ss.gaussian_kde(kde_pts.T)
 
@@ -239,7 +239,7 @@ start=opts.start
 stop=opts.end
 dataDir = opts.dataDir
 errorbudget = opts.errorbudget
-baseplotDir = os.path.join(opts.plotDir,'spec_40_%.2f'%errorbudget)
+baseplotDir = os.path.join(opts.plotDir,'spec_single_40_%.2f'%errorbudget)
 
 if not os.path.isdir(baseplotDir):
     os.makedirs(baseplotDir)
@@ -348,6 +348,18 @@ for ii,spec in enumerate(spectra):
 
 keys = sorted(data_out.keys())
 colors=cm.rainbow(np.linspace(0,1,len(keys)))
+
+data = np.empty((0,len(wavelengths)))
+for key, color in zip(keys,colors):
+    data = np.append(data, np.atleast_2d(data_out[key]["spec"]), axis=0)
+X, Y = np.meshgrid(wavelengths, np.arange(len(keys)))
+plotName = "%s/spec_multi.pdf"%(baseplotDir)
+fig = plt.figure(figsize=(14,5))    
+plt.pcolor(X, Y, data)
+plt.xlabel('Wavelength [nm]')
+plt.ylabel('Flux')
+plt.savefig(plotName)
+plt.close()
 
 plotName = "%s/spec_panels.pdf"%(baseplotDir)
 fig = plt.figure(figsize=(22,28))
@@ -465,6 +477,18 @@ for key in keys:
         cp_command = "cp %s %s" % (plotName, plotNameMovie)
         os.system(cp_command)
 
+data = np.empty((0,len(wavelengths)))
+for key, color in zip(keys,colors):
+    data = np.append(data, np.atleast_2d(data_out[key]["spec_2"]), axis=0)
+X, Y = np.meshgrid(wavelengths, np.arange(len(keys)))
+plotName = "%s/spec_multi_2.pdf"%(baseplotDir)
+fig = plt.figure(figsize=(14,5))
+plt.pcolor(X, Y, data)
+plt.xlabel('Wavelength [nm]')
+plt.ylabel('Flux')
+plt.savefig(plotName)
+plt.close()
+
 plotName = "%s/spec_panels_2.pdf"%(baseplotDir)
 fig = plt.figure(figsize=(22,28))
 
@@ -499,6 +523,8 @@ for key, color in zip(keys,colors):
 ax1.set_zorder(1)
 plt.savefig(plotName)
 plt.close()
+
+print(stop)
 
 if opts.doMovie:
     moviefiles = os.path.join(moviedir,"movie-%04d.png")

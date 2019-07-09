@@ -163,8 +163,12 @@ def get_catalog(data):
 
     ras, decs = [], []
     for dat in data:
-        ras.append(dat["ra"])
-        decs.append(dat["dec"])
+        if 'candidate' in dat:
+            ras.append(dat["candidate"]["ra"])
+            decs.append(dat["candidate"]["dec"])
+        else:
+            ras.append(dat["ra"])
+            decs.append(dat["dec"])
 
     return SkyCoord(ra=np.array(ras)*u.degree, dec=np.array(decs)*u.degree, frame='icrs')
 
@@ -173,7 +177,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
     #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190614": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
-    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190614": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}" } } }
+    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190614": { "filter": "{'data.catflags': {'$eq': 0}}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } }
 
     r = database_query(kow, qu, nquery = 10)
 
@@ -181,14 +185,18 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
         print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec)) 
         return {}
 
-    key1, key2 = 'ZTF_sources_20190614', 'Gaia_DR2'
-    data1, data2 = r["result_data"][key1], r["result_data"][key2]
+    key1, key2, key3 = 'ZTF_sources_20190614', 'Gaia_DR2', 'ZTF_alerts'
+    data1, data2, data3 = r["result_data"][key1], r["result_data"][key2], r["result_data"][key3]
     key = list(data1.keys())[0]
     data = data1[key]
     key = list(data2.keys())[0]
     data2 = data2[key]
+    key = list(data3.keys())[0]
+    data3 = data3[key]
 
-    cat = get_catalog(data2)
+    cat2 = get_catalog(data2)
+    cat3 = get_catalog(data3)
+
     lightcurves = {}
     for datlist in data:
         objid = str(datlist["_id"])
@@ -231,15 +239,16 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
             lightcurves[objid]["name"] = name
 
     objids = []
-    ras, decs = [], []
+    ras, decs, fids = [], [], []
     for objid in lightcurves.keys():
         objids.append(objid)
         ras.append(np.median(lightcurves[objid]["ra"]))
         decs.append(np.median(lightcurves[objid]["dec"]))
-    ras, decs = np.array(ras), np.array(decs)
+        fids.append(np.median(lightcurves[objid]["fid"]))
+    ras, decs, fids = np.array(ras), np.array(decs), np.array(fids).astype(int)
 
     coords = SkyCoord(ra=ras*u.degree, dec=decs*u.degree, frame='icrs')
-    idx,sep,_ = coords.match_to_catalog_sky(cat)
+    idx,sep,_ = coords.match_to_catalog_sky(cat2)
 
     for objid, ii, s in zip(objids, idx, sep):
         if s.arcsec > 1:
@@ -256,6 +265,71 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
         if not "absmag" in lightcurves[objid]:
             lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
             lightcurves[objid]["bp_rp"] = np.nan
+
+    # storage for outputdata
+    magnr,sigmagnr,fid = [],[],[]
+    jd, mag, magerr, pos = [], [], [], []
+    ra, dec, fid, pid = [], [], [], []
+
+    # posneg dict
+    idp = dict()
+    idp['t'] = 1
+    idp['1'] = 1
+    idp['f'] = 0
+    idp['0'] = 0
+
+    # loop over ids to get the data 
+    for datlist in data3:
+        objid = str(datlist["_id"])
+        dat = datlist["candidate"]
+
+        if idp[dat["isdiffpos"]] == 1:
+            continue
+
+        jd.append(dat["jd"])
+        mag.append(dat["magpsf"])
+        magerr.append(dat["sigmapsf"])
+        magnr.append(dat["magnr"])
+        sigmagnr.append(dat["sigmagnr"])
+        pos.append(idp[dat["isdiffpos"]])
+        ra.append(dat["ra"])
+        dec.append(dat["dec"])
+        fid.append(dat["fid"])
+        pid.append(dat["programid"])
+
+    return lightcurves
+    if len(jd) == 0: 
+        return lightcurves
+
+    hjds_alert = JD2HJD(jd, ra, dec)
+    mags_alert = np.array(mag)
+    magerrs_alert = np.array(magerr)
+    magnrs_alert = np.array(magnr)
+    sigmagnrs_alert = np.array(sigmagnr)
+    ras_alert, decs_alert = np.array(ra), np.array(dec)
+    fids_alert = np.array(fid)
+
+    for hjd, mag, magerr, ra, dec, fid in zip(hjds_alert, mags_alert, magerrs_alert, ras_alert, decs_alert, fids_alert):
+        
+        idx = np.where(fid == fids)[0]
+        if len(idx) == 0:
+            continue
+
+        dist = angular_distance(ra, dec, ras[idx], decs[idx])
+        dist = dist * 3600.0
+
+        if np.min(dist) > 1.0:
+            continue
+ 
+        idy = np.argmin(dist)       
+        objid = objids[idx[idy]]
+
+        lightcurves[objid]["hjd"] = np.append(lightcurves[objid]["hjd"], hjd)
+        lightcurves[objid]["mag"] = np.append(lightcurves[objid]["mag"], mag)
+        lightcurves[objid]["magerr"] = np.append(lightcurves[objid]["magerr"], magerr)
+        lightcurves[objid]["ra"] = np.append(lightcurves[objid]["ra"], ra)
+        lightcurves[objid]["dec"] = np.append(lightcurves[objid]["dec"], dec)
+        lightcurves[objid]["fid"] = np.array(lightcurves[objid]["dec"], fid)
 
     return lightcurves
 
@@ -588,7 +662,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
     for nb in [nb]:
         print("Querying batch number %d/%d..."%(nb, num_batches))
 
-        qu = {"query_type":"general_search","query":"db['ZTF_sources_20190614'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
+        qu = {"query_type":"general_search","query":"db['ZTF_sources_20190614'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
         r = database_query(kow, qu, nquery = 10)
 
         if not "result_data" in r:
@@ -607,6 +681,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
             for dic in data:
                 if not dic["programid"] in program_ids: continue
                 if (dic["programid"]==1) and (dic["hjd"] > tmax): continue
+                if not dic["catflags"] == 0: continue
 
                 hjd.append(dic["hjd"])
                 mag.append(dic["mag"])
@@ -772,6 +847,26 @@ def BJDConvert(mjd, RA, Dec):
         BJD_TDB=t2+delta
 
         return BJD_TDB
+
+def JD2HJD(jd,ra,dec):
+    objectcoords = SkyCoord(ra*u.deg,dec*u.deg, frame='icrs')
+    palomar = EarthLocation.of_site('palomar')
+    times = Time(jd, format='jd',scale='utc', location=palomar)
+
+    ltt_helio = times.light_travel_time(objectcoords, 'heliocentric')
+
+    times_heliocentre = times.utc + ltt_helio
+
+    return times_heliocentre.jd
+
+def angular_distance(ra1, dec1, ra2, dec2):
+
+    delt_lon = (ra1 - ra2)*np.pi/180.
+    delt_lat = (dec1 - dec2)*np.pi/180.
+    dist = 2.0*np.arcsin( np.sqrt( np.sin(delt_lat/2.0)**2 + \
+         np.cos(dec1*np.pi/180.)*np.cos(dec2*np.pi/180.)*np.sin(delt_lon/2.0)**2 ) )
+
+    return dist/np.pi*180.
 
 def convert_to_hex(val, delimiter=':', force_sign=False):
     """
