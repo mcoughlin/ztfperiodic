@@ -248,21 +248,26 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
     ras, decs, fids = np.array(ras), np.array(decs), np.array(fids).astype(int)
 
     coords = SkyCoord(ra=ras*u.degree, dec=decs*u.degree, frame='icrs')
-    idx,sep,_ = coords.match_to_catalog_sky(cat2)
-
-    for objid, ii, s in zip(objids, idx, sep):
-        if s.arcsec > 1:
-            lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
-            lightcurves[objid]["bp_rp"] = np.nan
-        else:     
-            dat2 = data2[ii]
-            parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
-            g_mag, bp_mag, rp_mag = dat2["phot_g_mean_mag"], dat2["phot_bp_mean_mag"], dat2["phot_rp_mean_mag"]
-            if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None)):
-                lightcurves[objid]["absmag"] = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
-                lightcurves[objid]["bp_rp"] = bp_mag-rp_mag
-
-        if not "absmag" in lightcurves[objid]:
+    if (len(coords) > 0) and (len(cat2) > 0):
+        idx,sep,_ = coords.match_to_catalog_sky(cat2)
+    
+        for objid, ii, s in zip(objids, idx, sep):
+            if s.arcsec > 1:
+                lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
+                lightcurves[objid]["bp_rp"] = np.nan
+            else:     
+                dat2 = data2[ii]
+                parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
+                g_mag, bp_mag, rp_mag = dat2["phot_g_mean_mag"], dat2["phot_bp_mean_mag"], dat2["phot_rp_mean_mag"]
+                if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None)):
+                    lightcurves[objid]["absmag"] = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
+                    lightcurves[objid]["bp_rp"] = bp_mag-rp_mag
+    
+            if not "absmag" in lightcurves[objid]:
+                lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
+                lightcurves[objid]["bp_rp"] = np.nan
+    else:
+        for objid in objids:
             lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
             lightcurves[objid]["bp_rp"] = np.nan
 
