@@ -372,7 +372,7 @@ def get_simulated(ra, dec, min_epochs = 1, name = None, doUsePDot = False):
     max_freq = 1./min_period
 
     if doUsePDot:
-        pdots = np.random.uniform(low=min_pdot, high=max_pdot, size=num_lcs)
+        pdots = 10**np.random.uniform(low=np.log10(min_pdot), high=np.log10(max_pdot), size=num_lcs)
     else:
         pdots = np.zeros((num_lcs,))
 
@@ -398,13 +398,27 @@ def get_simulated(ra, dec, min_epochs = 1, name = None, doUsePDot = False):
         hjd = np.random.uniform(low=0.0, high=baseline, size=num_pts)
         initial_phase = np.random.uniform(low=0.0, high=2*np.pi)
         vert_shift = np.random.uniform(low=mag_fac, high=3*mag_fac)
-        pdot = pdots[i]
+        pdot = -pdots[i]
         time_vals = hjd - np.min(hjd)
         mag = mag_fac*np.sin(2*np.pi*freq*(time_vals - (1./2.)*pdot*freq*time_vals**2) + initial_phase) + vert_shift
         magerr = 0.05*np.ones(mag.shape)
 
-        P = 1/freq
-        phases=np.mod((time_vals-(1.0/2.0)*pdot*freq*(time_vals)**2), P)/P
+        #filename = "/home/mcoughlin/ZTF/ztfperiodic/data/lightcurves/ZTFJ1539+5027PTFData.txt"
+        #data_out = np.loadtxt(filename)
+        #n = 100
+        #idx = np.random.randint(len(data_out[:,0]), size=(n,))
+        #idx = np.unique(np.sort(idx))
+        #idx = np.arange(len(data_out[:,0])).astype(int)
+        #idx = np.argsort(data_out[:,2])[:n]
+        #idx = np.sort(idx)
+        #hjd, mag, magerr = data_out[:,0], data_out[:,1], data_out[:,2]
+        #hjd = BJDConvert(hjd, 234.884000, 50.460778).value
+        #time_vals = hjd - np.min(hjd)
+
+        #P = (414.79153768 + 9*(0.75/1000))/86400.0
+        #freq = 1/P
+        #pdot = -2.365e-11
+        #phases=np.mod((time_vals-(1.0/2.0)*pdot*freq*(time_vals)**2), P)/P
 
         if len(hjd) < min_epochs: continue
 

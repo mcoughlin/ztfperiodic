@@ -425,6 +425,11 @@ if opts.doGPU and (algorithm == "PDM"):
         lightcurves_pdm.append((t, y, weights(np.ones(dy.shape)), freqs))
     lightcurves = lightcurves_pdm 
 
+P = (414.79153768 + 9*(0.75/1000))/86400.0
+freq = 1/P
+#freqs = np.append(freqs, freq)
+#freqs = freq*np.ones(freqs.shape)
+
 print('Analyzing %d lightcurves...' % len(lightcurves))
 start_time = time.time()
 periods_best, significances, pdots = find_periods(algorithm, lightcurves, 
@@ -500,11 +505,11 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         else:
             copy = np.ma.copy(lightcurve).T
 
-        if pdot > 0:
+        if pdot == 0:
+            phases = np.mod(copy[:,0],2*period)/(2*period)
+        else:
             time_vals = copy[:,0] - np.min(copy[:,0])
             phases=np.mod((time_vals-(1.0/2.0)*(pdot/period)*(time_vals)**2),2*period)/(2*period)
-        else:
-            phases = np.mod(copy[:,0],2*period)/(2*period)
         magnitude, err = copy[:,1], copy[:,2]
 
         fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
@@ -526,10 +531,10 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         ax2.set_ylim([-5,18])
         ax2.invert_yaxis()
         fig.colorbar(hist2[3],ax=ax2)
-        if pdot > 0:
-            plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec)+"_"+str(pdot))
-        else:
+        if pdot == 0:
             plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
+        else:
+            plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec)+"_"+str(pdot))
         fig.savefig(pngfile)
         plt.close()
 
