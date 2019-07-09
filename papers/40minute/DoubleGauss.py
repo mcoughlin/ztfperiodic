@@ -16,6 +16,10 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 
+import astropy.units as u
+from astropy.time import Time, TimeDelta
+from astropy.coordinates import SkyCoord, BarycentricTrueEcliptic, EarthLocation
+
 import scipy.stats as ss
 from scipy.optimize import curve_fit
 from scipy.special import wofz
@@ -35,11 +39,11 @@ def parse_commandline():
     parser.add_option("-o","--outputDir",default="../../output")
     parser.add_option("-p","--plotDir",default="../../plots")
     parser.add_option("-d","--dataDir",default="../../data/spectra/40minute")
-    parser.add_option("-N","--N",type=int,default=100)
+    parser.add_option("-N","--N",type=int,default=8)
     #parser.add_option("-s","--start",type=int,default=0)
     #parser.add_option("-e","--end",type=int,default=1500)
     parser.add_option("-s","--start",type=int,default=750)
-    parser.add_option("-e","--end",type=int,default=1050)
+    parser.add_option("-e","--end",type=int,default=1000)
     parser.add_option("--errorbudget",type=float,default=0.1)
 
     parser.add_option("--doInterp",  action="store_true", default=False)
@@ -132,9 +136,13 @@ def interpallspectra(newdat, N):
  
     FullData = []
     FullData.append(wavelengths)
-    tt = np.linspace(0,N,nspectra)
+    tt = np.linspace(0,1,N)
     for ii in range(N):
-        weights = 1./np.abs(tt-ii)
+        #weights1 = 1./np.abs(phases-tt[ii])
+        #weights2 = 1./np.abs(phases-(1-tt[ii]))
+        #weights = np.max(np.vstack((weights1,weights2)),axis=0)
+        weights = 1./np.abs(phases-tt[ii])
+
         if np.any(~np.isfinite(weights)):
             idx = np.where(~np.isfinite(weights))[0]
             weights[:] = 0.0
@@ -152,9 +160,23 @@ def interpallspectra(newdat, N):
       
     return FullData
 
+def func_trend(x,p0,p1,p2,p3):
+        #print(p0)
+        #print(p1*x)
+        #print(p2*(x**2))
+        #print(p3*(x**3))
+        return p0+(p1*x)+(p2*(x**2))+(p3*(x**3))
+
 def func(x,p0,p1,p2,vel0,vel1,v1,v2,g1,g2):
         return p0+p1*x+p2*x**2+gaussian(v1,(1+(vel0)/300000)*(4340.462),v2)(x)+gaussian(g1,(1+vel1/300000)*(4340.462),g2)(x)
         #return p0+p1*x+p2*x**2+lorentzian(v1,(1+(vel0)/300000)*(4340.462),v2)(x)+gaussian(g1,(1+vel1/300000)*(4340.462),g2)(x)
+
+def myprior_trend(cube, ndim, nparams):
+
+        cube[0] = cube[0]*10000
+        cube[1] = cube[1]*10.0 - 5.0
+        cube[2] = cube[2]*1e-3 - 5e-4
+        cube[3] = cube[3]*8e-10 - 4e-10
 
 def myprior_fit(cube, ndim, nparams):
 
@@ -162,22 +184,26 @@ def myprior_fit(cube, ndim, nparams):
         cube[1] = cube[1]*1000.0
         cube[2] = cube[2]*2*np.pi
         #cube[2] = np.pi
-        cube[3] = cube[3]*1000.0 - 500.0
-        cube[4] = cube[4]*1000.0 - 500.0
+        cube[3] = cube[3]*2000.0 - 1000.0
+        cube[4] = cube[4]*2000.0 - 1000.0
 
 def myprior(cube, ndim, nparams):
 
-        cube[0] = cube[0]*500 + 50
+        cube[0] = cube[0]*500 - 250.0
         cube[1] = cube[1]*2.0 - 1.0
+        #cube[1] = cube[1]*1e-10
         cube[2] = cube[2]*2e-4 - 1e-4
+        #cube[2] = cube[2]*1e-10
         cube[3] = cube[3]*1000.0 - 500.0
-        cube[4] = cube[4]*1000.0 - 500.0
-        cube[5] = cube[5]*100.0 - 100.0
-        cube[6] = cube[6]*100.0
-        #cube[6] = cube[6]*1.0 - 0.5 + 55.0 
-        #cube[6] = cube[6]*1.0
-        cube[7] = cube[7]*100.0 - 100.0
-        cube[8] = cube[8]*100.0
+        cube[4] = cube[4]*2000.0 - 1000.0
+        cube[5] = cube[5]*500.0 - 500.0
+        #cube[5] = cube[5]*1.0 - 1.0
+        #cube[6] = cube[6]*50.0
+        cube[6] = cube[6] + 28.5
+        cube[7] = cube[7]*500.0 - 500.0
+        #cube[7] = cube[7]*1.0 - 1.0
+        #cube[8] = cube[8]*20.0
+        cube[8] = cube[8] + 4.5
 
 def myloglike_fit(cube, ndim, nparams):
 
@@ -192,8 +218,8 @@ def myloglike_fit(cube, ndim, nparams):
 
     prob = 0
     for key, color in zip(keys,colors):
-        vel0 = A*np.sin((2*(np.pi/12.0)*float(key))+phi)+c
-        vel1 = B*np.sin((2*(np.pi/12.0)*float(key))+phi+np.pi)+d
+        vel0 = A*np.sin((2*(np.pi/8.0)*float(key))+phi)+c
+        vel1 = B*np.sin((2*(np.pi/8.0)*float(key))+phi+np.pi)+d
 
         kdedir = data_out[key]["kdedir"]
         vals = np.array([vel0,vel1]).T
@@ -211,6 +237,23 @@ def myloglike_fit(cube, ndim, nparams):
 
     return prob
 
+def myloglike_trend(cube, ndim, nparams):
+    p0 = cube[0]
+    p1 = cube[1]
+    p2 = cube[2]
+    p3 = cube[3]
+
+    model = func_trend(wavelengths,p0,p1,p2,p3)
+    sigma = spec * errorbudget
+
+    x = model - spec
+
+    idx = np.where((wavelengths < 4300.0) | (wavelengths > 4400.0))[0]
+    prob = ss.norm.logpdf(x[idx], loc=0.0, scale=sigma[idx])
+    prob = np.sum(prob)
+
+    return prob
+
 def myloglike(cube, ndim, nparams):
     p0 = cube[0]
     p1 = cube[1]
@@ -224,6 +267,9 @@ def myloglike(cube, ndim, nparams):
 
     if v2<g2:
         return -np.inf
+
+    #if (np.abs(v1) > 2*np.abs(g1)):
+    #    return -np.inf
 
     #v2_mu, v2_std = 20.0, 3.0
     #v2 = ss.norm(v2_mu, v2_std).ppf(v2)
@@ -247,7 +293,7 @@ start=opts.start
 stop=opts.end
 dataDir = opts.dataDir
 errorbudget = opts.errorbudget
-baseplotDir = os.path.join(opts.plotDir,'spec_40_%.2f'%errorbudget)
+baseplotDir = os.path.join(opts.plotDir,'spec_double_40_%.2f'%errorbudget)
 
 if not os.path.isdir(baseplotDir):
     os.makedirs(baseplotDir)
@@ -257,8 +303,6 @@ if not os.path.isdir(moviedir):
     os.makedirs(moviedir)
 
 newdat=loadallspectra()
-if opts.doInterp:
-    newdat=interpallspectra(newdat, N)
 
 n=1
 final=[]
@@ -270,7 +314,38 @@ title_fontsize = 26
 label_fontsize = 30
 
 wavelengths, spectra = newdat[0], newdat[1:]
+RA, Dec = 285.3559192, 53.1581982
+c = SkyCoord(RA,Dec, unit="deg")
+d=c.transform_to(BarycentricTrueEcliptic)
+Palomar=EarthLocation.of_site('Palomar')
+
 #spectra = [spectra[3]]
+# T0 is in BJD
+T0 = 0.586014316528247946E+05
+
+p=(2*0.01409783493869)
+exposuretime = 360.0
+exposure_starts = ['2019-05-29T09:08:29.581', '2019-05-29T09:14:51.255',
+                   '2019-05-29T09:21:12.937', '2019-05-29T09:27:34.618',
+                   '2019-05-29T09:33:56.301', '2019-05-29T09:40:17.986',
+                   '2019-05-29T09:46:39.670', '2019-05-29T09:53:01.348']
+phases = []
+for exposure_start in exposure_starts:
+    t = Time(exposure_start,format='isot',scale='utc')
+    dt = TimeDelta((exposuretime / 2.0) * u.s)
+    t = t + dt
+
+    t2=t.tdb
+    delta=t2.light_travel_time(c,kind='barycentric',location=Palomar)
+    BJD_TDB=t2+delta
+
+    phase = np.mod(BJD_TDB.mjd - T0, p)/p
+    phases.append(phase)
+phases = np.array(phases)
+
+if opts.doInterp:
+    newdat=interpallspectra(newdat, N)
+    wavelengths, spectra = newdat[0], newdat[1:]
 
 data_out = {}
 for ii,spec in enumerate(spectra):
@@ -298,6 +373,47 @@ for ii,spec in enumerate(spectra):
 
     #continue
 
+    #parameters = ["p0","p1","p2","p3"]
+    #labels = [r"$p_0$",r"$p_1$",r"$p_2$",r"$p_3$"]
+    #n_params = len(parameters)
+
+    #pymultinest.run(myloglike_trend, myprior_trend, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/1-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
+
+    #multifile = "%s/1-post_equal_weights.dat"%plotDir
+    #data = np.loadtxt(multifile)
+
+    #p0,p1,p2,p3,loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4]
+    #idx = np.argmax(loglikelihood)
+    #p0_best, p1_best, p2_best, p3_best = data[idx,0:-1]
+    #model = func_trend(wavelengths,p0_best,p1_best,p2_best,p3_best)
+
+    plotName = "%s/spec_trend.pdf"%(plotDir)
+    #fig = plt.figure(figsize=(22,28))
+    #plt.plot(wavelengths,spec,'k--',linewidth=2)
+    #plt.plot(wavelengths,model,'b-',linewidth=2)
+    #plt.ylim([0,100])
+    #plt.grid()
+    #plt.yticks(fontsize=36)
+    #plt.xticks(fontsize=36)
+    #plt.savefig(plotName)
+    #plotName = "%s/spec_trend.png"%(plotDir)
+    #plt.savefig(plotName)
+    #plt.close()
+
+    plotName = "%s/corner_trend.pdf"%(plotDir)
+    #if os.path.isfile(plotName): continue
+
+    #figure = corner.corner(data[:,:-1], labels=labels,
+    #                   quantiles=[0.16, 0.5, 0.84],
+    #                   show_titles=True, title_kwargs={"fontsize": title_fontsize},
+    #                   label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
+    #                   smooth=3)
+    #figure.set_size_inches(18.0,18.0)
+    #plt.savefig(plotName)
+    #plt.close()
+
+    #spec = spec / model 
+
     parameters = ["p0","p1","p2","vel0","vel1","v1","v2","g1","g2"]
     labels = [r"$p_0$",r"$p_1$",r"$p_2$",r"${\rm vel}_0$",r"${\rm vel}_1$",r"$v_1$",r"$v_2$",r"$g_1$",r"$g_2$"]
     n_params = len(parameters)
@@ -307,15 +423,11 @@ for ii,spec in enumerate(spectra):
     multifile = "%s/2-post_equal_weights.dat"%plotDir
     data = np.loadtxt(multifile)
 
-    #v2_mu, v2_std = 20.0, 3.0
-    #v2 = ss.norm(v2_mu, v2_std).ppf(data[:,6])
-    #data[:,6] = v2
-
     p0,p1,p2,vel0,vel1,v1,v2,g1,g2,loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4], data[:,5], data[:,6], data[:,7], data[:,8], data[:,9]
     idx = np.argmax(loglikelihood)
     p0_best, p1_best, p2_best, vel0_best, vel1_best, v1_best, v2_best, g1_best, g2_best = data[idx,0:-1]
     model = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,v1_best,v2_best,g1_best,g2_best)
-    model1 = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,v1_best,0,g1_best,g2_best)
+    model1 = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,v1_best,v2_best,0,g2_best)
     model2 = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,0,v2_best,g1_best,g2_best)
 
     key = str(ii)
@@ -350,12 +462,11 @@ for ii,spec in enumerate(spectra):
     plt.yticks(fontsize=36)
     plt.xticks(fontsize=36)
     plt.ylim([0,100])
+    #plt.ylim([0,1.5])
     plt.savefig(plotName)
     plotName = "%s/spec.png"%(plotDir)
     plt.savefig(plotName)
     plt.close()
-
-    print(noooooooo)
 
     if opts.doMovie:
         plotNameMovie = "%s/movie-%04d.png"%(moviedir,ii)
@@ -381,8 +492,8 @@ plotDir = os.path.join(baseplotDir,'combined')
 if not os.path.isdir(plotDir):
     os.makedirs(plotDir)
 
-n_live_points = 10000
-evidence_tolerance = 0.1
+n_live_points = 500
+evidence_tolerance = 0.5
 
 parameters = ["A","B","phi","c","d"]
 labels = ["A","B",r"$\phi$","c","d"]
@@ -406,8 +517,8 @@ xs, vel0s, vel1s = [], np.zeros((len(keys),len(A))), np.zeros((len(keys),len(A))
 for jj,key in enumerate(keys):
     x = float(key)
     for ii in range(len(A)):
-        vel0s[jj,ii] = A[ii]*np.sin(2*(np.pi/12.0)*float(key)+phi[ii])+c[ii] 
-        vel1s[jj,ii] = B[ii]*np.sin(2*(np.pi/12.0)*float(key)+phi[ii]+np.pi)+d[ii]
+        vel0s[jj,ii] = A[ii]*np.sin(2*(np.pi/8.0)*float(key)+phi[ii])+c[ii] 
+        vel1s[jj,ii] = B[ii]*np.sin(2*(np.pi/8.0)*float(key)+phi[ii]+np.pi)+d[ii]
     xs.append(x)
 
 idx = np.argsort(xs)
