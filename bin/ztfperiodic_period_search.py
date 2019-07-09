@@ -526,7 +526,7 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
         if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
             ax2.errorbar(bp_rp,absmag[0],yerr=[asymmetric_error],
-                         c='c',zorder=1,fmt='o')
+                         c='r',zorder=1,fmt='o')
         ax2.set_xlim([-1,4.0])
         ax2.set_ylim([-5,18])
         ax2.invert_yaxis()
