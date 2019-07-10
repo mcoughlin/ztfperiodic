@@ -206,7 +206,7 @@ if opts.doPlots:
     hist2 = plt.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
     if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
         plt.errorbar(bp_rp,absmag[0],yerr=[asymmetric_error],
-                     c='c',zorder=1,fmt='x',markersize=20)
+                     c='r',zorder=1,fmt='x',markersize=20)
     plt.xlim([-1,4.0])
     plt.ylim([-5,18])
     plt.gca().invert_yaxis()
@@ -246,7 +246,7 @@ if opts.doPlots:
 
     plotName = os.path.join(path_out_dir,'phot.pdf')
     plt.figure(figsize=(12,8))
-    plt.errorbar(hjd-hjd[0],mag,yerr=magerr,fmt='bo')
+    plt.errorbar(hjd-hjd[0],mag,yerr=magerr,fmt='ko')
     fittedmodel = fdecomp.make_f(period)
     plt.plot(hjd-hjd[0],fittedmodel(hjd,*LCfit),'k-')
     ymed = np.nanmedian(mag)
@@ -275,7 +275,7 @@ if opts.doPlots:
     plt.close()
 
     if opts.doPhase:
-        hjd_mod = np.mod(hjd, phase/2.0)/(phase/2.0)
+        hjd_mod = np.mod(hjd, 2.0*phase)/(2.0*phase)
         idx = np.argsort(hjd_mod)
         hjd_mod = hjd_mod[idx]
         mag_mod = mag[idx]
@@ -292,7 +292,7 @@ if opts.doPlots:
 
         plotName = os.path.join(path_out_dir,'phase.pdf')
         plt.figure(figsize=(12,8))
-        plt.errorbar(hjd_mod,mag_mod,yerr=magerr_mod,fmt='bo')
+        plt.errorbar(hjd_mod,mag_mod,yerr=magerr_mod,fmt='ko')
         plt.xlabel('Phase')
         plt.ylabel('Magnitude [ab]')
         if not opts.objid is None:
@@ -320,7 +320,7 @@ print('Cataloging lightcurves...')
 catalogFile = os.path.join(path_out_dir,'catalog')
 fid = open(catalogFile,'w')
 for algorithm in algorithms:
-    periods_best, significances = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU)
+    periods_best, significances, pdots = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU)
     period, significance = periods_best[0], significances[0]
     stat = calc_stats(hjd, mag, magerr, period)
 
