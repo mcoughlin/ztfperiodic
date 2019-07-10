@@ -53,11 +53,15 @@ def load_catalog(catalog):
              "stats35"]
     for ii, filename in enumerate(filenames):
         data_tmp = ascii.read(filename,names=names)
+        data_tmp['name'] = data_tmp['name'].astype(str)
+        data_tmp['filt'] = data_tmp['filt'].astype(str)
+
         if ii == 0:
             data = copy.copy(data_tmp)
         else:
             if len(data_tmp) == 0: continue
             data = vstack([data,data_tmp])
+
     sig = data["sig"]
     idx = np.arange(len(sig))/len(sig)
     sigsort = idx[np.argsort(sig)]
@@ -75,8 +79,9 @@ outputDir = opts.outputDir
 if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
 
-cat1file = os.path.join(outputDir,'catalog_%s.fits' % catalog1.split("/")[-1])
-cat2file = os.path.join(outputDir,'catalog_%s.fits' % catalog2.split("/")[-1])
+name1, name2 = catalog1.split("/")[-1], catalog2.split("/")[-1]
+cat1file = os.path.join(outputDir,'catalog_%s.fits' % name1)
+cat2file = os.path.join(outputDir,'catalog_%s.fits' % name2)
 
 if not os.path.isfile(cat1file):
     cat1 = load_catalog(catalog1)
@@ -137,9 +142,9 @@ if opts.doPlots:
     ax.set_xscale('log')
     ax.set_yscale('log')
     cbar = plt.colorbar(sc)
-    cbar.set_label('min(LS/CE,CE/LS) significance')
-    plt.xlabel('LS Frequency [1/days]')
-    plt.ylabel('CE Frequency [1/days]')
+    cbar.set_label('min(%s/%s,%s/%s) significance' % (name1, name2, name2, name1))
+    plt.xlabel('%s Frequency [1/days]' % name1)
+    plt.ylabel('%s Frequency [1/days]' % name2)
     fig.savefig(pdffile)
     plt.close()
 
