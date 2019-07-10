@@ -42,7 +42,7 @@ def parse_commandline():
 def load_catalog(catalog):
     filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1]
     #filenames = filenames[:100]
-    names = ["objid", "ra", "dec", "period", "sig", 
+    names = ["name", "objid", "ra", "dec", "period", "sig", "pdot", "filt",
              "stats0", "stats1", "stats2", "stats3", "stats4",
              "stats5", "stats6", "stats7", "stats8", "stats9",
              "stats10", "stats11", "stats12", "stats13", "stats14",
@@ -56,6 +56,7 @@ def load_catalog(catalog):
         if ii == 0:
             data = copy.copy(data_tmp)
         else:
+            if len(data_tmp) == 0: continue
             data = vstack([data,data_tmp])
     sig = data["sig"]
     idx = np.arange(len(sig))/len(sig)
@@ -104,7 +105,7 @@ filename = os.path.join(outputDir,'catalog.dat')
 fid = open(filename,'w')
 for i,ii,s in zip(np.arange(len(sep)),idx,sep):
     if s.arcsec > 1: continue
-   
+  
     objid = cat1["objid"][i]
     ra, dec = cat1["ra"][i], cat1["dec"][i]
     sig1, sig2 = cat1["sig"][i], cat2["sig"][ii]
