@@ -466,7 +466,7 @@ if algorithm == "LS":
 elif algorithm == "FFT":
     sigthresh = 0
 elif algorithm == "GCE":
-    sigthresh = 0
+    sigthresh = 7
 else:
     sigthresh = 7
 
