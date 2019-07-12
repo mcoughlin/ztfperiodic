@@ -304,7 +304,6 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
         fid.append(dat["fid"])
         pid.append(dat["programid"])
 
-    return lightcurves
     if len(jd) == 0: 
         return lightcurves
 
@@ -315,8 +314,20 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
     sigmagnrs_alert = np.array(sigmagnr)
     ras_alert, decs_alert = np.array(ra), np.array(dec)
     fids_alert = np.array(fid)
+    pos_alert = np.array(pos,dtype=float)
+
+    fluxrefs_alert,fluxrefs_err_alert,_ = mag2flux(magnrs_alert,sigmagnrs_alert)
+    fluxdiffs_alert,fluxdiffs_err_alert,_ = mag2flux(mags_alert,magerrs_alert)
+
+    flux = fluxrefs_alert + (-1)**(1.-pos_alert)*fluxdiffs_alert
+    fluxerr = np.sqrt(fluxdiffs_err_alert**2 + fluxrefs_err_alert**2)
+
+    mags_alert, magerrs_alert = flux2mag(flux, fluxerr)
 
     for hjd, mag, magerr, ra, dec, fid in zip(hjds_alert, mags_alert, magerrs_alert, ras_alert, decs_alert, fids_alert):
+
+        if np.isnan(mag):
+            continue
         
         idx = np.where(fid == fids)[0]
         if len(idx) == 0:
@@ -921,3 +932,19 @@ def overlapping_histogram(a, bins):
         sa = np.sort(a[i:i+block]) 
         n += np.r_[sa.searchsorted(bins[:-1,1], 'left'), sa.searchsorted(bins[-1,1], 'right')] - np.r_[sa.searchsorted(bins[:-1,0], 'left'), sa.searchsorted(bins[-1,0], 'right')] 
     return n, (bins[:,0]+bins[:,1])/2. 
+
+def mag2flux(mag,dmag=[],flux_0 = 3631.0):
+    # converts magnitude to flux in Jy
+    flux = flux_0 * 10**(-0.4*mag)
+
+    if dmag==[]:
+        return flux
+    else:
+        dflux_p = (flux_0 * 10**(-0.4*(mag-dmag)) - flux)
+        dflux_n = (flux_0 * 10**(-0.4*(mag+dmag)) - flux)
+        return flux, dflux_p, dflux_n
+
+def flux2mag(flux, fluxerr, flux_0 = 3631.0):
+    mag = -2.5*np.log10(flux/flux_0)
+    magerr = np.abs(fluxerr)/flux
+    return mag, magerr
