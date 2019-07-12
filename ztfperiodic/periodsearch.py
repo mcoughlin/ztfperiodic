@@ -150,21 +150,22 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             significances = np.zeros((len(lightcurves),1))
             pdots = np.zeros((len(lightcurves),1))
 
-            for ii, pdot in enumerate(pdots_to_test):
-                print("Running pdot %d / %d" % (ii, len(pdots_to_test)))
+            pdots_split = np.array_split(pdots_to_test,len(pdots_to_test))
+            for ii, pdot in enumerate(pdots_split):
+                print("Running pdot %d / %d" % (ii+1, len(pdots_split)))
 
-                results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, np.array([pdot]), show_progress=False)
+                results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdot, show_progress=False)
                 periods = 1./freqs
            
                 for jj, (lightcurve, entropies2) in enumerate(zip(lightcurves,results)):
-                    for entropies in entropies2:
+                    for kk, entropies in enumerate(entropies2):
                         significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
                         period = periods[np.argmin(entropies)]
                          
                         if significance > significances[jj]:
                             periods_best[jj] = period
                             significances[jj] = significance
-                            pdots[jj] = pdot*1.0 
+                            pdots[jj] = pdot[kk]*1.0 
 
         elif algorithm == "FFT":
             from cuvarbase.lombscargle import fap_baluev
