@@ -347,8 +347,8 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
         lightcurves[objid]["magerr"] = np.append(lightcurves[objid]["magerr"], magerr)
         lightcurves[objid]["ra"] = np.append(lightcurves[objid]["ra"], ra)
         lightcurves[objid]["dec"] = np.append(lightcurves[objid]["dec"], dec)
-        lightcurves[objid]["fid"] = np.array(lightcurves[objid]["dec"], fid)
-
+        lightcurves[objid]["fid"] = np.append(lightcurves[objid]["fid"], fid)
+  
     return lightcurves
 
 def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
