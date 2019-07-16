@@ -53,6 +53,7 @@ def parse_commandline():
     parser.add_option("--doRemoveHC",  action="store_true", default=False)
     parser.add_option("--doLongPeriod",  action="store_true", default=False)
     parser.add_option("--doCombineFilt",  action="store_true", default=False)
+    parser.add_option("--doExtinction",  action="store_true", default=False)
 
     parser.add_option("--doParallel",  action="store_true", default=False)
     parser.add_option("-n","--Ncore",default=4,type=int)
@@ -149,6 +150,7 @@ doCombineFilt = opts.doCombineFilt
 doRemoveHC = opts.doRemoveHC
 doSimulateLightcurves = opts.doSimulateLightcurves
 doUsePDot = opts.doUsePDot
+doExtinction = opts.doExtinction
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
@@ -327,7 +329,8 @@ if opts.lightcurve_source == "Kowalski":
                                   names=names,
                                   amaj=amaj, amin=amin, phi=phi,
                                   doCombineFilt=doCombineFilt,
-                                  doRemoveHC=doRemoveHC)
+                                  doRemoveHC=doRemoveHC,
+                                  doExtinction=doExtinction)
     else:
         print("Source type unknown...")
         exit(0)
@@ -466,7 +469,7 @@ if algorithm == "LS":
 elif algorithm == "FFT":
     sigthresh = 0
 elif algorithm == "GCE":
-    sigthresh = 0
+    sigthresh = 7
 else:
     sigthresh = 7
 

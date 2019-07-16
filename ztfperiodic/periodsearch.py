@@ -146,23 +146,26 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                                               lightcurve[1])).T
                 lightcurves_stack.append(lightcurve_stack)
 
-            results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdots_to_test, show_progress=False)
-            periods = 1./freqs
-           
-            pdots = []
-            cnt = 0
-            for lightcurve, entropies2 in zip(lightcurves,results):
-                significance_tmp, period_tmp = [], []
-                for entropies in entropies2:
-                    significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
-                    period = periods[np.argmin(entropies)]
-                    significance_tmp.append(significance)
-                    period_tmp.append(period)
+            periods_best = np.zeros((len(lightcurves),1))
+            significances = np.zeros((len(lightcurves),1))
+            pdots = np.zeros((len(lightcurves),1))
 
-                idx = np.argmax(significance_tmp)
-                periods_best.append(period_tmp[idx])
-                significances.append(significance_tmp[idx])
-                pdots.append(pdots_to_test[idx])
+            pdots_split = np.array_split(pdots_to_test,len(pdots_to_test))
+            for ii, pdot in enumerate(pdots_split):
+                print("Running pdot %d / %d" % (ii+1, len(pdots_split)))
+
+                results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdot, show_progress=False)
+                periods = 1./freqs
+           
+                for jj, (lightcurve, entropies2) in enumerate(zip(lightcurves,results)):
+                    for kk, entropies in enumerate(entropies2):
+                        significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
+                        period = periods[np.argmin(entropies)]
+                         
+                        if significance > significances[jj]:
+                            periods_best[jj] = period
+                            significances[jj] = significance
+                            pdots[jj] = pdot[kk]*1.0 
 
         elif algorithm == "FFT":
             from cuvarbase.lombscargle import fap_baluev
