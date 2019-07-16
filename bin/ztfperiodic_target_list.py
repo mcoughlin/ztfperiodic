@@ -37,8 +37,8 @@ def parse_commandline():
     """
     parser = optparse.OptionParser()
 
-    parser.add_option("-o","--outfile",default="/Users/mcoughlin/Desktop/Kevin/Candidates/obj.dat")
-    parser.add_option("-i","--inputDir",default="/Users/mcoughlin/Desktop/Kevin/Candidates/")
+    parser.add_option("-o","--outfile",default="/Users/ocooper/LIGO/obj.dat")
+    parser.add_option("-i","--inputDir",default="/Users/ocooper/LIGO/OliviaCandidates/")
     parser.add_option("-z","--ztfperiodicInputDir",default="../input")
 
     parser.add_option("--doGaia",  action="store_true", default=False)
@@ -52,6 +52,8 @@ def parse_commandline():
     parser.add_option("-m","--magnitude",default=16.0,type=float)
     parser.add_option("-s","--deltat_start",default=0.0,type=float)
     parser.add_option("-e","--deltat_end",default=24.0,type=float)
+    parser.add_option("-f","--ps1_filter",default="gmag")
+    parser.add_option("-t","--obs_time",default=Time.now(),type=str)
 
     opts, args = parser.parse_args()
 
@@ -125,6 +127,8 @@ outfile = opts.outfile
 ztfperiodicInputDir = opts.ztfperiodicInputDir
 deltat_start = opts.deltat_start
 deltat_end = opts.deltat_end
+ps1_filter = opts.ps1_filter
+obs_time = opts.obs_time
 
 if opts.doXray:
     xrayfile = os.path.join(ztfperiodicInputDir,'xray.dat')
@@ -168,7 +172,7 @@ kp = Observer(location=location, name="Kitt Peak",timezone="US/Arizona")
 #kp = Observer(location=location, name="Mauna Kea",timezone="US/Hawaii")
 
 #observe_time = Time('2018-11-04 1:00:00')
-observe_time = Time.now()
+observe_time = Time(obs_time)
 observe_time = observe_time + np.linspace(deltat_start, deltat_end, 55)*u.hour
 tstart, tend = observe_time[0],observe_time[-1]
 
@@ -219,9 +223,10 @@ for filename in filenames:
 
     ps1 = ps1_query(ra, dec, 5/3600.0)
     if not ps1:
-        gmag, rmag = np.nan, np.nan
+        gmag, rmag, imag, zmag, ymag = np.nan, np.nan, np.nan, np.nan, np.nan
     else:
-        gmag, rmag = ps1["gmag"], ps1["rmag"]
+        gmag, rmag, imag, zmag, ymag = ps1["gmag"], ps1["rmag"], ps1["imag"], ps1["zmag"], ps1["ymag"]
+        ps1_mag = ps1[str(ps1_filter)]
         if opts.doMagnitudeCut:
             if gmag < opts.magnitude:
                 continue
@@ -276,14 +281,14 @@ for filename in filenames:
             appflux, absflux = np.nan, np.nan
 
         if opts.doKPED:
-            print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Coughlin,%s'%(requestID, cnt, objname, ra_hex, dec_hex, gmag, tottime, filt, mode, comment),file=fid,flush=True)
+            print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Coughlin,%s'%(requestID, cnt, objname, ra_hex, dec_hex, ps1_mag, tottime, filt, mode, comment),file=fid,flush=True)
         else:
-            print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5e %.5e "%s"'%(objname, ra, dec, period, sig, gmag, col, mag, P_min, appflux, absflux, name),file=fid,flush=True)
+            print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5e %.5e "%s"'%(objname, ra, dec, period, sig, ps1_mag, col, mag, P_min, appflux, absflux, name),file=fid,flush=True)
     else:
         if opts.doKPED:
-            print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Coughlin,%s'%(requestID, cnt, objname, ra_hex, dec_hex, gmag, tottime, filt, mode,comment),file=fid,flush=True)
+            print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Coughlin,%s'%(requestID, cnt, objname, ra_hex, dec_hex, ps1_mag, tottime, filt, mode,comment),file=fid,flush=True)
         else:
-            print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f "%s"'%(objname, ra, dec, period, sig, gmag, col, mag, P_min, name),file=fid,flush=True)
+            print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f "%s"'%(objname, ra, dec, period, sig, ps1_mag, col, mag, P_min, name),file=fid,flush=True)
     cnt = cnt + 1
 
 fid.close()
@@ -325,4 +330,5 @@ ax2.set_ylabel('Altitude [degrees]')
 plotName = outfile.replace(".dat",".png").replace(".txt",".png")
 plt.savefig(plotName)
 plt.close()
+
 
