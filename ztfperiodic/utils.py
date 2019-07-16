@@ -257,6 +257,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
             if s.arcsec > 1:
                 lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
                 lightcurves[objid]["bp_rp"] = np.nan
+                lightcurves[objid]["parallax"] = np.nan
             else:     
                 dat2 = data2[ii]
                 parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
@@ -264,14 +265,17 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
                 if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None)):
                     lightcurves[objid]["absmag"] = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
                     lightcurves[objid]["bp_rp"] = bp_mag-rp_mag
-    
+                    lightcurves[objid]["parallax"] = parallax    
+
             if not "absmag" in lightcurves[objid]:
                 lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
                 lightcurves[objid]["bp_rp"] = np.nan
+                lightcurves[objid]["parallax"] = np.nan
     else:
         for objid in objids:
             lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
             lightcurves[objid]["bp_rp"] = np.nan
+            lightcurves[objid]["parallax"] = np.nan
 
     # storage for outputdata
     magnr,sigmagnr,fid = [],[],[]
@@ -355,7 +359,7 @@ def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
                       max_error = 2.0, errs = None, names = None,
                       amaj=None, amin=None, phi=None,
                       doCombineFilt=False,
-                      doRemoveHC=False):
+                      doRemoveHC=False, doExtinction=False):
 
     baseline=0
     cnt=0
@@ -363,6 +367,14 @@ def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
     lightcurves, filters, ids, coordinates = [], [], [], []
     absmags, bp_rps = [], []   
  
+    if doExtinction:
+        from dustmaps.config import config
+        from dustmaps.bayestar import BayestarQuery
+        fullpath = "/".join(sys.argv[0].split("/")[:-2])
+        dustmapspath = os.path.join(fullpath, 'dustmaps')
+        config['data_dir'] = dustmapspath
+        bayestar = BayestarQuery()
+
     if errs is None:
         errs = 5.0*np.ones(ras.shape)
     if names is None:
@@ -394,6 +406,20 @@ def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
             raobj, decobj = l["ra"], l["dec"]
             if len(raobj) == 0:
                 continue
+
+            if doExtinction:
+                parallax = l["parallax"]
+                dist = 1/(parallax*1e-3)
+                if np.isnan(dist) or (dist < 0):
+                    dist = 100*1e3
+                
+                coord = SkyCoord(np.median(raobj)*u.deg,
+                                 np.median(decobj)*u.deg, 
+                                 distance=dist*u.pc, frame='icrs')
+                ebv = bayestar(coord, mode='median')
+                extinction_coeff = np.array([3.518, 2.617, 1.971, 1.549, 
+                                             1.263, 0.7927, 0.4690, 0.3026])
+                extinction = extinction_coeff * ebv
 
             if amaj is not None:
                 if not ellipse.contains_point((np.median(raobj),np.median(decobj))): continue
@@ -631,7 +657,7 @@ def combine_lcs(ls):
             raobj, decobj = l["ra"], l["dec"]
             hjd, mag, magerr = l["hjd"], l["mag"]-np.median(l["mag"]), l["magerr"]
             fid = l["fid"]
-            absmag, bp_rp = l["absmag"], l["bp_rp"]
+            absmag, bp_rp, parallax = l["absmag"], l["bp_rp"], l["parallax"]
         else:
             raobj = np.hstack((raobj,l["ra"]))
             decobj = np.hstack((decobj,l["dec"]))
@@ -649,6 +675,7 @@ def combine_lcs(ls):
     data["fid"] = fid
     data["absmag"] = absmag
     data["bp_rp"] = bp_rp
+    data["parallax"] = parallax
     data["name"] = name
 
     return {lkey: data}
