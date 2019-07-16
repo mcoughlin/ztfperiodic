@@ -172,12 +172,13 @@ def get_catalog(data):
 
     return SkyCoord(ra=np.array(ras)*u.degree, dec=np.array(decs)*u.degree, frame='icrs')
 
-def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], min_epochs = 1, name = None):
+def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
+                 program_ids = [1, 2,3], min_epochs = 1, name = None):
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
     #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190614": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
-    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190614": { "filter": "{'data.catflags': {'$eq': 0}}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } }
+    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190614": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } }
 
     r = database_query(kow, qu, nquery = 10)
 
@@ -211,6 +212,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
         for dic in dat:
             if not dic["programid"] in program_ids: continue
             if (dic["programid"]==1) and (dic["hjd"] > tmax): continue
+            if not dic["catflags"] == 0: continue
 
             hjd.append(dic["hjd"])
             mag.append(dic["mag"])
@@ -255,6 +257,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
             if s.arcsec > 1:
                 lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
                 lightcurves[objid]["bp_rp"] = np.nan
+                lightcurves[objid]["parallax"] = np.nan
             else:     
                 dat2 = data2[ii]
                 parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
@@ -262,14 +265,17 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
                 if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None)):
                     lightcurves[objid]["absmag"] = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
                     lightcurves[objid]["bp_rp"] = bp_mag-rp_mag
-    
+                    lightcurves[objid]["parallax"] = parallax    
+
             if not "absmag" in lightcurves[objid]:
                 lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
                 lightcurves[objid]["bp_rp"] = np.nan
+                lightcurves[objid]["parallax"] = np.nan
     else:
         for objid in objids:
             lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
             lightcurves[objid]["bp_rp"] = np.nan
+            lightcurves[objid]["parallax"] = np.nan
 
     # storage for outputdata
     magnr,sigmagnr,fid = [],[],[]
@@ -302,7 +308,6 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
         fid.append(dat["fid"])
         pid.append(dat["programid"])
 
-    return lightcurves
     if len(jd) == 0: 
         return lightcurves
 
@@ -313,8 +318,20 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
     sigmagnrs_alert = np.array(sigmagnr)
     ras_alert, decs_alert = np.array(ra), np.array(dec)
     fids_alert = np.array(fid)
+    pos_alert = np.array(pos,dtype=float)
+
+    fluxrefs_alert,fluxrefs_err_alert,_ = mag2flux(magnrs_alert,sigmagnrs_alert)
+    fluxdiffs_alert,fluxdiffs_err_alert,_ = mag2flux(mags_alert,magerrs_alert)
+
+    flux = fluxrefs_alert + (-1)**(1.-pos_alert)*fluxdiffs_alert
+    fluxerr = np.sqrt(fluxdiffs_err_alert**2 + fluxrefs_err_alert**2)
+
+    mags_alert, magerrs_alert = flux2mag(flux, fluxerr)
 
     for hjd, mag, magerr, ra, dec, fid in zip(hjds_alert, mags_alert, magerrs_alert, ras_alert, decs_alert, fids_alert):
+
+        if np.isnan(mag):
+            continue
         
         idx = np.where(fid == fids)[0]
         if len(idx) == 0:
@@ -334,15 +351,15 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None, program_ids = [2,3], mi
         lightcurves[objid]["magerr"] = np.append(lightcurves[objid]["magerr"], magerr)
         lightcurves[objid]["ra"] = np.append(lightcurves[objid]["ra"], ra)
         lightcurves[objid]["dec"] = np.append(lightcurves[objid]["dec"], dec)
-        lightcurves[objid]["fid"] = np.array(lightcurves[objid]["dec"], fid)
-
+        lightcurves[objid]["fid"] = np.append(lightcurves[objid]["fid"], fid)
+  
     return lightcurves
 
-def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
+def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
                       max_error = 2.0, errs = None, names = None,
                       amaj=None, amin=None, phi=None,
                       doCombineFilt=False,
-                      doRemoveHC=False):
+                      doRemoveHC=False, doExtinction=False):
 
     baseline=0
     cnt=0
@@ -350,6 +367,14 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
     lightcurves, filters, ids, coordinates = [], [], [], []
     absmags, bp_rps = [], []   
  
+    if doExtinction:
+        from dustmaps.config import config
+        from dustmaps.bayestar import BayestarQuery
+        fullpath = "/".join(sys.argv[0].split("/")[:-2])
+        dustmapspath = os.path.join(fullpath, 'dustmaps')
+        config['data_dir'] = dustmapspath
+        bayestar = BayestarQuery()
+
     if errs is None:
         errs = 5.0*np.ones(ras.shape)
     if names is None:
@@ -381,6 +406,20 @@ def get_kowalski_list(ras, decs, kow, program_ids = [2,3], min_epochs = 1,
             raobj, decobj = l["ra"], l["dec"]
             if len(raobj) == 0:
                 continue
+
+            if doExtinction:
+                parallax = l["parallax"]
+                dist = 1/(parallax*1e-3)
+                if np.isnan(dist) or (dist < 0):
+                    dist = 100*1e3
+                
+                coord = SkyCoord(np.median(raobj)*u.deg,
+                                 np.median(decobj)*u.deg, 
+                                 distance=dist*u.pc, frame='icrs')
+                ebv = bayestar(coord, mode='median')
+                extinction_coeff = np.array([3.518, 2.617, 1.971, 1.549, 
+                                             1.263, 0.7927, 0.4690, 0.3026])
+                extinction = extinction_coeff * ebv
 
             if amaj is not None:
                 if not ellipse.contains_point((np.median(raobj),np.median(decobj))): continue
@@ -618,7 +657,7 @@ def combine_lcs(ls):
             raobj, decobj = l["ra"], l["dec"]
             hjd, mag, magerr = l["hjd"], l["mag"]-np.median(l["mag"]), l["magerr"]
             fid = l["fid"]
-            absmag, bp_rp = l["absmag"], l["bp_rp"]
+            absmag, bp_rp, parallax = l["absmag"], l["bp_rp"], l["parallax"]
         else:
             raobj = np.hstack((raobj,l["ra"]))
             decobj = np.hstack((decobj,l["dec"]))
@@ -636,6 +675,7 @@ def combine_lcs(ls):
     data["fid"] = fid
     data["absmag"] = absmag
     data["bp_rp"] = bp_rp
+    data["parallax"] = parallax
     data["name"] = name
 
     return {lkey: data}
@@ -919,3 +959,19 @@ def overlapping_histogram(a, bins):
         sa = np.sort(a[i:i+block]) 
         n += np.r_[sa.searchsorted(bins[:-1,1], 'left'), sa.searchsorted(bins[-1,1], 'right')] - np.r_[sa.searchsorted(bins[:-1,0], 'left'), sa.searchsorted(bins[-1,0], 'right')] 
     return n, (bins[:,0]+bins[:,1])/2. 
+
+def mag2flux(mag,dmag=[],flux_0 = 3631.0):
+    # converts magnitude to flux in Jy
+    flux = flux_0 * 10**(-0.4*mag)
+
+    if dmag==[]:
+        return flux
+    else:
+        dflux_p = (flux_0 * 10**(-0.4*(mag-dmag)) - flux)
+        dflux_n = (flux_0 * 10**(-0.4*(mag+dmag)) - flux)
+        return flux, dflux_p, dflux_n
+
+def flux2mag(flux, fluxerr, flux_0 = 3631.0):
+    mag = -2.5*np.log10(flux/flux_0)
+    magerr = np.abs(fluxerr)/flux
+    return mag, magerr
