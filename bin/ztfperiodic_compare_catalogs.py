@@ -17,9 +17,14 @@ from matplotlib.colors import Normalize
 
 import astropy
 from astropy.table import Table, vstack
+from astropy.coordinates import Angle
 from astropy.io import ascii
 from astropy import units as u
 from astropy.coordinates import SkyCoord
+
+from astroquery.simbad import Simbad
+Simbad.ROW_LIMIT = -1
+Simbad.TIMEOUT = 20000
 
 def parse_commandline():
     """
@@ -40,8 +45,14 @@ def parse_commandline():
     return opts
 
 def load_catalog(catalog):
+
+    customSimbad=Simbad() 
+    customSimbad.add_votable_fields("otype(V)")
+    customSimbad.add_votable_fields("otype(3)")
+    customSimbad.add_votable_fields("otype(N)")
+    customSimbad.add_votable_fields("otype(S)")
+
     filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1]
-    #filenames = filenames[:100]
     names = ["name", "objid", "ra", "dec", "period", "sig", "pdot", "filt",
              "stats0", "stats1", "stats2", "stats3", "stats4",
              "stats5", "stats6", "stats7", "stats8", "stats9",
@@ -51,21 +62,43 @@ def load_catalog(catalog):
              "stats25", "stats26", "stats27", "stats28", "stats29",
              "stats30", "stats31", "stats32", "stats33", "stats34",
              "stats35"]
+    cnt = 0
     for ii, filename in enumerate(filenames):
         data_tmp = ascii.read(filename,names=names)
+        if len(data_tmp) == 0: continue
+
         data_tmp['name'] = data_tmp['name'].astype(str)
         data_tmp['filt'] = data_tmp['filt'].astype(str)
 
-        if ii == 0:
+        if cnt == 0:
             data = copy.copy(data_tmp)
         else:
-            if len(data_tmp) == 0: continue
             data = vstack([data,data_tmp])
+        cnt = cnt + 1
 
     sig = data["sig"]
     idx = np.arange(len(sig))/len(sig)
     sigsort = idx[np.argsort(sig)]
     data["sigsort"] = sigsort
+
+    coords = SkyCoord(data["ra"], data["dec"], unit=u.degree)
+    result_table = customSimbad.query_region(coords, radius=2*u.arcsecond)
+    if result_table is None:
+        data['simbad'] = "N/A"
+    else:
+        ra = result_table['RA'].filled().tolist()
+        dec = result_table['DEC'].filled().tolist()
+
+        ra  = Angle(ra, unit=u.hour)
+        dec = Angle(dec, unit=u.deg)
+
+        coords2 = SkyCoord(ra=ra,
+                           dec=dec, frame='icrs')
+        idx,sep,_ = coords2.match_to_catalog_sky(coords)
+        simbad = ["N/A"] * len(data)
+        for jj, ii in enumerate(idx):
+            simbad[ii] = result_table[jj]["OTYPE_S"]
+        data['simbad'] = simbad
  
     return data
 
