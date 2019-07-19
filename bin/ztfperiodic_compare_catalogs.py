@@ -4,6 +4,7 @@ import os, sys
 import glob
 import optparse
 import copy
+import time
 
 import numpy as np
 
@@ -53,6 +54,7 @@ def load_catalog(catalog):
     customSimbad.add_votable_fields("otype(S)")
 
     filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1]
+    #filenames = filenames[:100]
     names = ["name", "objid", "ra", "dec", "period", "sig", "pdot", "filt",
              "stats0", "stats1", "stats2", "stats3", "stats4",
              "stats5", "stats6", "stats7", "stats8", "stats9",
@@ -70,6 +72,33 @@ def load_catalog(catalog):
         data_tmp['name'] = data_tmp['name'].astype(str)
         data_tmp['filt'] = data_tmp['filt'].astype(str)
 
+        coord = SkyCoord(data_tmp["ra"], data_tmp["dec"], unit=u.degree)
+        print('Querying simbad: %d/%d' %(ii,len(filenames)))
+        simbad = ["N/A"] * len(coord)
+        doQuery = True
+        while doQuery:
+            try:
+                result_table = customSimbad.query_region(coord,
+                                                         radius=2*u.arcsecond)
+                doQuery = False
+            except:
+                time.sleep(10)
+                continue
+        if not result_table is None:
+            ra = result_table['RA'].filled().tolist()
+            dec = result_table['DEC'].filled().tolist()
+
+            ra  = Angle(ra, unit=u.hour)
+            dec = Angle(dec, unit=u.deg)
+
+            coords2 = SkyCoord(ra=ra,
+                               dec=dec, frame='icrs')
+            idx,sep,_ = coords2.match_to_catalog_sky(coord)
+            for jj, ii in enumerate(idx):
+                simbad[ii] = result_table[jj]["OTYPE_S"]
+        data_tmp['simbad'] = simbad
+        data_tmp['simbad'] = data_tmp['simbad'].astype(str)
+
         if cnt == 0:
             data = copy.copy(data_tmp)
         else:
@@ -81,25 +110,6 @@ def load_catalog(catalog):
     sigsort = idx[np.argsort(sig)]
     data["sigsort"] = sigsort
 
-    coords = SkyCoord(data["ra"], data["dec"], unit=u.degree)
-    result_table = customSimbad.query_region(coords, radius=2*u.arcsecond)
-    if result_table is None:
-        data['simbad'] = "N/A"
-    else:
-        ra = result_table['RA'].filled().tolist()
-        dec = result_table['DEC'].filled().tolist()
-
-        ra  = Angle(ra, unit=u.hour)
-        dec = Angle(dec, unit=u.deg)
-
-        coords2 = SkyCoord(ra=ra,
-                           dec=dec, frame='icrs')
-        idx,sep,_ = coords2.match_to_catalog_sky(coords)
-        simbad = ["N/A"] * len(data)
-        for jj, ii in enumerate(idx):
-            simbad[ii] = result_table[jj]["OTYPE_S"]
-        data['simbad'] = simbad
- 
     return data
 
 # Parse command line
@@ -112,7 +122,7 @@ outputDir = opts.outputDir
 if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
 
-name1, name2 = catalog1.split("/")[-1], catalog2.split("/")[-1]
+name1, name2 = list(filter(None,catalog1.split("/")))[-1], list(filter(None,catalog2.split("/")))[-1]
 cat1file = os.path.join(outputDir,'catalog_%s.fits' % name1)
 cat2file = os.path.join(outputDir,'catalog_%s.fits' % name2)
 
