@@ -161,11 +161,12 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                     for kk, entropies in enumerate(entropies2):
                         significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
                         period = periods[np.argmin(entropies)]
-                         
+
                         if significance > significances[jj]:
                             periods_best[jj] = period
                             significances[jj] = significance
                             pdots[jj] = pdot[kk]*1.0 
+            pdots, periods_best, significances = pdots.flatten(), periods_best.flatten(), significances.flatten()
 
         elif algorithm == "FFT":
             from cuvarbase.lombscargle import fap_baluev

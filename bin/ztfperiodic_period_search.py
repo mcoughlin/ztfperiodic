@@ -165,7 +165,7 @@ if opts.doCPU and algorithm=="BLS":
     print("BLS only available for --doGPU")
     exit(0)
 
-if (opts.source_type == "catalog") and ("blue" in catalog_file):
+if (opts.source_type == "catalog") and (("blue" in catalog_file) or ("wdb" in catalog_file)):
     period_ranges = [0,0.0020833333333333333,0.002777778,0.0034722,0.0041666,0.004861111,0.006944444,0.020833333,0.041666667,0.083333333,0.166666667,0.5,3.0,10.0,50.0,np.inf]
     folders = [None,"3min","4min","5min","6min","7_10min","10_30min","30_60min","1_2hours","2_4hours","4_12hours","12_72hours","3_10days","10_50days","50_baseline"]
 else:
