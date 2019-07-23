@@ -476,13 +476,15 @@ def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
 
 def get_simulated(ra, dec, min_epochs = 1, name = None, doUsePDot = False):
 
+    import ztfperiodic.simulate
+
     filters = [1,2]
     num_lcs = len(filters)
 
     max_pdot = 1e-10
     min_pdot = 1e-12
 
-    min_period = 3 * 60.0/86400.0  # 3 minutes
+    min_period = 10 * 60.0/86400.0  # 10 minutes
     max_period = 50.0*24*3600.0/86400.0  # 50 days
     max_period = 1.0/2.0
 
@@ -513,30 +515,19 @@ def get_simulated(ra, dec, min_epochs = 1, name = None, doUsePDot = False):
 
         objid = '%10d' % int(np.random.uniform(low=0.0, high=1e10))
 
-        hjd = np.random.uniform(low=0.0, high=baseline, size=num_pts)
-        initial_phase = np.random.uniform(low=0.0, high=2*np.pi)
-        vert_shift = np.random.uniform(low=mag_fac, high=3*mag_fac)
-        pdot = -pdots[i]
-        time_vals = hjd - np.min(hjd)
-        mag = mag_fac*np.sin(2*np.pi*freq*(time_vals - (1./2.)*pdot*freq*time_vals**2) + initial_phase) + vert_shift
+        hjd = ztfperiodic.simulate.time()
+        flux, p = ztfperiodic.simulate.pdot_lc(t_obs=hjd, Pdot=pdots[i],
+                                               period=1/freq)
+        mag = -2.5*np.log10(flux)
         magerr = 0.05*np.ones(mag.shape)
 
-        #filename = "/home/mcoughlin/ZTF/ztfperiodic/data/lightcurves/ZTFJ1539+5027PTFData.txt"
-        #data_out = np.loadtxt(filename)
-        #n = 100
-        #idx = np.random.randint(len(data_out[:,0]), size=(n,))
-        #idx = np.unique(np.sort(idx))
-        #idx = np.arange(len(data_out[:,0])).astype(int)
-        #idx = np.argsort(data_out[:,2])[:n]
-        #idx = np.sort(idx)
-        #hjd, mag, magerr = data_out[:,0], data_out[:,1], data_out[:,2]
-        #hjd = BJDConvert(hjd, 234.884000, 50.460778).value
+        #hjd = np.random.uniform(low=0.0, high=baseline, size=num_pts)
+        #initial_phase = np.random.uniform(low=0.0, high=2*np.pi)
+        #vert_shift = np.random.uniform(low=mag_fac, high=3*mag_fac)
+        #pdot = -pdots[i]
         #time_vals = hjd - np.min(hjd)
-
-        #P = (414.79153768 + 9*(0.75/1000))/86400.0
-        #freq = 1/P
-        #pdot = -2.365e-11
-        #phases=np.mod((time_vals-(1.0/2.0)*pdot*freq*(time_vals)**2), P)/P
+        #mag = mag_fac*np.sin(2*np.pi*freq*(time_vals - (1./2.)*pdot*freq*time_vals**2) + initial_phase) + vert_shift
+        #magerr = 0.05*np.ones(mag.shape)
 
         if len(hjd) < min_epochs: continue
 
@@ -560,6 +551,7 @@ def get_simulated(ra, dec, min_epochs = 1, name = None, doUsePDot = False):
 
         lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
         lightcurves[objid]["bp_rp"] = np.nan
+        lightcurves[objid]["parallax"] = np.nan
 
     return lightcurves
 
