@@ -6,9 +6,11 @@ Creates light curve with given binary parameters, including Pdot
 """
 
 import numpy as np
+import os
 import matplotlib.pyplot as plt
 import ellc
 from ellc import lc
+import pandas as pd
 
 # default params
 m1 = 0.5 # mass 1 (msun)
@@ -40,7 +42,7 @@ def phase_fold(t,y,p):
     phases=np.remainder(t,p)/p
     phases=np.concatenate((phases,phases+1))
     y=np.concatenate((y,y))
-    plt.plot(phases,y,'c.',label='Pdot = 0')
+    plt.plot(phases,y,'c.',label=r'\.P = 0')
     plt.legend()
     plt.xlabel('Phase')
     plt.ylabel('Flux')
@@ -196,8 +198,8 @@ def pdot_phasefold(times, P, Pdot, t0=0):
 
 
 
-def pdot_lc(t_obs, Pdot=Pdot, radius_1=r1/a, radius_2=r2/a, sbratio=sbratio, incl=i, 
-       light_3 = 0, t_zero = 0, period = P0, a = a, q = m1/m2,
+def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=Pdot, radius_1=r1/a, radius_2=r2/a, sbratio=sbratio, incl=i, 
+       light_3 = 0, t_zero = 0, period = P0, a = a, q = m1/m2,  
        f_c = None, f_s = None,
        ldc_1 = None, ldc_2 = None,
        gdc_1 = None, gdc_2 = None,
@@ -213,7 +215,7 @@ def pdot_lc(t_obs, Pdot=Pdot, radius_1=r1/a, radius_2=r2/a, sbratio=sbratio, inc
        ld_1=None, ld_2=None,
        shape_1='sphere', shape_2='sphere',
        spots_1=None, spots_2=None, 
-       exact_grav=False, verbose=1, plot_nopdot=True):
+       exact_grav=False, verbose=1, plot_nopdot=True,savefig=False):
    
     """
     Calculates ellc binary light curve with orbital decay (p dot)
@@ -227,28 +229,42 @@ def pdot_lc(t_obs, Pdot=Pdot, radius_1=r1/a, radius_2=r2/a, sbratio=sbratio, inc
                       both Pdot=0 and Pdot=Pdot
             Default: True
         
+        savefig = True/False, saves .png of plot
+            Default: False
+            
+        mag = absolute magnitude of system (optional)
+            Default: None
+        
+        d = distance to system in pc (optional)
+            Default: None
+            
+        absmag = True/False, determines whether to plot absolute or apparent mag
+            Default: True
+            
         (see ellc() docstring for documentation of other input params)
         
     OUTPUT:
         
-        fluxes = flux array for binary light curve
+        fluxes/magarr = array for binary light curve, in flux (arb units) or magnitudes if mag value is passed
         
         phases = phase array for phase folded light curve
         
-        plots phase folded light curve(s)
+        errors = error array for mag array
+        
+        plots phase folded light curve(s) in flux/mag
         
     EXAMPLE:
         
         >>> import pdot
         >>> t_obs = pdot.time()
-        >>> flux,phase = pdot.pdot_lc(t_obs=t_obs,ld_1='quad',ldc_1=[0.65,0.2],ld_2='lin',
+        >>> mag,phase,err = pdot.pdot_lc(t_obs=t_obs,mag=17,ld_1='quad',ldc_1=[0.65,0.2],ld_2='lin',
         ...                ldc_2=0.45,shape_1='poly3p0',shape_2='poly1p5')
     
     """
     
     fluxes = []
     tmods = []
-    flux0 = ellc(t_obs=t_obs, radius_1=radius_1, radius_2=radius_2, sbratio=sbratio,
+    flux_nopdot = ellc(t_obs=t_obs, radius_1=radius_1, radius_2=radius_2, sbratio=sbratio,
          incl=incl,period=period,q=q,a=a,
          light_3=light_3,t_zero=t_zero,f_c=f_c, f_s=f_s,
          ldc_1=ldc_1, ldc_2=ldc_2,
@@ -271,8 +287,8 @@ def pdot_lc(t_obs, Pdot=Pdot, radius_1=r1/a, radius_2=r2/a, sbratio=sbratio, inc
 
     for ii in range(len(t_obs)):
         P_new = P0 + Pdot*t_obs[ii]
-        flux = ellc(t_obs=t_obs, radius_1=r1/a, radius_2=r2/a, sbratio=sbratio,
-         incl=i,period=P_new,q=q,a=a,
+        flux = ellc(t_obs=t_obs, radius_1=radius_1, radius_2=radius_2, sbratio=sbratio,
+         incl=incl,period=P_new,q=q,a=a,
          light_3=light_3,t_zero=t_zero,f_c=f_c, f_s=f_s,
          ldc_1=ldc_1, ldc_2=ldc_2,
          gdc_1=gdc_1, gdc_2=gdc_2,
@@ -289,7 +305,7 @@ def pdot_lc(t_obs, Pdot=Pdot, radius_1=r1/a, radius_2=r2/a, sbratio=sbratio, inc
          ld_1=ld_1, ld_2=ld_2,
          shape_1=shape_1, shape_2=shape_2,
          spots_1=spots_1, spots_2=spots_2, 
-         exact_grav=exact_grav, verbose=verbose) 
+         exact_grav=exact_grav, verbose=verbose)  
         tmod = np.mod(t_obs[ii],P_new)
         tmods.append(tmod)
         phot = np.interp(tmod,t_obs,flux,period=P_new)
@@ -297,25 +313,73 @@ def pdot_lc(t_obs, Pdot=Pdot, radius_1=r1/a, radius_2=r2/a, sbratio=sbratio, inc
         
     phases = pdot_phasefold(tmods,P=P0,Pdot=Pdot,t0=0)
 
-    if plot_nopdot is True:
-        phase_fold(t_obs,flux0,P0)
-        plt.plot(phases,fluxes,'k.',label='Pdot = '+str(Pdot))
-        plt.xlabel('Phase', fontsize=12)
-        plt.ylabel('Flux', fontsize=12)
-        plt.xlim(0,1)
-        plt.xticks(fontsize=12)
-        plt.yticks(fontsize=12)
-        plt.legend()
-        plt.show()
+    fig = plt.figure()
+    
+    script = os.path.realpath(__file__)
+    magerrdir = os.path.join("/".join(script.split("/")[:-2]),"input")
+    gmagerr = os.path.join(magerrdir,'gmagerr.txt')
+    rmagerr = os.path.join(magerrdir,'Rmagerr.txt')
+    
+    if mag is not None:
+        gerr = pd.read_csv(gmagerr,sep=' ',names=['Mag','Err'])
+        rerr = pd.read_csv(rmagerr,sep=' ',names=['Mag','Err'])
+        gmags, gerrs = gerr['Mag'], gerr['Err']
+        rmags, rerrs = rerr['Mag'], rerr['Err']
         
-    if plot_nopdot is False:
-        plt.plot(phases,fluxes,'k.',label='Pdot = '+str(Pdot))
-        plt.xlabel('Phase', fontsize=12)
-        plt.ylabel('Flux', fontsize=12)
-        plt.xticks(fontsize=12)
-        plt.yticks(fontsize=12)
-        plt.legend()
-        plt.show()
+        if absmag is True:
+            magarr = mag - 2.5*np.log10(fluxes/max(fluxes))
+            errors = np.interp(magarr,gmags,gerrs)
+            plt.errorbar(phases,magarr,errors,ls='none',c='k',label=r'\.P = '+str(Pdot))
+            plt.xlabel('Phase', fontsize=12)
+            plt.ylabel('Absolute Mag', fontsize=12)
+            plt.xlim(0,1)
+            plt.xticks(fontsize=12)
+            plt.yticks(fontsize=12)
+            plt.gca().invert_yaxis()
+            plt.legend()
+            plt.show()
+            
+        if absmag is False:    
+            appmag = 5*np.log10(d) - 5 + mag
+            magarr = appmag - 2.5*np.log10(fluxes/max(fluxes))
+            errors = np.interp(magarr,gmags,gerrs)
+            plt.errorbar(phases,magarr,errors,ls='none',c='k',label=r'\.P = '+str(Pdot))
+            plt.xlabel('Phase', fontsize=12)
+            plt.ylabel('Apparent Mag', fontsize=12)
+            plt.xlim(0,1)
+            plt.xticks(fontsize=12)
+            plt.yticks(fontsize=12)
+            plt.gca().invert_yaxis()
+            plt.legend()
+            plt.show()
+            
+        return np.array(magarr),np.array(phases),np.array(errors)
+       
+    else:
+        errors = np.zeros_like(fluxes)
+        if plot_nopdot is True:
+            phase_fold(t_obs,flux_nopdot,P0)
+            plt.plot(phases,fluxes,'k.',label=r'\.P = '+str(Pdot))
+            plt.xlabel('Phase', fontsize=12)
+            plt.ylabel('Flux', fontsize=12)
+            plt.xlim(0,1)
+            plt.xticks(fontsize=12)
+            plt.yticks(fontsize=12)
+            plt.legend()
+            plt.show()
 
+        if plot_nopdot is False:
+            plt.plot(phases,fluxes,'k.',label=r'\.P = '+str(Pdot))
+            plt.xlabel('Phase', fontsize=12)
+            plt.ylabel('Flux', fontsize=12)
+            plt.xticks(fontsize=12)
+            plt.yticks(fontsize=12)
+            plt.legend()
+            plt.show()
         
-    return np.array(fluxes),np.array(phases)
+        return np.array(fluxes),np.array(phases)
+        
+    
+        
+    if savefig is True:
+        fig.savefig(str(Pdot)+'_pdotlightcurve.png',dpi=100)
