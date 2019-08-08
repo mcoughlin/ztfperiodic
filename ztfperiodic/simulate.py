@@ -377,7 +377,7 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=Pdot, radius_1=r1/a, radi
             plt.legend()
             plt.show()
         
-        return np.array(fluxes),np.array(phases)
+        return np.array(fluxes),np.array(phases),errors
         
     
         
