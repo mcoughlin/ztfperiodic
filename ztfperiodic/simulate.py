@@ -215,7 +215,7 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=Pdot, radius_1=r1/a, radi
        ld_1=None, ld_2=None,
        shape_1='sphere', shape_2='sphere',
        spots_1=None, spots_2=None, 
-       exact_grav=False, verbose=1, plot_nopdot=True,savefig=False):
+       exact_grav=False, verbose=1, plot_nopdot=True,savefig=False, **kwargs):
    
     """
     Calculates ellc binary light curve with orbital decay (p dot)
