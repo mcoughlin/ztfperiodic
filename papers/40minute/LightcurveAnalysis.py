@@ -15,8 +15,9 @@ import ellc
 import time
 import scipy.signal
 
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
 from astropy.coordinates import SkyCoord, BarycentricTrueEcliptic, EarthLocation
+import astropy.units as u
 
 import matplotlib
 matplotlib.use('Agg')
@@ -40,6 +41,7 @@ def parse_commandline():
     parser.add_option("-o","--outputDir",default="../../output")
     parser.add_option("-p","--plotDir",default="../../plots")
     parser.add_option("-d","--dataDir",default="../../data/lightcurves")
+    parser.add_option("-t","--timestampDir",default="../../data/timestamps")
     parser.add_option("-e","--errorbudget",default=0.0,type=float)
 
     opts, args = parser.parse_args()
@@ -137,15 +139,76 @@ def myloglike(cube, ndim, nparams):
 opts = parse_commandline()
 
 dataDir = opts.dataDir
+basetimestampDir = opts.timestampDir
 baseplotDir = os.path.join(opts.plotDir,'Lightcurve_40')
 baseplotDir = os.path.join(baseplotDir,"%.5f"%opts.errorbudget)
 
 if not os.path.isdir(baseplotDir):
     os.makedirs(baseplotDir)
 
-lightcurveFile = os.path.join(dataDir,'40min-Chimera-g-20190429.dat')
+timestampDir = os.path.join(basetimestampDir,'40min-Chimera-g-20190808')
+timestampfiles = glob.glob(os.path.join(timestampDir, '*.txt'))
+times = []
+for timestampfile in timestampfiles:
+    lines = [line.rstrip('\n') for line in open(timestampfile)]
+    if len(lines) == 101:
+        lines = lines[:-1]
+    elif len(lines) == 152:
+        lines = lines[:-1]
+        lines.pop(100)
+    elif len(lines) == 210:
+        lines = lines[-100:]
+        
+    for line in lines:
+        lineSplit = list(filter(None,line.split(" ")))
+        time = Time('%s %s' % (lineSplit[-3], lineSplit[-2]))
+        dt = TimeDelta(2.9999990463256836/2.0 * u.s)
+        time = time - dt
+        times.append(time.mjd)
+times = np.sort(times)
+
+lightcurveFile = os.path.join(dataDir,'40min-Chimera-g-20190808.dat')
 data=np.loadtxt(lightcurveFile,skiprows=1,delimiter=' ')
-data=data[70:1700,:]
+data[:,0] = data[:,0] - 1.0/24.0 # daylight savings...
+
+idx1 = 100*12 + 95
+idx2 = 100*14
+data = np.vstack((data[:idx1,:],data[idx2:,:]))
+
+times = times[100:]
+data = data[100:,:]
+times = times[:2300]
+data = data[:2300]
+
+t0 = np.min(times)
+fig = plt.figure(figsize=(8, 6))
+gs = gridspec.GridSpec(4, 1)
+ax1 = fig.add_subplot(gs[0:3, 0])
+ax2 = fig.add_subplot(gs[3, 0], sharex = ax1)
+plt.axes(ax1)
+plt.plot(np.arange(len(data[:,0])),(data[:,0]-t0)*86400.0,'kx',alpha=0.2)
+plt.plot(np.arange(len(times)),(times-t0)*86400.0,'bo',alpha=0.2,zorder=-10)
+plt.ylabel('Time [s]')
+plt.setp(ax1.get_xticklabels(), visible=False)
+
+plt.axes(ax2)
+plt.plot(np.arange(len(data[:,0])),(data[:,0]-times)*86400.0,'bo',alpha=0.2,zorder=-10)
+plt.ylabel('Cube - GPS')
+plt.xlabel('Image Number')
+
+plt.show()
+plotName = os.path.join(baseplotDir,'timing.pdf')
+plt.savefig(plotName)
+plt.close()
+
+fig = plt.figure(figsize=(8, 12))
+plt.plot(np.arange(len(data[:,0])-1),np.diff(data[:,0]),'kx',alpha=0.2)
+plt.plot(np.arange(len(times)-1),np.diff(times),'bo',alpha=0.2,zorder=-10)
+plt.ylim([0,0.0002])
+plt.show()
+plotName = os.path.join(baseplotDir,'timing_diff.pdf')
+plt.savefig(plotName)
+plt.close()
 
 data[:,4] = np.abs(data[:,4])
 #y, dy=Detrending.detrending(data)
