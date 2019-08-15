@@ -1,6 +1,5 @@
 """
 @author: 0cooper
-
 Creates light curve with given binary parameters, including Pdot
     
 """
@@ -23,6 +22,11 @@ P0 = 0.005 # period (days)
 sbratio = 0.5 # surface brightness ratio
 Pdot = -1e-11 # rate of change of period (days/days)
 
+# constants
+G = 6.67*(10**-11) # grav constant (m^3/kg/s^2)
+rsun = 6.957*(10**5) # solar radius (km)
+msun = 1.989*(10**30) # solar mass (kg)
+c = 299792458 # speed of light (m/s)
 
 def phase_fold(t,y,p):
     """
@@ -102,7 +106,6 @@ def ellc(t_obs, radius_1=r1/a, radius_2=r2/a, sbratio=0.5, incl=80,
 
     """
     Uses ellc binary star model [1] to create light curve of binary star system
-
     See lc.py for documentation of all params and defaults
     
     INPUT:
@@ -132,12 +135,10 @@ def ellc(t_obs, radius_1=r1/a, radius_2=r2/a, sbratio=0.5, incl=80,
     OUTPUT:
             flux = flux array for binary system
        
-
     ------------
     References:
         [1] Maxted, P.F.L. 2016. A fast, flexible light curve model for detached
             eclipsing binary stars and transiting exoplanets. A&A 591, A111, 2016.
-
     """  
 
     flux = lc(t_obs=t_obs, radius_1=radius_1, radius_2=radius_2, sbratio=sbratio,
@@ -198,8 +199,8 @@ def pdot_phasefold(times, P, Pdot, t0=0):
 
 
 
-def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=Pdot, radius_1=r1/a, radius_2=r2/a, sbratio=sbratio, incl=i, 
-       light_3 = 0, t_zero = 0, period = P0, a = a, q = m1/m2,  
+def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=None, radius_1=None, radius_2=None, sbratio=sbratio, incl=i, 
+       light_3 = 0, t_zero = 0, period = P0, a=None, q = m1/m2, 
        f_c = None, f_s = None,
        ldc_1 = None, ldc_2 = None,
        gdc_1 = None, gdc_2 = None,
@@ -215,7 +216,7 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=Pdot, radius_1=r1/a, radi
        ld_1=None, ld_2=None,
        shape_1='sphere', shape_2='sphere',
        spots_1=None, spots_2=None, 
-       exact_grav=False, verbose=1, plot_nopdot=True,savefig=False):
+       exact_grav=False, verbose=1, plot_nopdot=True,savefig=False, **kwargs):
    
     """
     Calculates ellc binary light curve with orbital decay (p dot)
@@ -264,6 +265,26 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=Pdot, radius_1=r1/a, radi
     
     fluxes = []
     tmods = []
+    
+    # calculate semi major axis
+    if a is None:
+        p_sec = P0*24*3600 # convert units from days to sec    
+        a = ((p_sec**2)*((G*(m1+m2)*msun)/(4*np.pi**2)))**(1/3) # radial separation (m)
+        a = (a*10**-3)/rsun # convert units from m to rsun
+    
+    # calculate radii from mass-radius relation for white dwarfs
+    if radius_1 is None:
+        r1 = 0.0126*m1**(-1/3)*((1-(m1/1.44)**(4/3))**(1/2))  
+        radius_1 = r1/a # relative radius
+    if radius_2 is None:
+        r2 = 0.0126*m2**(-1/3)*((1-(m2/1.44)**(4/3))**(1/2))
+        radius_2 = r2/a # relative radius
+    
+    # calculate pdot
+    if Pdot is None:
+        mchirp = ((m1*m2)**(3/5))/((m1+m2)**(1/5))
+        Pdot = -(96*np.pi/(5*c**5))*((G*np.pi*mchirp*msun*(2/432))**(5/3))
+        
     flux_nopdot = ellc(t_obs=t_obs, radius_1=radius_1, radius_2=radius_2, sbratio=sbratio,
          incl=incl,period=period,q=q,a=a,
          light_3=light_3,t_zero=t_zero,f_c=f_c, f_s=f_s,
@@ -377,7 +398,7 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=Pdot, radius_1=r1/a, radi
             plt.legend()
             plt.show()
         
-        return np.array(fluxes),np.array(phases)
+        return np.array(fluxes),np.array(phases),errors
         
     
         
