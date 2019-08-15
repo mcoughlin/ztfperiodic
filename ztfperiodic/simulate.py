@@ -282,8 +282,9 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=None, radius_1=None, radi
     
     # calculate pdot
     if Pdot is None:
+        p_sec = P0*24*3600 # convert units from days to sec  
         mchirp = ((m1*m2)**(3/5))/((m1+m2)**(1/5))
-        Pdot = -(96*np.pi/(5*c**5))*((G*np.pi*mchirp*msun*(2/432))**(5/3))
+        Pdot = -(96*np.pi/(5*c**5))*((G*np.pi*mchirp*msun*(2/p_sec))**(5/3))
         
     flux_nopdot = ellc(t_obs=t_obs, radius_1=radius_1, radius_2=radius_2, sbratio=sbratio,
          incl=incl,period=period,q=q,a=a,
