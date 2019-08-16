@@ -200,7 +200,7 @@ def pdot_phasefold(times, P, Pdot, t0=0):
 
 
 def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=None, radius_1=None, radius_2=None, sbratio=sbratio, incl=i, 
-       light_3 = 0, t_zero = 0, period = P0, a=None, q = m1/m2, 
+       light_3 = 0, t_zero = 0, period = P0, a=None, q = m1/m2, m_tot = m1 + m2,
        f_c = None, f_s = None,
        ldc_1 = None, ldc_2 = None,
        gdc_1 = None, gdc_2 = None,
@@ -265,8 +265,11 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=None, radius_1=None, radi
     
     fluxes = []
     tmods = []
+
     P0 = period
-    
+    m1 = m_tot/(1+q)
+    m2 = m_tot*q/(1+q)
+       
     # calculate semi major axis
     if a is None:
         p_sec = P0*24*3600 # convert units from days to sec    
