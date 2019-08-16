@@ -265,6 +265,7 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=None, radius_1=None, radi
     
     fluxes = []
     tmods = []
+    P0 = period
     
     # calculate semi major axis
     if a is None:
