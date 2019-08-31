@@ -60,6 +60,7 @@ def parse_commandline():
 
     parser.add_option("--doSimulateLightcurves",  action="store_true", default=False)
     parser.add_option("--doUsePDot",  action="store_true", default=False)
+    parser.add_option("--doVariability",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     #parser.add_option("-m","--matchFile",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.pytable") 
@@ -176,6 +177,9 @@ epoch_ranges = [0,100,500,np.inf]
 epoch_folders = ["0-100","100-500","500-all"]
 
 catalogDir = os.path.join(outputDir,'catalog',algorithm)
+if (opts.source_type == "catalog") and ("fermi" in catalog_file):
+    catalogDir = os.path.join(catalogDir,'%d' % opts.Ncatindex)
+
 if not os.path.isdir(catalogDir):
     os.makedirs(catalogDir)
 
@@ -400,6 +404,9 @@ else:
     else:
         fmin, fmax = 2/baseline, 480
 
+if (opts.source_type == "catalog") and ("fermi" in catalog_file):
+    basefolder = os.path.join(basefolder,'%d' % opts.Ncatindex)
+
 samples_per_peak = 10
 phase_bins, mag_bins = 20, 10
 
@@ -464,26 +471,33 @@ if opts.doLightcurveStats:
             stat = calc_stats(t, mag, magerr, period)
             stats.append(stat)
 
-if algorithm == "LS":
-    sigthresh = 1e6
-elif algorithm == "FFT":
-    sigthresh = 0
-elif algorithm == "GCE":
-    sigthresh = 7
+if opts.doVariability:
+    sigthresh = 0.15
 else:
-    sigthresh = 7
+    if algorithm == "LS":
+        sigthresh = 1e6
+    elif algorithm == "FFT":
+        sigthresh = 0
+    elif algorithm == "GCE":
+        sigthresh = 7
+    else:
+        sigthresh = 7
 
 print('Cataloging / Plotting lightcurves...')
 cnt = 0
 fid = open(catalogFile,'w')
 for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significance, pdot in zip(lightcurves,filters,ids,names,coordinates,absmags,bp_rps,periods_best,significances,pdots):
     filt_str = "_".join([str(x) for x in filt])
+
     if opts.doLightcurveStats:
         fid.write('%s %d %.10f %.10f %.10f %.10f %.10e %s '%(name, objid, coordinate[0], coordinate[1], period, significance, pdot, filt_str))
         fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
     else:
         fid.write('%s %d %.10f %.10f %.10f %.10f %.10e %s\n'%(name, objid, coordinate[0], coordinate[1], period, significance, pdot, filt_str))
         fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
+     
+    if opts.doVariability:
+        significance = stats[cnt][5]        
 
     if opts.doPlots and (significance>sigthresh):
         RA, Dec = coordinate
@@ -508,11 +522,14 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         else:
             copy = np.ma.copy(lightcurve).T
 
-        if pdot == 0:
-            phases = np.mod(copy[:,0],2*period)/(2*period)
+        if opts.doVariability:
+            phases = copy[:,0]
         else:
-            time_vals = copy[:,0] - np.min(copy[:,0])
-            phases=np.mod((time_vals-(1.0/2.0)*(pdot/period)*(time_vals)**2),2*period)/(2*period)
+            if pdot == 0:
+                phases = np.mod(copy[:,0],2*period)/(2*period)
+            else:
+                time_vals = copy[:,0] - np.min(copy[:,0])
+                phases=np.mod((time_vals-(1.0/2.0)*(pdot/period)*(time_vals)**2),2*period)/(2*period)
         magnitude, err = copy[:,1], copy[:,2]
 
         fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
