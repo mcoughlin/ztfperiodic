@@ -30,6 +30,7 @@ from astroquery.simbad import Simbad
 import ztfperiodic
 from ztfperiodic.utils import gaia_query
 from ztfperiodic.utils import ps1_query
+from ztfperiodic.utils import iphas_query
 
 def parse_commandline():
     """
@@ -42,6 +43,7 @@ def parse_commandline():
     parser.add_option("-z","--ztfperiodicInputDir",default="../input")
 
     parser.add_option("--doGaia",  action="store_true", default=False)
+    parser.add_option("--doIPHAS",  action="store_true", default=False)
 
     parser.add_option("--doXray",  action="store_true", default=False)
     parser.add_option("--doCheckObservable",  action="store_true", default=False)
@@ -231,6 +233,13 @@ for filename in filenames:
             if gmag < opts.magnitude:
                 continue
 
+    if opts.doIPHAS:
+        iphas = iphas_query(ra, dec, 5/3600.0)
+        if not iphas:
+            ha_mag = np.nan
+        else:
+            ha_mag = iphas["ha"]
+
     FixedTargets.append(tar)
 
     time.sleep(1.0)
@@ -285,10 +294,16 @@ for filename in filenames:
         else:
             print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5e %.5e "%s"'%(objname, ra, dec, period, sig, ps1_mag, col, mag, P_min, appflux, absflux, name),file=fid,flush=True)
     else:
-        if opts.doKPED:
-            print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Coughlin,%s'%(requestID, cnt, objname, ra_hex, dec_hex, ps1_mag, tottime, filt, mode,comment),file=fid,flush=True)
+        if opts.doIPHAS:
+            if opts.doKPED:
+                print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Coughlin,%s'%(requestID, cnt, objname, ra_hex, dec_hex, ps1_mag, tottime, filt, mode,comment),file=fid,flush=True)
+            else:
+                print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f "%s"'%(objname, ra, dec, period, sig, ps1_mag, col, mag, ha_mag, P_min, name),file=fid,flush=True)
         else:
-            print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f "%s"'%(objname, ra, dec, period, sig, ps1_mag, col, mag, P_min, name),file=fid,flush=True)
+            if opts.doKPED:
+                print('%s%04d,1,%s,%s,%s,2000.0,0.00,0.00,%.2f,%.0f,%s,%d,Coughlin,%s'%(requestID, cnt, objname, ra_hex, dec_hex, ps1_mag, tottime, filt, mode,comment),file=fid,flush=True)
+            else:
+                print('%s %.5f %.5f %.5f %.5f %.5f %.5f %.5f %.5f "%s"'%(objname, ra, dec, period, sig, ps1_mag, col, mag, P_min, name),file=fid,flush=True)
     cnt = cnt + 1
 
 fid.close()
