@@ -123,7 +123,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
         elif algorithm == "GCE":
             from gcex.gce import ConditionalEntropy
         
-            ce = ConditionalEntropy()
+            ce = ConditionalEntropy(phase_bins=20)
 
             if doUsePDot:
                 num_pdots = 10
