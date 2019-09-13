@@ -201,14 +201,20 @@ plotName = os.path.join(baseplotDir,'timing.pdf')
 plt.savefig(plotName)
 plt.close()
 
-fig = plt.figure(figsize=(8, 12))
-plt.plot(np.arange(len(data[:,0])-1),np.diff(data[:,0]),'kx',alpha=0.2)
-plt.plot(np.arange(len(times)-1),np.diff(times),'bo',alpha=0.2,zorder=-10)
-plt.ylim([0,0.0002])
+fig = plt.figure(figsize=(8, 6))
+#plt.plot(np.arange(len(data[:,0])-1),np.diff(data[:,0]),'kx',alpha=0.2)
+#plt.plot(np.arange(len(times)-1),np.diff(times),'bo',alpha=0.2,zorder=-10)
+#plt.ylim([0,0.0002])
+plt.plot(np.arange(len(data[:,0])),(data[:,0]-times)*86400.0,'bo',alpha=0.2,zorder=-10)
+plt.xlim([0,99])
+plt.ylim([-1.8185,-1.8175])
 plt.show()
 plotName = os.path.join(baseplotDir,'timing_diff.pdf')
 plt.savefig(plotName)
 plt.close()
+print(stop)
+
+data[:,0] = times
 
 data[:,4] = np.abs(data[:,4])
 #y, dy=Detrending.detrending(data)
@@ -312,8 +318,11 @@ idx = np.argmax(loglikelihood)
 #r1_best, r2_best, J_best, i_best, t0_best, scale_best, heat_2_best, q_best, ldc_1_best, ldc_2_best, gdc_2_best = data[idx,0:-1]
 r1_best, r2_best, J_best, i_best, t0_best, scale_best, q_best = data[idx,0:-1]
 
-labels = labels[:4]
-data = data[:,:-4]
+print('Timing precision: %.10f +- %.10f' %( np.median(t0), np.std(t0)))
+print('Timing precision (s): %.10f' % ( np.std(t0*86400))) 
+
+#labels = labels[:5]
+data = data[:,:-1]
 
 plotName = "%s/corner.pdf"%(baseplotDir)
 figure = corner.corner(data, labels=labels,

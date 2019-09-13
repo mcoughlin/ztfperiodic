@@ -396,6 +396,7 @@ def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
             print('%d/%d'%(cnt,len(ras)))       
         ls = get_kowalski(ra, dec, kow, radius = err, oid = None,
                           program_ids = program_ids, name = name)
+
         if len(ls.keys()) == 0: continue
 
         if doCombineFilt:
