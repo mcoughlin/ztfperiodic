@@ -407,7 +407,7 @@ else:
 if (opts.source_type == "catalog") and ("fermi" in catalog_file):
     basefolder = os.path.join(basefolder,'%d' % opts.Ncatindex)
 
-samples_per_peak = 10
+samples_per_peak = 3
 phase_bins, mag_bins = 20, 10
 
 df = 1./(samples_per_peak * baseline)
