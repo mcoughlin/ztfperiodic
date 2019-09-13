@@ -244,9 +244,9 @@ if opts.lightcurve_source == "Kowalski":
                     decs.append(float(lineSplit[2]))
                     err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
                     errs.append(err)
-                    amaj.append(float(lineSplit[5]))
-                    amin.append(float(lineSplit[6]))
-                    phi.append(float(lineSplit[7]))
+                    amaj.append(float(lineSplit[3]))
+                    amin.append(float(lineSplit[4]))
+                    phi.append(float(lineSplit[5]))
                 elif ("swift" in catalog_file) or ("xmm" in catalog_file):
                     names.append(lineSplit[0])
                     ras.append(float(lineSplit[1]))
