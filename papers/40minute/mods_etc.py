@@ -17,7 +17,7 @@ flux = data_out[:,1]
 sky = data_out[:,2]
 fluxerr = data_out[:,3]
 
-texp = 60
+texp = 120
 airmass = 1.5
 
 log10S0 = [[5000, 15.978, np.nan, 3200, 15.721, 15.597],
@@ -69,13 +69,21 @@ log10S = log10S0 + log10Flam + np.log10(texp) - 0.4*K_new*airmass
 
 g = 2.5
 sig = 2.5
-SNR = g*10**(log10S) / np.sqrt((g*10**(log10S))**2 + sig*sig) 
+SNR = g*(10**(log10S)) / np.sqrt(g*(10**(log10S)) + sig*sig) 
 
 plt.figure(figsize=(8,6))
 plt.plot(wavelengths, 10**log10S, 'k--')
-plt.xlabel('Wavelength [A]')
-plt.ylabel('Counts / A')
+plt.xlabel('Wavelength [$\AA$]')
+plt.ylabel('ADU / $\AA$')
 plt.show()
 plt.savefig('../../plots/LBT/counts.pdf',dpi=200)
+plt.close('all')
+
+plt.figure(figsize=(8,6))
+plt.plot(wavelengths, SNR, 'k--')
+plt.xlabel('Wavelength [$\AA$]')
+plt.ylabel('SNR')
+plt.show()
+plt.savefig('../../plots/LBT/SNR.pdf',dpi=200)
 plt.close('all')
 
