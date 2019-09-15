@@ -193,7 +193,18 @@ if opts.lightcurve_source == "Kowalski":
 
     catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
 
-    kow = Kowalski(username=opts.user, password=opts.pwd)
+    kow = []
+    nquery = 10
+    cnt = 0
+    while cnt < nquery:
+        try:
+            kow = Kowalski(username=opts.user, password=opts.pwd)
+            break
+        except:
+            time.sleep(5)
+        cnt = cnt + 1
+    if cnt == nquery:
+        raise Exception('Kowalski connection failed...')
 
     if opts.source_type == "quadrant":
         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.dat"%(field, ccd, quadrant,opts.Ncatindex))
