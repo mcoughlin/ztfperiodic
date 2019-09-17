@@ -33,6 +33,7 @@ def parse_commandline():
     """
     parser = optparse.OptionParser()
     parser.add_option("--doPlots",  action="store_true", default=False)
+    parser.add_option("--doFermi",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output_quadrants/catalog/compare")
     parser.add_option("--catalog1",default="/home/mcoughlin/ZTF/output_quadrants/catalog/LS")
@@ -45,7 +46,7 @@ def parse_commandline():
 
     return opts
 
-def load_catalog(catalog):
+def load_catalog(catalog,doFermi=False):
 
     customSimbad=Simbad() 
     customSimbad.add_votable_fields("otype(V)")
@@ -53,7 +54,10 @@ def load_catalog(catalog):
     customSimbad.add_votable_fields("otype(N)")
     customSimbad.add_votable_fields("otype(S)")
 
-    filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1]
+    if doFermi:
+        filenames = sorted(glob.glob(os.path.join(catalog,"*/*.dat")))[::-1]
+    else:
+        filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1]
     #filenames = filenames[:100]
     names = ["name", "objid", "ra", "dec", "period", "sig", "pdot", "filt",
              "stats0", "stats1", "stats2", "stats3", "stats4",
@@ -127,13 +131,13 @@ cat1file = os.path.join(outputDir,'catalog_%s.fits' % name1)
 cat2file = os.path.join(outputDir,'catalog_%s.fits' % name2)
 
 if not os.path.isfile(cat1file):
-    cat1 = load_catalog(catalog1)
+    cat1 = load_catalog(catalog1,doFermi=opts.doFermi)
     cat1.write(cat1file, format='fits')
 else:
     cat1 = Table.read(cat1file, format='fits')
 
 if not os.path.isfile(cat2file):
-    cat2 = load_catalog(catalog2)
+    cat2 = load_catalog(catalog2,doFermi=opts.doFermi)
     cat2.write(cat2file, format='fits')
 else:
     cat2 = Table.read(cat2file, format='fits')

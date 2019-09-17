@@ -148,7 +148,7 @@ else:
 fid.write('accounting_group = ligo.dev.o2.burst.allsky.stamp\n');
 fid.write('notification = never\n');
 fid.write('getenv = true\n');
-fid.write('log = /usr1/mcoughlin/folding.log\n')
+fid.write('log = /local/mcoughlin/folding.log\n')
 fid.write('+MaxHours = 24\n');
 fid.write('universe = vanilla\n');
 fid.write('queue 1\n');
