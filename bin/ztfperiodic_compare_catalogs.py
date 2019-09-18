@@ -25,7 +25,7 @@ from astropy.coordinates import SkyCoord
 
 from astroquery.simbad import Simbad
 Simbad.ROW_LIMIT = -1
-Simbad.TIMEOUT = 20000
+Simbad.TIMEOUT = 300000
 
 def parse_commandline():
     """
@@ -34,6 +34,7 @@ def parse_commandline():
     parser = optparse.OptionParser()
     parser.add_option("--doPlots",  action="store_true", default=False)
     parser.add_option("--doFermi",  action="store_true", default=False)
+    parser.add_option("--doSimbad",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output_quadrants/catalog/compare")
     parser.add_option("--catalog1",default="/home/mcoughlin/ZTF/output_quadrants/catalog/LS")
@@ -46,7 +47,7 @@ def parse_commandline():
 
     return opts
 
-def load_catalog(catalog,doFermi=False):
+def load_catalog(catalog,doFermi=False,doSimbad=False):
 
     customSimbad=Simbad() 
     customSimbad.add_votable_fields("otype(V)")
@@ -70,36 +71,48 @@ def load_catalog(catalog,doFermi=False):
              "stats35"]
     cnt = 0
     for ii, filename in enumerate(filenames):
+        filenameSplit = filename.split("/")
+        catnum = filenameSplit[-1].replace(".dat","").split("_")[-1]
+ 
         data_tmp = ascii.read(filename,names=names)
         if len(data_tmp) == 0: continue
 
         data_tmp['name'] = data_tmp['name'].astype(str)
         data_tmp['filt'] = data_tmp['filt'].astype(str)
+        data_tmp['catnum'] = int(catnum) * np.zeros(data_tmp["ra"].shape)
 
         coord = SkyCoord(data_tmp["ra"], data_tmp["dec"], unit=u.degree)
-        print('Querying simbad: %d/%d' %(ii,len(filenames)))
         simbad = ["N/A"] * len(coord)
-        doQuery = True
-        while doQuery:
-            try:
-                result_table = customSimbad.query_region(coord,
-                                                         radius=2*u.arcsecond)
-                doQuery = False
-            except:
-                time.sleep(10)
-                continue
-        if not result_table is None:
-            ra = result_table['RA'].filled().tolist()
-            dec = result_table['DEC'].filled().tolist()
+        if doSimbad:
+            print('Querying simbad: %d/%d' %(ii,len(filenames)))
+            doQuery = True
+            result_table = None
+            nquery = 1
+            while doQuery: #and (not ii==1078):
+                try:
+                    result_table = customSimbad.query_region(coord,
+                                                             radius=2*u.arcsecond)
+                    doQuery = False
+                    nquery = nquery + 1
+                except:
+                    nquery = nquery + 1
+                    time.sleep(10)
+                    continue
+                if nquery >= 3:
+                    break
 
-            ra  = Angle(ra, unit=u.hour)
-            dec = Angle(dec, unit=u.deg)
-
-            coords2 = SkyCoord(ra=ra,
-                               dec=dec, frame='icrs')
-            idx,sep,_ = coords2.match_to_catalog_sky(coord)
-            for jj, ii in enumerate(idx):
-                simbad[ii] = result_table[jj]["OTYPE_S"]
+            if not result_table is None:
+                ra = result_table['RA'].filled().tolist()
+                dec = result_table['DEC'].filled().tolist()
+    
+                ra  = Angle(ra, unit=u.hour)
+                dec = Angle(dec, unit=u.deg)
+    
+                coords2 = SkyCoord(ra=ra,
+                                   dec=dec, frame='icrs')
+                idx,sep,_ = coords2.match_to_catalog_sky(coord)
+                for jj, ii in enumerate(idx):
+                    simbad[ii] = result_table[jj]["OTYPE_S"]
         data_tmp['simbad'] = simbad
         data_tmp['simbad'] = data_tmp['simbad'].astype(str)
 
@@ -131,13 +144,13 @@ cat1file = os.path.join(outputDir,'catalog_%s.fits' % name1)
 cat2file = os.path.join(outputDir,'catalog_%s.fits' % name2)
 
 if not os.path.isfile(cat1file):
-    cat1 = load_catalog(catalog1,doFermi=opts.doFermi)
+    cat1 = load_catalog(catalog1,doFermi=opts.doFermi,doSimbad=opts.doSimbad)
     cat1.write(cat1file, format='fits')
 else:
     cat1 = Table.read(cat1file, format='fits')
 
 if not os.path.isfile(cat2file):
-    cat2 = load_catalog(catalog2,doFermi=opts.doFermi)
+    cat2 = load_catalog(catalog2,doFermi=opts.doFermi,doSimbad=opts.doSimbad)
     cat2.write(cat2file, format='fits')
 else:
     cat2 = Table.read(cat2file, format='fits')
@@ -158,6 +171,7 @@ fid = open(filename,'w')
 for i,ii,s in zip(np.arange(len(sep)),idx,sep):
     if s.arcsec > 1: continue
   
+    catnum = cat1["catnum"][i]
     objid = cat1["objid"][i]
     ra, dec = cat1["ra"][i], cat1["dec"][i]
     sig1, sig2 = cat1["sig"][i], cat2["sig"][ii]
@@ -172,9 +186,9 @@ for i,ii,s in zip(np.arange(len(sep)),idx,sep):
     ratio = np.min([sigsort1/sigsort2,sigsort2/sigsort1])
     zs.append(ratio)
 
-    fid.write('%d %.5f %.5f %.5f %.5f %.5e %.5e\n' % (objid, ra, dec,
-                                                      period1, period2,
-                                                      sig1, sig2))
+    fid.write('%d %d %.5f %.5f %.5f %.5f %.5e %.5e\n' % (catnum, objid, ra, dec,
+                                                         period1, period2,
+                                                         sig1, sig2))
 fid.close() 
 
 if opts.doPlots:
