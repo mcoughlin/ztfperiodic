@@ -79,7 +79,7 @@ def load_catalog(catalog,doFermi=False,doSimbad=False):
 
         data_tmp['name'] = data_tmp['name'].astype(str)
         data_tmp['filt'] = data_tmp['filt'].astype(str)
-        data_tmp['catnum'] = int(catnum) * np.zeros(data_tmp["ra"].shape)
+        data_tmp['catnum'] = int(catnum) * np.ones(data_tmp["ra"].shape)
 
         coord = SkyCoord(data_tmp["ra"], data_tmp["dec"], unit=u.degree)
         simbad = ["N/A"] * len(coord)
