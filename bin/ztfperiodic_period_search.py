@@ -553,10 +553,10 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         ymax = y90 + 7*ystd
         ax1.set_ylim([ymin,ymax])
         ax1.invert_yaxis()
-        asymmetric_error = [absmag[1], absmag[2]]
+        asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
         hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
         if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
-            ax2.errorbar(bp_rp,absmag[0],yerr=[asymmetric_error],
+            ax2.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
                          c='r',zorder=1,fmt='o')
         ax2.set_xlim([-1,4.0])
         ax2.set_ylim([-5,18])
