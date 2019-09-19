@@ -27,6 +27,8 @@ from astropy.modeling.models import Voigt1D as voigt
 from astropy.modeling.models import Gaussian1D as gaussian
 from astropy.modeling.models import Lorentz1D as lorentzian
 
+from statsmodels.nonparametric.smoothers_lowess import lowess
+
 import corner
 import pymultinest
 
@@ -38,12 +40,12 @@ def parse_commandline():
 
     parser.add_option("-o","--outputDir",default="../../output")
     parser.add_option("-p","--plotDir",default="../../plots")
-    parser.add_option("-d","--dataDir",default="../../data/spectra/40minute")
+    parser.add_option("-d","--dataDir",default="../../data/spectra/40minute/LRIS")
     parser.add_option("-N","--N",type=int,default=8)
     #parser.add_option("-s","--start",type=int,default=0)
     #parser.add_option("-e","--end",type=int,default=1500)
-    parser.add_option("-s","--start",type=int,default=750)
-    parser.add_option("-e","--end",type=int,default=1000)
+    parser.add_option("-s","--start",type=int,default=4200)
+    parser.add_option("-e","--end",type=int,default=4600)
     parser.add_option("--errorbudget",type=float,default=0.1)
 
     parser.add_option("--doInterp",  action="store_true", default=False)
@@ -116,18 +118,31 @@ def kde_eval(kdedir,truth):
 
 def loadspectra(f):
     data=np.loadtxt(f)
-    return(data[start:stop,1])
+    return(data[startwave:stopwave,1])
     
 def loadallspectra():
-    filenames = glob.glob(os.path.join(dataDir,'*txt'))
+    filenames = glob.glob(os.path.join(dataDir,'*spec*'))
+    exposure_starts = []
     for ii, filename in enumerate(filenames):
         data=np.loadtxt(filename)
+        lines = [line.rstrip('\n') for line in open(filename)]
+        for line in lines:
+            if "MJDMID" in line:
+                lineSplit = list(filter(None,line.split(" ")))
+                obsdate = float(lineSplit[3])
+                exposure_starts.append(obsdate)
         if ii == 0:
             FullData=[]
-            wavelengths=data[start:stop,0]
+            wavelengths=data[:,0]
+            idx = np.where((wavelengths >= startwave) & (wavelengths <= stopwave))[0]
+            wavelengths = wavelengths[idx]
             FullData.append(wavelengths)
-        FullData.append((10**17)*data[start:stop,1])
-    return FullData
+
+        vals = lowess(data[idx,1], wavelengths, frac=0.05)
+
+        FullData.append((10**17)*vals[:,1])
+
+    return FullData, exposure_starts
 
 def interpallspectra(newdat, N):
 
@@ -217,9 +232,9 @@ def myloglike_fit(cube, ndim, nparams):
     #    return -np.inf
 
     prob = 0
-    for key, color in zip(keys,colors):
-        vel0 = A*np.sin((2*(np.pi/8.0)*float(key))+phi)+c
-        vel1 = B*np.sin((2*(np.pi/8.0)*float(key))+phi+np.pi)+d
+    for key in keys:
+        vel0 = A*np.sin(2*np.pi*(data_out[key]["phase"]+phi))+c
+        vel1 = B*np.sin(2*np.pi*(data_out[key]["phase"]+phi+np.pi))+d
 
         kdedir = data_out[key]["kdedir"]
         vals = np.array([vel0,vel1]).T
@@ -289,11 +304,11 @@ opts = parse_commandline()
 FullData=[]
 
 N=opts.N
-start=opts.start
-stop=opts.end
+startwave=opts.start
+stopwave=opts.end
 dataDir = opts.dataDir
 errorbudget = opts.errorbudget
-baseplotDir = os.path.join(opts.plotDir,'spec_double_40_%.2f'%errorbudget)
+baseplotDir = os.path.join(opts.plotDir,'spec_LRIS_double_40_%.2f'%errorbudget)
 
 if not os.path.isdir(baseplotDir):
     os.makedirs(baseplotDir)
@@ -302,7 +317,7 @@ moviedir = os.path.join(baseplotDir,'movie')
 if not os.path.isdir(moviedir):
     os.makedirs(moviedir)
 
-newdat=loadallspectra()
+newdat, exposure_starts = loadallspectra()
 
 n=1
 final=[]
@@ -324,16 +339,17 @@ Palomar=EarthLocation.of_site('Palomar')
 T0 = 0.586014316528247946E+05
 
 p=(2*0.01409783493869)
-exposuretime = 360.0
-exposure_starts = ['2019-05-29T09:08:29.581', '2019-05-29T09:14:51.255',
-                   '2019-05-29T09:21:12.937', '2019-05-29T09:27:34.618',
-                   '2019-05-29T09:33:56.301', '2019-05-29T09:40:17.986',
-                   '2019-05-29T09:46:39.670', '2019-05-29T09:53:01.348']
+
+#exposuretime = 360.0
+#exposure_starts = ['2019-05-29T09:08:29.581', '2019-05-29T09:14:51.255',
+#                   '2019-05-29T09:21:12.937', '2019-05-29T09:27:34.618',
+#                   '2019-05-29T09:33:56.301', '2019-05-29T09:40:17.986',
+#                   '2019-05-29T09:46:39.670', '2019-05-29T09:53:01.348']
 phases = []
 for exposure_start in exposure_starts:
-    t = Time(exposure_start,format='isot',scale='utc')
-    dt = TimeDelta((exposuretime / 2.0) * u.s)
-    t = t + dt
+    t = Time(exposure_start,format='mjd',scale='utc')
+    #dt = TimeDelta((exposuretime / 2.0) * u.s)
+    #t = t + dt
 
     t2=t.tdb
     delta=t2.light_travel_time(c,kind='barycentric',location=Palomar)
@@ -341,30 +357,33 @@ for exposure_start in exposure_starts:
 
     phase = np.mod(BJD_TDB.mjd - T0, p)/p
     phases.append(phase)
-phases = np.array(phases)
 
 if opts.doInterp:
     newdat=interpallspectra(newdat, N)
     wavelengths, spectra = newdat[0], newdat[1:]
 
+spectra_primary = []
+spectra_diff = []
 data_out = {}
 for ii,spec in enumerate(spectra):
+
+    if ii > 55: continue
 
     plotDir = os.path.join(baseplotDir,'%d'%ii)
     if not os.path.isdir(plotDir):
         os.makedirs(plotDir)
 
-    plotName = "%s/spec.pdf"%(plotDir)
-    fig = plt.figure(figsize=(22,28))
-    plt.plot(wavelengths,spec,'k--',linewidth=2)
-    plt.ylim([0,100])
-    plt.grid()
-    plt.yticks(fontsize=36)
-    plt.xticks(fontsize=36)
-    plt.savefig(plotName)
-    plotName = "%s/spec.png"%(plotDir)
-    plt.savefig(plotName)
-    plt.close()
+    #plotName = "%s/spec.pdf"%(plotDir)
+    #fig = plt.figure(figsize=(22,28))
+    #plt.plot(wavelengths,spec,'k--',linewidth=2)
+    #plt.ylim([0,100])
+    #plt.grid()
+    #plt.yticks(fontsize=36)
+    #plt.xticks(fontsize=36)
+    #plt.savefig(plotName)
+    #plotName = "%s/spec.png"%(plotDir)
+    #plt.savefig(plotName)
+    #plt.close()
 
     if opts.doMovie:
         plotNameMovie = "%s/movie-%04d.png"%(moviedir,ii)
@@ -439,9 +458,13 @@ for ii,spec in enumerate(spectra):
     data_out[key]["vel1"] = vel1
     pts = np.vstack((vel0,vel1)).T
     data_out[key]["kdedir"] = greedy_kde_areas_2d(pts)
+    data_out[key]["phase"] = phases[ii]
+
+    spectra_primary.append(spec-model2)
+    spectra_diff.append(spec-model1)
 
     plotName = "%s/corner.pdf"%(plotDir)
-    #if os.path.isfile(plotName): continue
+    if os.path.isfile(plotName): continue
 
     figure = corner.corner(data[:,:-1], labels=labels,
                        quantiles=[0.16, 0.5, 0.84],
@@ -472,6 +495,62 @@ for ii,spec in enumerate(spectra):
         plotNameMovie = "%s/movie-%04d.png"%(moviedir,ii)
         cp_command = "cp %s %s" % (plotName, plotNameMovie)
         os.system(cp_command)
+
+X, Y = np.meshgrid(wavelengths, np.arange(len(spectra_primary)))
+plotName = "%s/spectra_primary.pdf"%(baseplotDir)
+fig = plt.figure(figsize=(14,5))
+plt.pcolor(X, Y, np.array(spectra_primary))
+plt.xlim([4300,4380])
+plt.ylim([0,52])
+plt.xlabel('Wavelength [nm]')
+plt.ylabel('Spectra')
+plt.savefig(plotName)
+plt.close()
+
+X, Y = np.meshgrid(wavelengths, np.arange(len(spectra_diff)))
+plotName = "%s/spectra_diff.pdf"%(baseplotDir)
+fig = plt.figure(figsize=(14,5))
+plt.pcolor(X, Y, np.array(spectra_diff))
+plt.xlim([4300,4380])
+plt.ylim([0,52])
+plt.xlabel('Wavelength [nm]')
+plt.ylabel('Spectra')
+plt.savefig(plotName)
+plt.close()
+
+plotName = "%s/spec_panels_diff.pdf"%(baseplotDir)
+fig = plt.figure(figsize=(22,28))
+
+cnt = 0
+for ii in range(len(spectra_primary)):
+    cnt = cnt+1
+    vals = "%d%d%d"%(len(spectra_primary),1,cnt)
+    if cnt == 1:
+        #ax1 = plt.subplot(eval(vals))
+        ax1 = plt.subplot(len(spectra_primary),1,cnt)
+    else:
+        #ax2 = plt.subplot(eval(vals),sharex=ax1,sharey=ax1)
+        ax2 = plt.subplot(len(spectra_primary),1,cnt,sharex=ax1,sharey=ax1)
+
+    plt.plot(wavelengths,spectra_primary[ii],'k--',linewidth=2)
+
+    plt.ylabel('%.1f'%float(ii+1),fontsize=48,rotation=0,labelpad=40)
+    plt.xlim([4300,4400])
+    #plt.ylim([0.0,1.0])
+    plt.grid()
+    plt.yticks(fontsize=36)
+
+    if (not cnt == len(spectra_primary)) and (not cnt == 1):
+        plt.setp(ax2.get_xticklabels(), visible=False)
+    elif cnt == 1:
+        plt.setp(ax1.get_xticklabels(), visible=False)
+    else:
+        plt.xticks(fontsize=36)
+
+ax1.set_zorder(1)
+#ax2.set_xlabel(r'$\lambda [\AA]$',fontsize=48,labelpad=30)
+plt.savefig(plotName)
+plt.close()
 
 if opts.doMovie:
     moviefiles = os.path.join(moviedir,"movie-%04d.png")
@@ -515,10 +594,10 @@ color4 = 'darkmagenta'
 
 xs, vel0s, vel1s = [], np.zeros((len(keys),len(A))), np.zeros((len(keys),len(A))) 
 for jj,key in enumerate(keys):
-    x = float(key)
+    x = data_out[key]["phase"]
     for ii in range(len(A)):
-        vel0s[jj,ii] = A[ii]*np.sin(2*(np.pi/8.0)*float(key)+phi[ii])+c[ii] 
-        vel1s[jj,ii] = B[ii]*np.sin(2*(np.pi/8.0)*float(key)+phi[ii]+np.pi)+d[ii]
+        vel0s[jj,ii] = A[ii]*np.sin(2*np.pi*(data_out[key]["phase"]+phi[ii]))+c[ii] 
+        vel1s[jj,ii] = B[ii]*np.sin(2*np.pi*(data_out[key]["phase"]+phi[ii]+np.pi))+d[ii]
     xs.append(x)
 
 idx = np.argsort(xs)
@@ -534,9 +613,9 @@ vel1s_50 = np.percentile(vel1s,50,axis=1)
 vel1s_90 = np.percentile(vel1s,90,axis=1)
 
 plotName = "%s/violin.pdf"%(baseplotDir)
-fig = plt.figure(figsize=(22,28))
+fig = plt.figure(figsize=(40,28))
 for key, color in zip(keys,colors):
-    parts = plt.violinplot(data_out[key]["vel0"],[float(key)])
+    parts = plt.violinplot(data_out[key]["vel0"],[data_out[key]["phase"]],widths=0.1)
     for partname in ('cbars','cmins','cmaxes'):
         vp = parts[partname]
         vp.set_edgecolor(color1)
@@ -544,7 +623,7 @@ for key, color in zip(keys,colors):
     for pc in parts['bodies']:
         pc.set_facecolor(color1)
         pc.set_edgecolor(color1)
-    parts = plt.violinplot(data_out[key]["vel1"],[float(key)])
+    parts = plt.violinplot(data_out[key]["vel1"],[data_out[key]["phase"]],widths=0.1)
     for partname in ('cbars','cmins','cmaxes'):
         vp = parts[partname]
         vp.set_edgecolor(color2)
@@ -613,6 +692,8 @@ figure.set_size_inches(18.0,18.0)
 plt.savefig(plotName)
 plt.close()
 
+keys = keys[:57]
+
 plotName = "%s/spec_panels.pdf"%(baseplotDir)
 fig = plt.figure(figsize=(22,28))
 
@@ -631,7 +712,7 @@ for key, color in zip(keys,colors):
     plt.plot(data_out[key]["wavelengths"],data_out[key]["model"],'b-',linewidth=2)
 
     plt.ylabel('%.1f'%float(key),fontsize=48,rotation=0,labelpad=40)
-    #plt.xlim([start,stop])
+    plt.xlim([4300,4400])
     #plt.ylim([0.0,1.0])
     plt.grid()
     plt.yticks(fontsize=36)

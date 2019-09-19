@@ -193,7 +193,18 @@ if opts.lightcurve_source == "Kowalski":
 
     catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
 
-    kow = Kowalski(username=opts.user, password=opts.pwd)
+    kow = []
+    nquery = 10
+    cnt = 0
+    while cnt < nquery:
+        try:
+            kow = Kowalski(username=opts.user, password=opts.pwd)
+            break
+        except:
+            time.sleep(5)
+        cnt = cnt + 1
+    if cnt == nquery:
+        raise Exception('Kowalski connection failed...')
 
     if opts.source_type == "quadrant":
         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.dat"%(field, ccd, quadrant,opts.Ncatindex))
@@ -244,9 +255,9 @@ if opts.lightcurve_source == "Kowalski":
                     decs.append(float(lineSplit[2]))
                     err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
                     errs.append(err)
-                    amaj.append(float(lineSplit[5]))
-                    amin.append(float(lineSplit[6]))
-                    phi.append(float(lineSplit[7]))
+                    amaj.append(float(lineSplit[3]))
+                    amin.append(float(lineSplit[4]))
+                    phi.append(float(lineSplit[5]))
                 elif ("swift" in catalog_file) or ("xmm" in catalog_file):
                     names.append(lineSplit[0])
                     ras.append(float(lineSplit[1]))
@@ -407,7 +418,7 @@ else:
 if (opts.source_type == "catalog") and ("fermi" in catalog_file):
     basefolder = os.path.join(basefolder,'%d' % opts.Ncatindex)
 
-samples_per_peak = 10
+samples_per_peak = 3
 phase_bins, mag_bins = 20, 10
 
 df = 1./(samples_per_peak * baseline)
@@ -542,10 +553,10 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         ymax = y90 + 7*ystd
         ax1.set_ylim([ymin,ymax])
         ax1.invert_yaxis()
-        asymmetric_error = [absmag[1], absmag[2]]
+        asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
         hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
         if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
-            ax2.errorbar(bp_rp,absmag[0],yerr=[asymmetric_error],
+            ax2.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
                          c='r',zorder=1,fmt='o')
         ax2.set_xlim([-1,4.0])
         ax2.set_ylim([-5,18])
