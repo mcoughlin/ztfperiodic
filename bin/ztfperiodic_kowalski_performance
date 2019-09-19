@@ -1,0 +1,48 @@
+
+import os, sys
+import glob
+
+import tables
+import pandas as pd
+import numpy as np
+
+import matplotlib
+matplotlib.use('Agg')
+matplotlib.rcParams.update({'font.size': 16})
+matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import cm
+
+filename = "/home/mcoughlin/ZTF/output_Fermi/condor/out.dat"
+outputDir = "/home/mcoughlin/ZTF/output_Fermi/condor/"
+
+lines = [line.rstrip('\n') for line in open(filename)]
+
+times, objects, fermiid = [], [], []
+for line in lines:
+    lineSplit = line.split(" ")
+    times.append(float(lineSplit[4]))
+    objects.append(int(lineSplit[1]))
+    fermiid.append(int(lineSplit[0].split(".")[-1].split(":")[0]))
+times, objects, fermiid = np.array(times), np.array(objects), np.array(fermiid)
+idx = np.argsort(times)
+times, objects, fermiid = times[idx], objects[idx], fermiid[idx]
+
+objects[objects < 1] = 1
+
+plotName = os.path.join(outputDir, "kowalski.pdf")
+plt.figure(figsize=(8,6))
+ax = plt.gca()
+plt.plot(times, objects, 'kx')
+plt.xlabel('Time [s]')
+plt.ylabel('Number of objects')
+ax.set_xscale('log')
+ax.set_yscale('log')
+plt.savefig(plotName)
+plt.close()
+
+filename = os.path.join(outputDir, "kowalski.dat")
+fid = open(filename, 'w')
+for t, o, f in zip(times, objects, fermiid):
+    fid.write('%.5f %d %d\n' % (t,o,f))
+fid.close()

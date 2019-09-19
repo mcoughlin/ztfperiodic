@@ -79,7 +79,23 @@ logDir = os.path.join(qsubDir,'logs')
 if not os.path.isdir(logDir):
     os.makedirs(logDir)
 
+if opts.source_type == "quadrant":
+    fields, ccds, quadrants = np.arange(1,880), np.arange(1,17), np.arange(1,5)
+    fields = [683,853,487,718,372,842,359,778,699,296]
+    job_number = 0
+    quadrantfile = os.path.join(qsubDir,'qsub.dat')
+    fid = open(quadrantfile,'w')
+    for field in fields:
+        for ccd in ccds:
+            for quadrant in quadrants:
+                for ii in range(opts.Ncatalog):
+                    fid.write('%d %d %d %d %d\n' % (job_number, field, ccd, quadrant, ii))
+
+                    job_number = job_number + 1
+    fid.close()
+
 dir_path = os.path.dirname(os.path.realpath(__file__))
+
 
 fid = open(os.path.join(qsubDir,'qsub.sub'),'w')
 fid.write('#!/bin/bash\n')
@@ -88,6 +104,9 @@ fid.write('#PBS -m abe\n')
 fid.write('#PBS -M cough052@umn.edu\n')
 fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
 fid.write('cd $PBS_O_WORKDIR\n')
-fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --Ncatindex $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,opts.algorithm,extra_flags))
+if opts.source_type == "quadrant":
+    fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type quadrant --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,opts.Ncatalog,opts.algorithm,extra_flags))
+elif opts.source_type == "catalog":
+    fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --Ncatindex $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,opts.algorithm,extra_flags))
 fid.close()
 

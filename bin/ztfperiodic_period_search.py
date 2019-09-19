@@ -61,6 +61,9 @@ def parse_commandline():
     parser.add_option("--doSimulateLightcurves",  action="store_true", default=False)
     parser.add_option("--doUsePDot",  action="store_true", default=False)
     parser.add_option("--doVariability",  action="store_true", default=False)
+    parser.add_option("--doQuadrantFile",  action="store_true", default=False)
+    parser.add_option("--quadrant_file",default="../input/quadrant_file.dat")
+    parser.add_option("--quadrant_index",default=0,type=int)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     #parser.add_option("-m","--matchFile",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.pytable") 
@@ -147,11 +150,20 @@ quadrant = opts.quadrant
 program_ids = list(map(int,opts.program_ids.split(",")))
 min_epochs = opts.min_epochs
 catalog_file = opts.catalog_file
+quadrant_file = opts.quadrant_file
 doCombineFilt = opts.doCombineFilt
 doRemoveHC = opts.doRemoveHC
 doSimulateLightcurves = opts.doSimulateLightcurves
 doUsePDot = opts.doUsePDot
 doExtinction = opts.doExtinction
+Ncatindex = opts.Ncatindex
+
+if opts.doQuadrantFile:
+    quad_out = np.loadtxt(quadrant_file)
+    idx = np.where(quad_out[:,0] == opts.quadrant_index)[0]
+    row = quad_out[idx,:][0]
+    field, ccd, quadrant = row[1], row[2], row[3]
+    Ncatindex = row[4]
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
@@ -178,7 +190,7 @@ epoch_folders = ["0-100","100-500","500-all"]
 
 catalogDir = os.path.join(outputDir,'catalog',algorithm)
 if (opts.source_type == "catalog") and ("fermi" in catalog_file):
-    catalogDir = os.path.join(catalogDir,'%d' % opts.Ncatindex)
+    catalogDir = os.path.join(catalogDir,'%d' % Ncatindex)
 
 if not os.path.isdir(catalogDir):
     os.makedirs(catalogDir)
@@ -207,12 +219,12 @@ if opts.lightcurve_source == "Kowalski":
         raise Exception('Kowalski connection failed...')
 
     if opts.source_type == "quadrant":
-        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.dat"%(field, ccd, quadrant,opts.Ncatindex))
+        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.dat"%(field, ccd, quadrant,Ncatindex))
         lightcurves, coordinates, filters, ids,\
         absmags, bp_rps, names, baseline =\
             get_kowalski_bulk(field, ccd, quadrant, kow, 
                               program_ids=program_ids, min_epochs=min_epochs,
-                              num_batches=opts.Ncatalog, nb=opts.Ncatindex)
+                              num_batches=opts.Ncatalog, nb=Ncatindex)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\
                 slicestardist(lightcurves, coordinates, filters,
@@ -306,23 +318,23 @@ if opts.lightcurve_source == "Kowalski":
         decs_split = np.array_split(decs,opts.Ncatalog)
         errs_split = np.array_split(errs,opts.Ncatalog)
 
-        names = names_split[opts.Ncatindex]
-        ras = ras_split[opts.Ncatindex]
-        decs = decs_split[opts.Ncatindex]
-        errs = errs_split[opts.Ncatindex]
+        names = names_split[Ncatindex]
+        ras = ras_split[Ncatindex]
+        decs = decs_split[Ncatindex]
+        errs = errs_split[Ncatindex]
 
         if ("fermi" in catalog_file):
             amaj_split = np.array_split(amaj,opts.Ncatalog)
             amin_split = np.array_split(amin,opts.Ncatalog)
             phi_split = np.array_split(phi,opts.Ncatalog)
 
-            amaj = amaj_split[opts.Ncatindex]
-            amin = amin_split[opts.Ncatindex]
-            phi = phi_split[opts.Ncatindex]
+            amaj = amaj_split[Ncatindex]
+            amin = amin_split[Ncatindex]
+            phi = phi_split[Ncatindex]
 
         catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").split("/")[-1]
         catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(catalog_file_split,
-                                                           opts.Ncatindex))
+                                                           Ncatindex))
 
         if doSimulateLightcurves:
             lightcurves, coordinates, filters, ids,\
@@ -416,7 +428,7 @@ else:
         fmin, fmax = 2/baseline, 480
 
 if (opts.source_type == "catalog") and ("fermi" in catalog_file):
-    basefolder = os.path.join(basefolder,'%d' % opts.Ncatindex)
+    basefolder = os.path.join(basefolder,'%d' % Ncatindex)
 
 samples_per_peak = 3
 phase_bins, mag_bins = 20, 10
