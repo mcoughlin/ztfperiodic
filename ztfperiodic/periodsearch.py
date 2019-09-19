@@ -123,7 +123,8 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
         elif algorithm == "GCE":
             from gcex.gce import ConditionalEntropy
         
-            ce = ConditionalEntropy(phase_bins=20)
+            nphase = 50
+            ce = ConditionalEntropy(phase_bins=nphase)
 
             if doUsePDot:
                 num_pdots = 10
@@ -153,6 +154,11 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             pdots_split = np.array_split(pdots_to_test,len(pdots_to_test))
             for ii, pdot in enumerate(pdots_split):
                 print("Running pdot %d / %d" % (ii+1, len(pdots_split)))
+
+                print("Number of lightcurves: %d" % len(lightcurves_stack))
+                print("Batch size: %d" % batch_size)
+                print("Number of frequency bins: %d" % len(freqs))
+                print("Number of phase bins: %d" % nphase)
 
                 results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdot, show_progress=False)
                 periods = 1./freqs
