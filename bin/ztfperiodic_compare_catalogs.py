@@ -88,7 +88,7 @@ def load_catalog(catalog,doFermi=False,doSimbad=False):
             doQuery = True
             result_table = None
             nquery = 1
-            while doQuery: #and (not ii==1078):
+            while doQuery and (not ii==1078):
                 try:
                     result_table = customSimbad.query_region(coord,
                                                              radius=2*u.arcsecond)
