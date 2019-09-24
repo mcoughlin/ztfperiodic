@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os, sys
+import tempfile
 import time
 import glob
 import optparse
@@ -21,6 +22,8 @@ import matplotlib.pyplot as plt
 
 from astropy import units as u
 from astropy.coordinates import SkyCoord
+from astroquery.sdss import SDSS
+import astropy.io.fits
 
 import ztfperiodic
 from ztfperiodic.period import CE
@@ -54,6 +57,7 @@ def parse_commandline():
     parser.add_option("--doLongPeriod",  action="store_true", default=False)
     parser.add_option("--doCombineFilt",  action="store_true", default=False)
     parser.add_option("--doExtinction",  action="store_true", default=False)
+    parser.add_option("--doSpectra",  action="store_true", default=False)
 
     parser.add_option("--doParallel",  action="store_true", default=False)
     parser.add_option("-n","--Ncore",default=4,type=int)
@@ -506,6 +510,19 @@ else:
     else:
         sigthresh = 7
 
+if opts.doSpectra:
+    lamostpage = "http://dr4.lamost.org/spectrum/png/"
+    lamostfits = "http://dr4.lamost.org/spectrum/fits/"
+
+    LAMOSTcat = os.path.join(starCatalogDir,'lamost.hdf5')
+    with h5py.File(LAMOSTcat, 'r') as f:
+        lamost_ra, lamost_dec = f['ra'][:], f['dec'][:]
+    LAMOSTidxcat = os.path.join(starCatalogDir,'lamost_indices.hdf5')
+    with h5py.File(LAMOSTidxcat, 'r') as f:
+        lamost_obsid = f['obsid'][:]
+
+    lamost = SkyCoord(ra=lamost_ra*u.degree, dec=lamost_dec*u.degree, frame='icrs')    
+
 print('Cataloging / Plotting lightcurves...')
 cnt = 0
 fid = open(catalogFile,'w')
@@ -555,7 +572,47 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                 phases=np.mod((time_vals-(1.0/2.0)*(pdot/period)*(time_vals)**2),2*period)/(2*period)
         magnitude, err = copy[:,1], copy[:,2]
 
-        fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
+        spectral_data = {}
+        if opts.doSpectra:
+            coord = SkyCoord(ra=RA*u.degree, dec=Dec*u.degree, frame='icrs')
+            xid = SDSS.query_region(coord, spectro=True)
+            if not xid is None:
+                spec = SDSS.get_spectra(matches=xid)[0]
+                for ii, sp in enumerate(spec):
+                    try:
+                        sp.data["loglam"]
+                    except:
+                        continue
+                    lam = 10**sp.data["loglam"]
+                    flux = sp.data["flux"]
+                    key = len(list(spectral_data.keys()))
+                    spectral_data[key] = {}
+                    spectral_data[key]["lambda"] = lam
+                    spectral_data[key]["flux"] = flux            
+            sep = coord.separation(lamost).deg
+            idx = np.argmin(sep)
+            if sep[idx] < 3.0/3600.0:
+                obsid = lamost_obsid[idx]
+                requestpage = "%s/%d" % (lamostfits, obsid)
+ 
+                with tempfile.NamedTemporaryFile(mode='w') as f:
+                    wget_command = "wget %s -O %s" % (requestpage, f.name)
+                    os.system(wget_command)
+                    hdul = astropy.io.fits.open(f.name)
+        
+                lamost_data = {}
+                for ii, sp in enumerate(hdul):
+                    lam = sp.data[2,:]
+                    flux = sp.data[0,:]
+                    key = len(list(spectral_data.keys()))
+                    spectral_data[ii] = {}
+                    spectral_data[ii]["lambda"] = lam
+                    spectral_data[ii]["flux"] = flux
+
+        if len(spectral_data.keys()) > 0:
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(25,10))
+        else:
+            fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
         ax1.errorbar(phases, magnitude,err,ls='none',c='k')
         period2=period
         ymed = np.nanmedian(magnitude)
@@ -574,11 +631,27 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         ax2.set_ylim([-5,18])
         ax2.invert_yaxis()
         fig.colorbar(hist2[3],ax=ax2)
+        if len(spectral_data.keys()) > 0:
+            ymin, ymax = -np.inf, np.inf
+            for key in spectral_data:
+                y10 = np.nanpercentile(spectral_data[key]["flux"],10)
+                y90 = np.nanpercentile(spectral_data[key]["flux"],90)
+                ydiff = y90 - y10
+                ymintmp = y10 - ydiff
+                ymaxtmp = y90 + ydiff
+                if ymin < ymintmp:
+                    ymin = ymintmp
+                if ymaxtmp < ymax:
+                    ymax = ymaxtmp
+                ax3.plot(spectral_data[key]["lambda"],spectral_data[key]["flux"],'--')
+            ax3.set_ylim([ymin,ymax])
+            ax3.set_xlabel('Wavelength [A]')
+            ax3.set_ylabel('Flux')
         if pdot == 0:
             plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
         else:
             plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec)+"_"+str(pdot))
-        fig.savefig(pngfile)
+        fig.savefig(pngfile, bbox_inches='tight')
         plt.close()
 
     cnt = cnt + 1

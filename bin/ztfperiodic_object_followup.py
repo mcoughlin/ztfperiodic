@@ -24,6 +24,8 @@ from matplotlib.colors import LogNorm
 from astropy.io import ascii
 from astropy import units as u
 from astropy.coordinates import SkyCoord
+from astroquery.sdss import SDSS
+import astropy.io.fits
 
 import requests
 
@@ -35,6 +37,7 @@ from ztfperiodic.utils import ps1_query
 from ztfperiodic.utils import load_file
 from ztfperiodic.utils import get_kowalski
 from ztfperiodic.utils import get_lightcurve
+from ztfperiodic.utils import combine_lcs
 from ztfperiodic.periodsearch import find_periods
 
 from gatspy.periodic import LombScargle, LombScargleFast
@@ -58,7 +61,7 @@ def parse_commandline():
     parser.add_option("-o","--outputDir",default="../output")
     parser.add_option("-i","--inputDir",default="../input")
 
-    parser.add_option("-a","--algorithms",default="CE,BLS")
+    parser.add_option("-a","--algorithms",default="GCE,BLS")
 
     parser.add_option("-r","--ra",default=110.58940,type=float)
     parser.add_option("-d","--declination",default=-18.65840,type=float)
@@ -70,6 +73,7 @@ def parse_commandline():
     parser.add_option("--doPlots",  action="store_true", default=False)
     parser.add_option("--doJustHR",  action="store_true", default=False)
     parser.add_option("--doOverwrite",  action="store_true", default=False)
+    parser.add_option("--doSpectra",  action="store_true", default=False)
 
     parser.add_option("--doPhase",  action="store_true", default=False)
     parser.add_option("-p","--phase",default=0.016666,type=float)
@@ -143,27 +147,92 @@ if opts.doJustHR:
         plt.close()
     exit(0)
 
+coord = SkyCoord(ra=opts.ra*u.degree, dec=opts.declination*u.degree, frame='icrs')
+
+spectral_data = {}
+if opts.doSpectra:
+    xid = SDSS.query_region(coord, spectro=True)
+    if not xid is None:
+        spec = SDSS.get_spectra(matches=xid)[0]
+        for ii, sp in enumerate(spec):
+            try:
+                sp.data["loglam"]
+            except:
+                continue
+            lam = 10**sp.data["loglam"]
+            flux = sp.data["flux"]
+            key = len(list(spectral_data.keys()))
+            spectral_data[key] = {}
+            spectral_data[key]["lambda"] = lam
+            spectral_data[key]["flux"] = flux
+
+    lamostpage = "http://dr4.lamost.org/spectrum/png/"
+    lamostfits = "http://dr4.lamost.org/spectrum/fits/"
+   
+    LAMOSTcat = os.path.join(starCatalogDir,'lamost.hdf5')
+    with h5py.File(LAMOSTcat, 'r') as f:
+        lamost_ra, lamost_dec = f['ra'][:], f['dec'][:]
+    LAMOSTidxcat = os.path.join(starCatalogDir,'lamost_indices.hdf5')
+    with h5py.File(LAMOSTidxcat, 'r') as f:
+        lamost_obsid = f['obsid'][:]
+
+    lamost = SkyCoord(ra=lamost_ra*u.degree, dec=lamost_dec*u.degree, frame='icrs')
+    sep = coord.separation(lamost).deg
+    idx = np.argmin(sep)
+    if sep[idx] < 3.0/3600.0:
+        obsid = lamost_obsid[idx]
+        requestpage = "%s/%d" % (lamostpage, obsid)
+        plotName = os.path.join(path_out_dir,'lamost.png')
+        wget_command = "wget %s -O %s" % (requestpage, plotName)
+        os.system(wget_command)
+        lamost_im = plt.imread(plotName)
+
+        requestpage = "%s/%d" % (lamostfits, obsid)
+        fitsName = os.path.join(path_out_dir,'lamost.fits.gz')
+        wget_command = "wget %s -O %s" % (requestpage, fitsName)
+        os.system(wget_command)
+
+        hdul = astropy.io.fits.open(fitsName)
+
+        lamost_data = {}
+        for ii, sp in enumerate(hdul):
+            lam = sp.data[2,:]
+            flux = sp.data[0,:]
+            key = len(list(spectral_data.keys()))
+            spectral_data[ii] = {}
+            spectral_data[ii]["lambda"] = lam
+            spectral_data[ii]["flux"] = flux
+
+if opts.doPlots and len(list(spectral_data.keys()))>0:
+    plotName = os.path.join(path_out_dir,'spectra.pdf')
+    plt.figure(figsize=(12,12))
+    for key in spectral_data:
+        plt.plot(spectral_data[key]["lambda"],spectral_data[key]["flux"],'--')
+    plt.xlabel('Wavelength [A]')
+    plt.ylabel('Flux')
+    plt.savefig(plotName)
+    plt.close()
+
 # Gaia and PS1 
 ps1 = ps1_query(opts.ra, opts.declination, 5/3600.0)
 
 if opts.lightcurve_source == "Kowalski":
     kow = Kowalski(username=opts.user, password=opts.pwd)
-    lightcurves = get_kowalski(opts.ra, opts.declination, kow, oid=opts.objid,
-                               program_ids=program_ids, min_epochs=min_epochs)
-    if len(lightcurves.keys()) > 1:
-        print("Choose one object ID and run again...")
-        for objid in lightcurves.keys():
-            print("Object ID: %s"%objid)
-        exit(0)
-    elif len(lightcurves.keys()) == 0:
+    lightcurves_all = get_kowalski(opts.ra, opts.declination, kow, 
+                                   oid=opts.objid,
+                                   program_ids=program_ids,
+                                   min_epochs=min_epochs)
+    lightcurves_combined = combine_lcs(lightcurves_all)
+
+    if len(lightcurves_all.keys()) == 0:
         print("No objects... sorry.")
         exit(0)
-    key = list(lightcurves.keys())[0]
-
-    hjd, mag, magerr = lightcurves[key]["hjd"], lightcurves[key]["mag"], lightcurves[key]["magerr"]
-    fid = lightcurves[key]["fid"]
-    ra, dec = lightcurves[key]["ra"], lightcurves[key]["dec"]
-    absmag, bp_rp = lightcurves[key]["absmag"], lightcurves[key]["bp_rp"]
+    key = list(lightcurves_combined.keys())[0]
+    
+    hjd, mag, magerr = lightcurves_combined[key]["hjd"], lightcurves_combined[key]["mag"], lightcurves_combined[key]["magerr"]
+    fid = lightcurves_combined[key]["fid"]
+    ra, dec = lightcurves_combined[key]["ra"], lightcurves_combined[key]["dec"]
+    absmag, bp_rp = lightcurves_combined[key]["absmag"], lightcurves_combined[key]["bp_rp"]
 
     idx = np.argsort(hjd)
     hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
@@ -261,6 +330,21 @@ if opts.doPlots:
     plt.savefig(plotName)
     plt.close()
 
+    colors = ['g','r','k']
+    fids = [1,2,3]
+    plotName = os.path.join(path_out_dir,'phot_color.pdf')
+    plt.figure(figsize=(12,8))
+    for fid, color in zip(fids, colors):
+        for ii, key in enumerate(lightcurves_all.keys()):
+            lc = lightcurves_all[key]
+            if not lc["fid"][0] == fid: continue
+            plt.errorbar(lc["hjd"]-hjd[0],lc["mag"],yerr=lc["magerr"],fmt='%so' % color)
+    plt.xlabel('Time from %.5f [days]'%hjd[0])
+    plt.ylabel('Magnitude [ab]')
+    plt.gca().invert_yaxis()
+    plt.savefig(plotName)
+    plt.close()
+
     plotName = os.path.join(path_out_dir,'periodogram.pdf')
     periods = np.logspace(-3,-1,10000)
     #periods = np.logspace(0,2,10000)
@@ -272,6 +356,55 @@ if opts.doPlots:
     plt.xlabel("Period [days]")
     plt.ylabel("Power")
     plt.savefig(plotName)
+    plt.close()
+
+    plotName = os.path.join(path_out_dir,'overall.pdf')
+    if len(spectral_data.keys()) > 0:
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(25,10))
+    else:
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,10))
+
+    ax1.errorbar(hjd-hjd[0],mag,yerr=magerr,fmt='ko')
+    fittedmodel = fdecomp.make_f(period)
+    ax1.plot(hjd-hjd[0],fittedmodel(hjd,*LCfit),'k-')
+    ymed = np.nanmedian(mag)
+    y10, y90 = np.nanpercentile(mag,10), np.nanpercentile(mag,90)
+    ystd = np.nanmedian(magerr)
+    ymin = y10 - 3*ystd
+    ymax = y90 + 3*ystd
+    ax1.set_ylim([ymin,ymax])
+    ax1.invert_yaxis()
+    asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
+    hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
+    if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
+        ax2.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
+                     c='r',zorder=1,fmt='o')
+    ax2.set_xlim([-1,4.0])
+    ax2.set_ylim([-5,18])
+    ax2.invert_yaxis()
+    fig.colorbar(hist2[3],ax=ax2)
+    if len(spectral_data.keys()) > 0:
+        ymin, ymax = -np.inf, np.inf
+        for key in spectral_data:
+            ax3.plot(spectral_data[key]["lambda"],spectral_data[key]["flux"],'--')
+            y10 = np.nanpercentile(spectral_data[key]["flux"],10)
+            y90 = np.nanpercentile(spectral_data[key]["flux"],90)
+            ydiff = y90 - y10
+            ymintmp = y10 - ydiff
+            ymaxtmp = y90 + ydiff
+            if ymin < ymintmp:
+                ymin = ymintmp
+            if ymaxtmp < ymax:
+                ymax = ymaxtmp
+        ax3.set_ylim([ymin,ymax])
+        ax3.set_xlabel('Wavelength [A]')
+        ax3.set_ylabel('Flux')
+    plt.savefig(plotName)
+    plt.close()
+
+    fig.savefig(plotName, bbox_inches='tight')
+    plotName = os.path.join(path_out_dir,'overall.png')
+    fig.savefig(plotName, bbox_inches='tight')
     plt.close()
 
     if opts.doPhase:
@@ -302,6 +435,58 @@ if opts.doPlots:
             #    plt.ylim([18.0,17.7])
         plt.gca().invert_yaxis()
         plt.savefig(plotName)
+        plt.close()
+
+        plotName = os.path.join(path_out_dir,'phase_color.pdf')
+        plt.figure(figsize=(12,8))
+        for fid, color in zip(fids, colors):
+            for ii, key in enumerate(lightcurves_all.keys()):
+                lc = lightcurves_all[key]
+                if not lc["fid"][0] == fid: continue
+                plt.errorbar(np.mod(lc["hjd"]-hjd[0], 2.0*phase)/(2.0*phase), lc["mag"],yerr=lc["magerr"],fmt='%so' % color)
+        plt.xlabel('Time from %.5f [days]'%hjd[0])
+        plt.ylabel('Magnitude [ab]')
+        plt.gca().invert_yaxis()
+        plt.savefig(plotName)
+        plt.close()
+
+        plotName = os.path.join(path_out_dir,'overall_color.pdf')
+        if len(spectral_data.keys()) > 0:
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(25,10))
+        else:
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,10))
+
+        for fid, color in zip(fids, colors):
+            for ii, key in enumerate(lightcurves_all.keys()):
+                lc = lightcurves_all[key]
+                if not lc["fid"][0] == fid: continue
+                ax1.errorbar(np.mod(lc["hjd"]-hjd[0], 2.0*phase)/(2.0*phase), lc["mag"],yerr=lc["magerr"],fmt='%so' % color)
+        #period2=period
+        #ymed = np.nanmedian(magnitude)
+        #y10, y90 = np.nanpercentile(magnitude,10), np.nanpercentile(magnitude,90)
+        #ystd = np.nanmedian(err)
+        #ymin = y10 - 7*ystd
+        #ymax = y90 + 7*ystd
+        #ax1.set_ylim([ymin,ymax])
+        ax1.invert_yaxis()
+        asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
+        hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
+        if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
+            ax2.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
+                         c='r',zorder=1,fmt='o')
+        ax2.set_xlim([-1,4.0])
+        ax2.set_ylim([-5,18])
+        ax2.invert_yaxis()
+        fig.colorbar(hist2[3],ax=ax2)
+        if len(spectral_data.keys()) > 0:
+            for key in spectral_data:
+                ax3.plot(spectral_data[key]["lambda"],spectral_data[key]["flux"],'--')
+            ax3.set_xlabel('Wavelength [A]')
+            ax3.set_ylabel('Flux')
+
+        fig.savefig(plotName, bbox_inches='tight')
+        plotName = os.path.join(path_out_dir,'overall_color.png')
+        fig.savefig(plotName, bbox_inches='tight')
         plt.close()
 
 baseline = max(hjd)-min(hjd)
