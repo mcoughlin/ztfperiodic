@@ -507,7 +507,6 @@ else:
         sigthresh = 0
     elif algorithm == "GCE":
         sigthresh = 7
-        sigthresh = 0
     else:
         sigthresh = 7
 
