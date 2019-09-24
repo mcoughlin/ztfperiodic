@@ -81,7 +81,7 @@ def parse_commandline():
     parser.add_option("-l","--lightcurve_source",default="Kowalski")
  
     parser.add_option("--program_ids",default="2,3")
-    parser.add_option("--min_epochs",default=0,type=int)
+    parser.add_option("--min_epochs",default=1,type=int)
 
     parser.add_option("-n","--nstack",default=1,type=int)
     parser.add_option("--objid",type=int)
@@ -175,33 +175,33 @@ if opts.doSpectra:
     LAMOSTidxcat = os.path.join(starCatalogDir,'lamost_indices.hdf5')
     with h5py.File(LAMOSTidxcat, 'r') as f:
         lamost_obsid = f['obsid'][:]
-
+        lamost_inverse = f['inverse'][:]
     lamost = SkyCoord(ra=lamost_ra*u.degree, dec=lamost_dec*u.degree, frame='icrs')
     sep = coord.separation(lamost).deg
     idx = np.argmin(sep)
     if sep[idx] < 3.0/3600.0:
-        obsid = lamost_obsid[idx]
-        requestpage = "%s/%d" % (lamostpage, obsid)
-        plotName = os.path.join(path_out_dir,'lamost.png')
-        wget_command = "wget %s -O %s" % (requestpage, plotName)
-        os.system(wget_command)
-        lamost_im = plt.imread(plotName)
-
-        requestpage = "%s/%d" % (lamostfits, obsid)
-        fitsName = os.path.join(path_out_dir,'lamost.fits.gz')
-        wget_command = "wget %s -O %s" % (requestpage, fitsName)
-        os.system(wget_command)
-
-        hdul = astropy.io.fits.open(fitsName)
-
-        lamost_data = {}
-        for ii, sp in enumerate(hdul):
-            lam = sp.data[2,:]
-            flux = sp.data[0,:]
-            key = len(list(spectral_data.keys()))
-            spectral_data[ii] = {}
-            spectral_data[ii]["lambda"] = lam
-            spectral_data[ii]["flux"] = flux
+        idy = np.where(idx == lamost_inverse)[0]
+        obsids = lamost_obsid[idy]
+        for obsid in obsids:
+            requestpage = "%s/%d" % (lamostpage, obsid)
+            plotName = os.path.join(path_out_dir,'lamost_%d.png' % obsid)
+            wget_command = "wget %s -O %s" % (requestpage, plotName)
+            os.system(wget_command)
+            lamost_im = plt.imread(plotName)
+    
+            requestpage = "%s/%d" % (lamostfits, obsid)
+            fitsName = os.path.join(path_out_dir,'lamost_%d.fits.gz' % obsid)
+            wget_command = "wget %s -O %s" % (requestpage, fitsName)
+            os.system(wget_command)
+    
+            hdul = astropy.io.fits.open(fitsName)
+            for ii, sp in enumerate(hdul):
+                lam = sp.data[2,:]
+                flux = sp.data[0,:]
+                key = len(list(spectral_data.keys()))
+                spectral_data[key] = {}
+                spectral_data[key]["lambda"] = lam
+                spectral_data[key]["flux"] = flux
 
 if opts.doPlots and len(list(spectral_data.keys()))>0:
     plotName = os.path.join(path_out_dir,'spectra.pdf')
@@ -384,19 +384,23 @@ if opts.doPlots:
     ax2.invert_yaxis()
     fig.colorbar(hist2[3],ax=ax2)
     if len(spectral_data.keys()) > 0:
+        xmin, xmax = 6475.0, 6650.0
         ymin, ymax = -np.inf, np.inf
         for key in spectral_data:
-            ax3.plot(spectral_data[key]["lambda"],spectral_data[key]["flux"],'--')
-            y10 = np.nanpercentile(spectral_data[key]["flux"],10)
-            y90 = np.nanpercentile(spectral_data[key]["flux"],90)
-            ydiff = y90 - y10
-            ymintmp = y10 - ydiff
-            ymaxtmp = y90 + ydiff
+            idx = np.where( (spectral_data[key]["lambda"] >= xmin) &
+                            (spectral_data[key]["lambda"] <= xmax))[0]
+            y1 = np.nanpercentile(spectral_data[key]["flux"][idx],1)
+            y99 = np.nanpercentile(spectral_data[key]["flux"][idx],99)
+            ydiff = y99 - y1
+            ymintmp = y1 - ydiff
+            ymaxtmp = y99 + ydiff
             if ymin < ymintmp:
                 ymin = ymintmp
             if ymaxtmp < ymax:
                 ymax = ymaxtmp
+            ax3.plot(spectral_data[key]["lambda"],spectral_data[key]["flux"],'--')
         ax3.set_ylim([ymin,ymax])
+        ax3.set_xlim([xmin,xmax])
         ax3.set_xlabel('Wavelength [A]')
         ax3.set_ylabel('Flux')
     plt.savefig(plotName)
@@ -479,8 +483,23 @@ if opts.doPlots:
         ax2.invert_yaxis()
         fig.colorbar(hist2[3],ax=ax2)
         if len(spectral_data.keys()) > 0:
+            xmin, xmax = 6475.0, 6650.0
+            ymin, ymax = -np.inf, np.inf
             for key in spectral_data:
+                idx = np.where( (spectral_data[key]["lambda"] >= xmin) &
+                                (spectral_data[key]["lambda"] <= xmax))[0]
+                y1 = np.nanpercentile(spectral_data[key]["flux"][idx],1)
+                y99 = np.nanpercentile(spectral_data[key]["flux"][idx],99)
+                ydiff = y99 - y1
+                ymintmp = y1 - ydiff
+                ymaxtmp = y99 + ydiff
+                if ymin < ymintmp:
+                    ymin = ymintmp
+                if ymaxtmp < ymax:
+                    ymax = ymaxtmp
                 ax3.plot(spectral_data[key]["lambda"],spectral_data[key]["flux"],'--')
+            ax3.set_ylim([ymin,ymax])
+            ax3.set_xlim([xmin,xmax])
             ax3.set_xlabel('Wavelength [A]')
             ax3.set_ylabel('Flux')
 
