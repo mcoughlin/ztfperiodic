@@ -10,6 +10,8 @@ import os
 import numpy as np
 import glob
 import optparse
+import pickle
+from scipy.interpolate import interpolate as interp
 
 import matplotlib
 matplotlib.use('Agg')
@@ -44,9 +46,10 @@ def parse_commandline():
     parser.add_option("-N","--N",type=int,default=8)
     #parser.add_option("-s","--start",type=int,default=0)
     #parser.add_option("-e","--end",type=int,default=1500)
-    parser.add_option("-s","--start",type=int,default=4200)
-    parser.add_option("-e","--end",type=int,default=4600)
-    parser.add_option("--errorbudget",type=float,default=0.1)
+    parser.add_option("--errorbudget",type=float,default=0.05)
+    parser.add_option("--cwave",type=float,default=4340.462)
+    parser.add_option("--startwave",type=float,default=4300.0)
+    parser.add_option("--stopwave",type=float,default=4400.0)
 
     parser.add_option("--doInterp",  action="store_true", default=False)
     parser.add_option("--doMovie",  action="store_true", default=False)
@@ -138,9 +141,15 @@ def loadallspectra():
             wavelengths = wavelengths[idx]
             FullData.append(wavelengths)
 
-        vals = lowess(data[idx,1], wavelengths, frac=0.05)
+        dataslice = data[idx,1]
+        jj = np.where(~np.isnan(dataslice))[0]
+        f = interp.interp1d(wavelengths[jj], np.log10(dataslice[jj]), fill_value='extrapolate')
+        dataslice = 10**(f(wavelengths))
 
-        FullData.append((10**17)*vals[:,1])
+        vals = lowess(dataslice, wavelengths, frac=0.05, missing='none')
+        specvals = vals[:,1]
+
+        FullData.append((10**17)*specvals)
 
     return FullData, exposure_starts
 
@@ -183,7 +192,7 @@ def func_trend(x,p0,p1,p2,p3):
         return p0+(p1*x)+(p2*(x**2))+(p3*(x**3))
 
 def func(x,p0,p1,p2,vel0,vel1,v1,v2,g1,g2):
-        return p0+p1*x+p2*x**2+gaussian(v1,(1+(vel0)/300000)*(4340.462),v2)(x)+gaussian(g1,(1+vel1/300000)*(4340.462),g2)(x)
+        return p0+p1*x+p2*x**2+gaussian(v1,(1+(vel0)/300000)*(cwave),v2)(x)+gaussian(g1,(1+vel1/300000)*(cwave),g2)(x)
         #return p0+p1*x+p2*x**2+lorentzian(v1,(1+(vel0)/300000)*(4340.462),v2)(x)+gaussian(g1,(1+vel1/300000)*(4340.462),g2)(x)
 
 def myprior_trend(cube, ndim, nparams):
@@ -193,14 +202,24 @@ def myprior_trend(cube, ndim, nparams):
         cube[2] = cube[2]*1e-3 - 5e-4
         cube[3] = cube[3]*8e-10 - 4e-10
 
+def myprior_global_fit(cube, ndim, nparams):
+
+        cube[0] = cube[0]*1000.0
+        #cube[2] = cube[2]*0.02 + np.pi/2.0 - 0.01
+        #cube[2] = cube[2]*0.1
+        cube[1] = cube[1]*np.pi
+        cube[2] = cube[2]*2000.0 - 1000.0
+        #cube[4] = cube[4]*2000.0 - 1000.0
+
 def myprior_fit(cube, ndim, nparams):
 
         cube[0] = cube[0]*1000.0
-        cube[1] = cube[1]*1000.0
-        cube[2] = cube[2]*2*np.pi
-        #cube[2] = np.pi
-        cube[3] = cube[3]*2000.0 - 1000.0
-        cube[4] = cube[4]*2000.0 - 1000.0
+        #cube[1] = cube[1]*1000.0
+        #cube[2] = cube[2]*2*np.pi
+        cube[1] = cube[1]*np.pi
+        cube[2] = cube[2]*2000.0 - 1000.0
+        #cube[3] = cube[3]*2000.0 - 1000.0
+        #cube[4] = cube[4]*2000.0 - 1000.0
 
 def myprior(cube, ndim, nparams):
 
@@ -220,13 +239,51 @@ def myprior(cube, ndim, nparams):
         #cube[8] = cube[8]*20.0
         cube[8] = cube[8] + 4.5
 
+def myloglike_global_fit(cube, ndim, nparams):
+
+    A = cube[0]
+    phi = cube[1]
+    c = cube[2]
+    #d = cube[4]
+
+    #if c<d:
+    #    return -np.inf
+
+    prob = 0
+    for key in keys:
+        spec = data_out[key]["spec"]
+
+        vel0 = A*np.sin(2*np.pi*(data_out[key]["phase"]+phi))+c
+        vel1 = A*np.sin(2*np.pi*(data_out[key]["phase"]+phi+np.pi))+c
+
+        (p0_best, p1_best, p2_best, vel0_best, vel1_best, v1_best, v2_best, g1_best, g2_best) = data_out[key]["params"]
+
+        model = func(wavelengths,p0_best,p1_best,p2_best,vel0,vel1,v1_best,v2_best,g1_best,g2_best)
+        sigma = spec * errorbudget
+
+        x = model - spec
+
+        thisprob = ss.norm.logpdf(x, loc=0.0, scale=sigma)
+        thisprob = np.sum(thisprob)
+
+        prob = prob + thisprob
+
+        if not np.isfinite(prob):
+            break
+
+    if np.isnan(prob):
+        prob = -np.inf
+
+    #if np.isfinite(prob):
+    #    print(A,phi,c,prob)
+
+    return prob
+
 def myloglike_fit(cube, ndim, nparams):
 
     A = cube[0]
-    B = cube[1]
-    phi = cube[2]
-    c = cube[3]
-    d = cube[4]
+    phi = cube[1]
+    c = cube[2]
 
     #if c<d:
     #    return -np.inf
@@ -234,7 +291,7 @@ def myloglike_fit(cube, ndim, nparams):
     prob = 0
     for key in keys:
         vel0 = A*np.sin(2*np.pi*(data_out[key]["phase"]+phi))+c
-        vel1 = B*np.sin(2*np.pi*(data_out[key]["phase"]+phi+np.pi))+d
+        vel1 = A*np.sin(2*np.pi*(data_out[key]["phase"]+phi+np.pi))+c
 
         kdedir = data_out[key]["kdedir"]
         vals = np.array([vel0,vel1]).T
@@ -293,6 +350,7 @@ def myloglike(cube, ndim, nparams):
     sigma = spec * errorbudget
 
     x = model - spec
+
     prob = ss.norm.logpdf(x, loc=0.0, scale=sigma)
     prob = np.sum(prob)
 
@@ -304,11 +362,13 @@ opts = parse_commandline()
 FullData=[]
 
 N=opts.N
-startwave=opts.start
-stopwave=opts.end
+cwave=opts.cwave
+startwave=opts.startwave
+stopwave=opts.stopwave
 dataDir = opts.dataDir
 errorbudget = opts.errorbudget
-baseplotDir = os.path.join(opts.plotDir,'spec_LRIS_double_40_%.2f'%errorbudget)
+baseplotDir = os.path.join(opts.plotDir,'LRIS_40_%.2f'%errorbudget)
+baseplotDir = os.path.join(baseplotDir,'%.4f' % cwave)
 
 if not os.path.isdir(baseplotDir):
     os.makedirs(baseplotDir)
@@ -358,149 +418,241 @@ for exposure_start in exposure_starts:
     phase = np.mod(BJD_TDB.mjd - T0, p)/p
     phases.append(phase)
 
+phasefile = os.path.join(baseplotDir,'phases.dat')
+fid = open(phasefile, 'w')
+for ii, (exposure_start, phase) in enumerate(zip(exposure_starts,phases)):
+    fid.write('%d %.10f\n' % (ii, phase))
+fid.close()
+
 if opts.doInterp:
     newdat=interpallspectra(newdat, N)
     wavelengths, spectra = newdat[0], newdat[1:]
 
-spectra_primary = []
-spectra_diff = []
-data_out = {}
-for ii,spec in enumerate(spectra):
+pcklFile = "%s/data.pkl"%(baseplotDir)
+if os.path.isfile(pcklFile):
+    f = open(pcklFile, 'r')
+    (data_out, spectra_primary, spectra_diff) = pickle.load(f)
+    f.close()
+else:
+    spectra_primary = []
+    spectra_diff = []
+    data_out = {}
+    for ii,spec in enumerate(spectra):
+    
+        if ii > 55: continue
+    
+        plotDir = os.path.join(baseplotDir,'%d'%ii)
+        if not os.path.isdir(plotDir):
+            os.makedirs(plotDir)
+    
+        if False:
+            plotName = "%s/spec.pdf"%(plotDir)
+            fig = plt.figure(figsize=(22,28))
+            plt.plot(wavelengths,spec,'k--',linewidth=2)
+            #plt.ylim([0,100])
+            plt.grid()
+            plt.yticks(fontsize=36)
+            plt.xticks(fontsize=36)
+            plt.savefig(plotName)
+            plotName = "%s/spec.png"%(plotDir)
+            plt.savefig(plotName)
+            plt.close()
+    
+        if opts.doMovie:
+            plotNameMovie = "%s/movie-%04d.png"%(moviedir,ii)
+            cp_command = "cp %s %s" % (plotName, plotNameMovie)
+            os.system(cp_command)
+    
+        #continue
+    
+        #parameters = ["p0","p1","p2","p3"]
+        #labels = [r"$p_0$",r"$p_1$",r"$p_2$",r"$p_3$"]
+        #n_params = len(parameters)
+    
+        #pymultinest.run(myloglike_trend, myprior_trend, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/1-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
+    
+        #multifile = "%s/1-post_equal_weights.dat"%plotDir
+        #data = np.loadtxt(multifile)
+    
+        #p0,p1,p2,p3,loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4]
+        #idx = np.argmax(loglikelihood)
+        #p0_best, p1_best, p2_best, p3_best = data[idx,0:-1]
+        #model = func_trend(wavelengths,p0_best,p1_best,p2_best,p3_best)
+    
+        plotName = "%s/spec_trend.pdf"%(plotDir)
+        #fig = plt.figure(figsize=(22,28))
+        #plt.plot(wavelengths,spec,'k--',linewidth=2)
+        #plt.plot(wavelengths,model,'b-',linewidth=2)
+        #plt.ylim([0,100])
+        #plt.grid()
+        #plt.yticks(fontsize=36)
+        #plt.xticks(fontsize=36)
+        #plt.savefig(plotName)
+        #plotName = "%s/spec_trend.png"%(plotDir)
+        #plt.savefig(plotName)
+        #plt.close()
+    
+        plotName = "%s/corner_trend.pdf"%(plotDir)
+        #if os.path.isfile(plotName): continue
+    
+        #figure = corner.corner(data[:,:-1], labels=labels,
+        #                   quantiles=[0.16, 0.5, 0.84],
+        #                   show_titles=True, title_kwargs={"fontsize": title_fontsize},
+        #                   label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
+        #                   smooth=3)
+        #figure.set_size_inches(18.0,18.0)
+        #plt.savefig(plotName)
+        #plt.close()
+    
+        #spec = spec / model 
+    
+        parameters = ["p0","p1","p2","vel0","vel1","v1","v2","g1","g2"]
+        labels = [r"$p_0$",r"$p_1$",r"$p_2$",r"${\rm vel}_0$",r"${\rm vel}_1$",r"$v_1$",r"$v_2$",r"$g_1$",r"$g_2$"]
+        n_params = len(parameters)
+    
+        pymultinest.run(myloglike, myprior, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/2-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
+    
+        multifile = "%s/2-post_equal_weights.dat"%plotDir
+        data = np.loadtxt(multifile)
+    
+        p0,p1,p2,vel0,vel1,v1,v2,g1,g2,loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4], data[:,5], data[:,6], data[:,7], data[:,8], data[:,9]
+        idx = np.argmax(loglikelihood)
+        p0_best, p1_best, p2_best, vel0_best, vel1_best, v1_best, v2_best, g1_best, g2_best = data[idx,0:-1]
+        model = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,v1_best,v2_best,g1_best,g2_best)
+        model1 = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,v1_best,v2_best,0,g2_best)
+        model2 = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,0,v2_best,g1_best,g2_best)
+    
+        key = str(ii)
+        data_out[key] = {}
+        data_out[key]["spec"] = spec
+        data_out[key]["model"] = model
+        data_out[key]["model1"] = model1
+        data_out[key]["model2"] = model2
+        data_out[key]["wavelengths"] = wavelengths
+        data_out[key]["vel0"] = vel0
+        data_out[key]["vel1"] = vel1
+        pts = np.vstack((vel0,vel1)).T
+        data_out[key]["kdedir"] = greedy_kde_areas_2d(pts)
+        data_out[key]["phase"] = phases[ii]
+        data_out[key]["data"] = data
+        data_out[key]["params"] = [p0_best, p1_best, p2_best, vel0_best, vel1_best, v1_best, v2_best, g1_best, g2_best]   
+ 
+        spectra_primary.append(spec-model2)
+        spectra_diff.append(spec-model1)
+    
+        plotName = "%s/corner.pdf"%(plotDir)
+        if os.path.isfile(plotName): continue
+    
+        figure = corner.corner(data[:,:-1], labels=labels,
+                           quantiles=[0.16, 0.5, 0.84],
+                           show_titles=True, title_kwargs={"fontsize": title_fontsize},
+                           label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
+                           smooth=3)
+        figure.set_size_inches(18.0,18.0)
+        plt.savefig(plotName)
+        plt.close()
+    
+        plotName = "%s/spec.pdf"%(plotDir)
+        fig = plt.figure(figsize=(22,28))
+        plt.plot(data_out[key]["wavelengths"],data_out[key]["spec"],'k--',linewidth=2)
+        plt.plot(data_out[key]["wavelengths"],data_out[key]["model"],'b-',linewidth=2)
+        plt.plot(data_out[key]["wavelengths"],model1,'g-',linewidth=2)
+        plt.plot(data_out[key]["wavelengths"],model2,'c-',linewidth=2)    
+        plt.grid()
+        plt.yticks(fontsize=36)
+        plt.xticks(fontsize=36)
+        #plt.ylim([0,100])
+        #plt.ylim([0,1.5])
+        plt.savefig(plotName)
+        plotName = "%s/spec.png"%(plotDir)
+        plt.savefig(plotName)
+        plt.close()
+    
+        if opts.doMovie:
+            plotNameMovie = "%s/movie-%04d.png"%(moviedir,ii)
+            cp_command = "cp %s %s" % (plotName, plotNameMovie)
+            os.system(cp_command)
+    
+    pcklFile = "%s/data.pkl"%(baseplotDir)
+    f = open(pcklFile, 'wb')
+    pickle.dump((data_out, spectra_primary, spectra_diff), f)
+    f.close()
 
-    if ii > 55: continue
+keys = sorted(data_out.keys())
+colors=cm.rainbow(np.linspace(0,1,len(keys)))
+
+plotDir = os.path.join(baseplotDir,'simul')
+if not os.path.isdir(plotDir):
+    os.makedirs(plotDir)
+
+parameters = ["A","phi","c"]
+labels = ["A",r"$\phi$","c"]
+n_params = len(parameters)
+
+pymultinest.run(myloglike_global_fit, myprior_global_fit, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/2-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
+
+multifile = "%s/2-post_equal_weights.dat"%plotDir
+data = np.loadtxt(multifile)
+#data[:,2] = np.random.rand(len(data[:,2]))
+A,phi,c,loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3]
+idx = np.argmax(loglikelihood)
+A_best, phi_best, c_best = data[idx,0:-1]
+
+plotName = "%s/corner_global.pdf"%(baseplotDir)
+figure = corner.corner(data[:,:-1], labels=labels,
+                       quantiles=[0.16, 0.5, 0.84],
+                       show_titles=True, title_kwargs={"fontsize": title_fontsize},
+                       label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
+                       smooth=3)
+figure.set_size_inches(18.0,18.0)
+plt.savefig(plotName)
+plt.close()
+
+for ii, key in enumerate(keys):
+    vel0 = A_best*np.sin(2*np.pi*(data_out[key]["phase"]+phi_best))+c_best
+    vel1 = A_best*np.sin(2*np.pi*(data_out[key]["phase"]+phi_best+np.pi))+c_best
+
+    (p0_best, p1_best, p2_best, vel0_best, vel1_best, v1_best, v2_best, g1_best, g2_best) = data_out[key]["params"]
+
+    model = func(wavelengths,p0_best,p1_best,p2_best,vel0,vel1,v1_best,v2_best,g1_best,g2_best)
+    model1 = func(wavelengths,p0_best,p1_best,p2_best,vel0,vel1,v1_best,v2_best,0,g2_best)
+    model2 = func(wavelengths,p0_best,p1_best,p2_best,vel0,vel1,0,v2_best,g1_best,g2_best)
+
+    data_out[key]["model"] = model
+
+    vel0 = A*np.sin(2*np.pi*(data_out[key]["phase"]+phi))+c
+    vel1 = A*np.sin(2*np.pi*(data_out[key]["phase"]+phi+np.pi))+c
+
+    data_out[key]["vel0"] = vel0
+    data_out[key]["vel1"] = vel1
+    pts = np.vstack((vel0,vel1)).T
+    data_out[key]["kdedir"] = greedy_kde_areas_2d(pts)
 
     plotDir = os.path.join(baseplotDir,'%d'%ii)
     if not os.path.isdir(plotDir):
         os.makedirs(plotDir)
 
-    #plotName = "%s/spec.pdf"%(plotDir)
-    #fig = plt.figure(figsize=(22,28))
-    #plt.plot(wavelengths,spec,'k--',linewidth=2)
-    #plt.ylim([0,100])
-    #plt.grid()
-    #plt.yticks(fontsize=36)
-    #plt.xticks(fontsize=36)
-    #plt.savefig(plotName)
-    #plotName = "%s/spec.png"%(plotDir)
-    #plt.savefig(plotName)
-    #plt.close()
-
-    if opts.doMovie:
-        plotNameMovie = "%s/movie-%04d.png"%(moviedir,ii)
-        cp_command = "cp %s %s" % (plotName, plotNameMovie)
-        os.system(cp_command)
-
-    #continue
-
-    #parameters = ["p0","p1","p2","p3"]
-    #labels = [r"$p_0$",r"$p_1$",r"$p_2$",r"$p_3$"]
-    #n_params = len(parameters)
-
-    #pymultinest.run(myloglike_trend, myprior_trend, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/1-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
-
-    #multifile = "%s/1-post_equal_weights.dat"%plotDir
-    #data = np.loadtxt(multifile)
-
-    #p0,p1,p2,p3,loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4]
-    #idx = np.argmax(loglikelihood)
-    #p0_best, p1_best, p2_best, p3_best = data[idx,0:-1]
-    #model = func_trend(wavelengths,p0_best,p1_best,p2_best,p3_best)
-
-    plotName = "%s/spec_trend.pdf"%(plotDir)
-    #fig = plt.figure(figsize=(22,28))
-    #plt.plot(wavelengths,spec,'k--',linewidth=2)
-    #plt.plot(wavelengths,model,'b-',linewidth=2)
-    #plt.ylim([0,100])
-    #plt.grid()
-    #plt.yticks(fontsize=36)
-    #plt.xticks(fontsize=36)
-    #plt.savefig(plotName)
-    #plotName = "%s/spec_trend.png"%(plotDir)
-    #plt.savefig(plotName)
-    #plt.close()
-
-    plotName = "%s/corner_trend.pdf"%(plotDir)
-    #if os.path.isfile(plotName): continue
-
-    #figure = corner.corner(data[:,:-1], labels=labels,
-    #                   quantiles=[0.16, 0.5, 0.84],
-    #                   show_titles=True, title_kwargs={"fontsize": title_fontsize},
-    #                   label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
-    #                   smooth=3)
-    #figure.set_size_inches(18.0,18.0)
-    #plt.savefig(plotName)
-    #plt.close()
-
-    #spec = spec / model 
-
-    parameters = ["p0","p1","p2","vel0","vel1","v1","v2","g1","g2"]
-    labels = [r"$p_0$",r"$p_1$",r"$p_2$",r"${\rm vel}_0$",r"${\rm vel}_1$",r"$v_1$",r"$v_2$",r"$g_1$",r"$g_2$"]
-    n_params = len(parameters)
-
-    pymultinest.run(myloglike, myprior, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/2-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
-
-    multifile = "%s/2-post_equal_weights.dat"%plotDir
-    data = np.loadtxt(multifile)
-
-    p0,p1,p2,vel0,vel1,v1,v2,g1,g2,loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4], data[:,5], data[:,6], data[:,7], data[:,8], data[:,9]
-    idx = np.argmax(loglikelihood)
-    p0_best, p1_best, p2_best, vel0_best, vel1_best, v1_best, v2_best, g1_best, g2_best = data[idx,0:-1]
-    model = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,v1_best,v2_best,g1_best,g2_best)
-    model1 = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,v1_best,v2_best,0,g2_best)
-    model2 = func(wavelengths,p0_best,p1_best,p2_best,vel0_best,vel1_best,0,v2_best,g1_best,g2_best)
-
-    key = str(ii)
-    data_out[key] = {}
-    data_out[key]["spec"] = spec
-    data_out[key]["model"] = model
-    data_out[key]["wavelengths"] = wavelengths
-    data_out[key]["vel0"] = vel0
-    data_out[key]["vel1"] = vel1
-    pts = np.vstack((vel0,vel1)).T
-    data_out[key]["kdedir"] = greedy_kde_areas_2d(pts)
-    data_out[key]["phase"] = phases[ii]
-
-    spectra_primary.append(spec-model2)
-    spectra_diff.append(spec-model1)
-
-    plotName = "%s/corner.pdf"%(plotDir)
-    if os.path.isfile(plotName): continue
-
-    figure = corner.corner(data[:,:-1], labels=labels,
-                       quantiles=[0.16, 0.5, 0.84],
-                       show_titles=True, title_kwargs={"fontsize": title_fontsize},
-                       label_kwargs={"fontsize": label_fontsize}, title_fmt=".3f",
-                       smooth=3)
-    figure.set_size_inches(18.0,18.0)
-    plt.savefig(plotName)
-    plt.close()
-
-    plotName = "%s/spec.pdf"%(plotDir)
+    plotName = "%s/spec_global.pdf"%(plotDir)
     fig = plt.figure(figsize=(22,28))
     plt.plot(data_out[key]["wavelengths"],data_out[key]["spec"],'k--',linewidth=2)
     plt.plot(data_out[key]["wavelengths"],data_out[key]["model"],'b-',linewidth=2)
     plt.plot(data_out[key]["wavelengths"],model1,'g-',linewidth=2)
-    plt.plot(data_out[key]["wavelengths"],model2,'c-',linewidth=2)    
+    plt.plot(data_out[key]["wavelengths"],model2,'c-',linewidth=2)
     plt.grid()
     plt.yticks(fontsize=36)
     plt.xticks(fontsize=36)
-    plt.ylim([0,100])
+    #plt.ylim([0,100])
     #plt.ylim([0,1.5])
     plt.savefig(plotName)
-    plotName = "%s/spec.png"%(plotDir)
+    plotName = "%s/spec_global.png"%(plotDir)
     plt.savefig(plotName)
     plt.close()
-
-    if opts.doMovie:
-        plotNameMovie = "%s/movie-%04d.png"%(moviedir,ii)
-        cp_command = "cp %s %s" % (plotName, plotNameMovie)
-        os.system(cp_command)
 
 X, Y = np.meshgrid(wavelengths, np.arange(len(spectra_primary)))
 plotName = "%s/spectra_primary.pdf"%(baseplotDir)
 fig = plt.figure(figsize=(14,5))
 plt.pcolor(X, Y, np.array(spectra_primary))
-plt.xlim([4300,4380])
+plt.xlim([startwave,stopwave])
 plt.ylim([0,52])
 plt.xlabel('Wavelength [nm]')
 plt.ylabel('Spectra')
@@ -511,7 +663,7 @@ X, Y = np.meshgrid(wavelengths, np.arange(len(spectra_diff)))
 plotName = "%s/spectra_diff.pdf"%(baseplotDir)
 fig = plt.figure(figsize=(14,5))
 plt.pcolor(X, Y, np.array(spectra_diff))
-plt.xlim([4300,4380])
+plt.xlim([startwave,stopwave])
 plt.ylim([0,52])
 plt.xlabel('Wavelength [nm]')
 plt.ylabel('Spectra')
@@ -535,7 +687,7 @@ for ii in range(len(spectra_primary)):
     plt.plot(wavelengths,spectra_primary[ii],'k--',linewidth=2)
 
     plt.ylabel('%.1f'%float(ii+1),fontsize=48,rotation=0,labelpad=40)
-    plt.xlim([4300,4400])
+    plt.xlim([startwave,stopwave])
     #plt.ylim([0.0,1.0])
     plt.grid()
     plt.yticks(fontsize=36)
@@ -574,8 +726,8 @@ if not os.path.isdir(plotDir):
 n_live_points = 500
 evidence_tolerance = 0.5
 
-parameters = ["A","B","phi","c","d"]
-labels = ["A","B",r"$\phi$","c","d"]
+parameters = ["A","phi","c"]
+labels = ["A",r"$\phi$","c"]
 n_params = len(parameters)
 
 pymultinest.run(myloglike_fit, myprior_fit, n_params, importance_nested_sampling = False, resume = True, verbose = True, sampling_efficiency = 'parameter', n_live_points = n_live_points, outputfiles_basename='%s/2-'%plotDir, evidence_tolerance = evidence_tolerance, multimodal = False, max_iter = max_iter)
@@ -583,9 +735,9 @@ pymultinest.run(myloglike_fit, myprior_fit, n_params, importance_nested_sampling
 multifile = "%s/2-post_equal_weights.dat"%plotDir
 data = np.loadtxt(multifile)
 #data[:,2] = np.random.rand(len(data[:,2]))
-A,B,phi,c,d,loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3], data[:,4], data[:,5]
+A,phi,c,loglikelihood = data[:,0], data[:,1], data[:,2], data[:,3]
 idx = np.argmax(loglikelihood)
-A_best, B_best, phi_best, c_best, d_best = data[idx,0:-1]
+A_best, phi_best, c_best = data[idx,0:-1]
 
 color2 = 'coral'
 color1 = 'cornflowerblue'
@@ -597,7 +749,7 @@ for jj,key in enumerate(keys):
     x = data_out[key]["phase"]
     for ii in range(len(A)):
         vel0s[jj,ii] = A[ii]*np.sin(2*np.pi*(data_out[key]["phase"]+phi[ii]))+c[ii] 
-        vel1s[jj,ii] = B[ii]*np.sin(2*np.pi*(data_out[key]["phase"]+phi[ii]+np.pi))+d[ii]
+        vel1s[jj,ii] = A[ii]*np.sin(2*np.pi*(data_out[key]["phase"]+phi[ii]+np.pi))+c[ii]
     xs.append(x)
 
 idx = np.argsort(xs)
@@ -712,7 +864,7 @@ for key, color in zip(keys,colors):
     plt.plot(data_out[key]["wavelengths"],data_out[key]["model"],'b-',linewidth=2)
 
     plt.ylabel('%.1f'%float(key),fontsize=48,rotation=0,labelpad=40)
-    plt.xlim([4300,4400])
+    plt.xlim([startwave,stopwave])
     #plt.ylim([0.0,1.0])
     plt.grid()
     plt.yticks(fontsize=36)
