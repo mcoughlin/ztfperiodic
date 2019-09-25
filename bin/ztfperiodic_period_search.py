@@ -613,7 +613,12 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                         spectral_data[key]["flux"] = flux
 
         if len(spectral_data.keys()) > 0:
-            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(25,10))
+            #fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(25,10))
+            fig = plt.figure(figsize=(25,10))
+            gs = fig.add_gridspec(nrows=3, ncols=3)
+            ax1 = fig.add_subplot(gs[:, 0])
+            ax2 = fig.add_subplot(gs[:, 1])
+            #ax3 = fig.add_subplot(gs[0, 2])
         else:
             fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
         ax1.errorbar(phases, magnitude,err,ls='none',c='k')
@@ -635,25 +640,29 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         ax2.invert_yaxis()
         fig.colorbar(hist2[3],ax=ax2)
         if len(spectral_data.keys()) > 0:
-            xmin, xmax = 6475.0, 6650.0
-            ymin, ymax = -np.inf, np.inf
-            for key in spectral_data:
-                idx = np.where( (spectral_data[key]["lambda"] >= xmin) &
-                                (spectral_data[key]["lambda"] <= xmax))[0]
-                y1 = np.nanpercentile(spectral_data[key]["flux"][idx],1)
-                y99 = np.nanpercentile(spectral_data[key]["flux"][idx],99)
-                ydiff = y99 - y1
-                ymintmp = y1 - ydiff
-                ymaxtmp = y99 + ydiff
-                if ymin < ymintmp:
-                    ymin = ymintmp
-                if ymaxtmp < ymax:
-                    ymax = ymaxtmp
-                ax3.plot(spectral_data[key]["lambda"],spectral_data[key]["flux"],'--')
-            ax3.set_ylim([ymin,ymax])
-            ax3.set_xlim([xmin,xmax])
-            ax3.set_xlabel('Wavelength [A]')
-            ax3.set_ylabel('Flux')
+            bands = [[4750.0, 4950.0], [6475.0, 6650.0], [8450, 8700]]
+            for jj, band in enumerate(bands):
+                ax = fig.add_subplot(gs[jj, 2])
+                xmin, xmax = band[0], band[1]
+                ymin, ymax = -np.inf, np.inf
+                for key in spectral_data:
+                    idx = np.where( (spectral_data[key]["lambda"] >= xmin) &
+                                    (spectral_data[key]["lambda"] <= xmax))[0]
+                    y1 = np.nanpercentile(spectral_data[key]["flux"][idx],1)
+                    y99 = np.nanpercentile(spectral_data[key]["flux"][idx],99)
+                    ydiff = y99 - y1
+                    ymintmp = y1 - ydiff
+                    ymaxtmp = y99 + ydiff
+                    if ymin < ymintmp:
+                        ymin = ymintmp
+                    if ymaxtmp < ymax:
+                        ymax = ymaxtmp
+                    ax.plot(spectral_data[key]["lambda"],spectral_data[key]["flux"],'--')
+                ax.set_ylim([ymin,ymax])
+                ax.set_xlim([xmin,xmax])
+                if jj == len(bands)-1:
+                    ax.set_xlabel('Wavelength [A]')
+                ax.set_ylabel('Flux')
         if pdot == 0:
             plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
         else:
