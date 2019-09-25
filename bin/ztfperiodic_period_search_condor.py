@@ -29,6 +29,7 @@ def parse_commandline():
     parser.add_option("--doCombineFilt",  action="store_true", default=False)
     parser.add_option("--doRemoveHC",  action="store_true", default=False)
     parser.add_option("--doUsePDot",  action="store_true", default=False)
+    parser.add_option("--doSpectra",  action="store_true", default=False)
 
     parser.add_option("-l","--lightcurve_source",default="Kowalski")
     parser.add_option("-s","--source_type",default="quadrant")
@@ -65,6 +66,8 @@ if opts.doRemoveHC:
     extra_flags.append("--doRemoveHC")
 if opts.doUsePDot:
     extra_flags.append("--doUsePDot")
+if opts.doSpectra:
+    extra_flags.append("--doSpectra")
 extra_flags = " ".join(extra_flags)
 
 dataDir = opts.dataDir

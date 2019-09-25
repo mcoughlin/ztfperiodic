@@ -520,6 +520,7 @@ if opts.doSpectra:
     LAMOSTidxcat = os.path.join(starCatalogDir,'lamost_indices.hdf5')
     with h5py.File(LAMOSTidxcat, 'r') as f:
         lamost_obsid = f['obsid'][:]
+        lamost_inverse = f['inverse'][:]
 
     lamost = SkyCoord(ra=lamost_ra*u.degree, dec=lamost_dec*u.degree, frame='icrs')    
 
@@ -589,25 +590,27 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                     spectral_data[key] = {}
                     spectral_data[key]["lambda"] = lam
                     spectral_data[key]["flux"] = flux            
+
             sep = coord.separation(lamost).deg
             idx = np.argmin(sep)
             if sep[idx] < 3.0/3600.0:
-                obsid = lamost_obsid[idx]
-                requestpage = "%s/%d" % (lamostfits, obsid)
+                idy = np.where(idx == lamost_inverse)[0]
+                obsids = lamost_obsid[idy]
+                for obsid in obsids:
+                    requestpage = "%s/%d" % (lamostfits, obsid)
  
-                with tempfile.NamedTemporaryFile(mode='w') as f:
-                    wget_command = "wget %s -O %s" % (requestpage, f.name)
-                    os.system(wget_command)
-                    hdul = astropy.io.fits.open(f.name)
+                    with tempfile.NamedTemporaryFile(mode='w') as f:
+                        wget_command = "wget %s -O %s" % (requestpage, f.name)
+                        os.system(wget_command)
+                        hdul = astropy.io.fits.open(f.name)
         
-                lamost_data = {}
-                for ii, sp in enumerate(hdul):
-                    lam = sp.data[2,:]
-                    flux = sp.data[0,:]
-                    key = len(list(spectral_data.keys()))
-                    spectral_data[ii] = {}
-                    spectral_data[ii]["lambda"] = lam
-                    spectral_data[ii]["flux"] = flux
+                    for ii, sp in enumerate(hdul):
+                        lam = sp.data[2,:]
+                        flux = sp.data[0,:]
+                        key = len(list(spectral_data.keys()))
+                        spectral_data[key] = {}
+                        spectral_data[key]["lambda"] = lam
+                        spectral_data[key]["flux"] = flux
 
         if len(spectral_data.keys()) > 0:
             fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(25,10))
@@ -632,19 +635,23 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         ax2.invert_yaxis()
         fig.colorbar(hist2[3],ax=ax2)
         if len(spectral_data.keys()) > 0:
+            xmin, xmax = 6475.0, 6650.0
             ymin, ymax = -np.inf, np.inf
             for key in spectral_data:
-                y10 = np.nanpercentile(spectral_data[key]["flux"],10)
-                y90 = np.nanpercentile(spectral_data[key]["flux"],90)
-                ydiff = y90 - y10
-                ymintmp = y10 - ydiff
-                ymaxtmp = y90 + ydiff
+                idx = np.where( (spectral_data[key]["lambda"] >= xmin) &
+                                (spectral_data[key]["lambda"] <= xmax))[0]
+                y1 = np.nanpercentile(spectral_data[key]["flux"][idx],1)
+                y99 = np.nanpercentile(spectral_data[key]["flux"][idx],99)
+                ydiff = y99 - y1
+                ymintmp = y1 - ydiff
+                ymaxtmp = y99 + ydiff
                 if ymin < ymintmp:
                     ymin = ymintmp
                 if ymaxtmp < ymax:
                     ymax = ymaxtmp
                 ax3.plot(spectral_data[key]["lambda"],spectral_data[key]["flux"],'--')
             ax3.set_ylim([ymin,ymax])
+            ax3.set_xlim([xmin,xmax])
             ax3.set_xlabel('Wavelength [A]')
             ax3.set_ylabel('Flux')
         if pdot == 0:
