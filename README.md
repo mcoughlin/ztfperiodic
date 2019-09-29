@@ -14,5 +14,4 @@ Installation: `python setup.py install`<br>
 [TBD]: not every computer is CUDA-capable.
 
 - For AOV: </br>
-`source build.sh` in ztfperiodic/pyaov/
-copy the .so file to lib/python3.7/site-packages/ or equivalent 
+First, run `source build.sh` in the **ztfperiodic/pyaov/** directory, then copy the `aov.cpython-36m-darwin.so` file to **lib/python3.7/site-packages/** or equivalent 
