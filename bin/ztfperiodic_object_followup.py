@@ -70,8 +70,8 @@ def parse_commandline():
     parser.add_option("-d", "--declination", default=39.8249067, type=float)
     parser.add_option("-f", "--filt", default="r")
 
-    parser.add_option("-u", "--user", default="yyao")
-    parser.add_option("-w", "--pwd", default="Str0ngBUTeasyT0Remeber")
+    parser.add_option("-u", "--user")
+    parser.add_option("-w", "--pwd")
 
     parser.add_option("--doPlots", action="store_true", default=False)
     parser.add_option("--doJustHR", action="store_true", default=False)
@@ -427,7 +427,7 @@ if opts.doPlots:
             ax.set_ylim([ymin,ymax])
             ax.set_xlim([xmin,xmax])
             ax_.set_ylim([0,1])
-            ax_.set_xlim([-4000,4000])
+            ax_.set_xlim([-1000,1000])
             if jj == len(bands)-1:
                 ax.set_xlabel('Wavelength [A]')
                 ax_.set_xlabel('Velocity [km/s]')
