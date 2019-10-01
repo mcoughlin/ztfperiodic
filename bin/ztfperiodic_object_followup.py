@@ -29,7 +29,7 @@ import astropy.io.fits
 
 import requests
 
-sys.path.append("/Users/yuhanyao/Documents/GitHub/ztfperiodic/")
+#sys.path.append("/Users/yuhanyao/Documents/GitHub/ztfperiodic/")
 import ztfperiodic
 from ztfperiodic import fdecomp
 from ztfperiodic.lcstats import calc_stats
@@ -77,6 +77,7 @@ def parse_commandline():
     parser.add_option("--doJustHR", action="store_true", default=False)
     parser.add_option("--doOverwrite", action="store_true", default=False)
     parser.add_option("--doSpectra", action="store_true", default=False)
+    parser.add_option("--doPeriodSearch", action="store_true", default=False)
 
     parser.add_option("--doPhase", action="store_true", default=False)
     parser.add_option("-p", "--phase", default=0.016666, type=float)
@@ -539,28 +540,27 @@ if opts.doPlots:
         fig.savefig(plotName, bbox_inches='tight')
         plt.close()
 
-baseline = max(hjd)-min(hjd)
-if baseline<10:
-    fmin, fmax = 18, 1440
-else:
-    fmin, fmax = 2/baseline, 480
-
-samples_per_peak = 10
-
-df = 1./(samples_per_peak * baseline)
-nf = int(np.ceil((fmax - fmin) / df))
-freqs = fmin + df * np.arange(nf)
-
-"""
-print('Cataloging lightcurves...')
-catalogFile = os.path.join(path_out_dir,'catalog')
-fid = open(catalogFile,'w')
-for algorithm in algorithms:
-    periods_best, significances, pdots = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU)
-    period, significance = periods_best[0], significances[0]
-    stat = calc_stats(hjd, mag, magerr, period)
-
-    fid.write('%s %.10f %.10f ' % (algorithm, period, significance))
-    fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stat[0], stat[1], stat[2], stat[3], stat[4], stat[5], stat[6], stat[7], stat[8], stat[9], stat[10], stat[11], stat[12], stat[13], stat[14], stat[15], stat[16], stat[17], stat[18], stat[19], stat[20], stat[21], stat[22], stat[23], stat[24], stat[25], stat[26], stat[27], stat[28], stat[29], stat[30], stat[31], stat[32], stat[33], stat[34], stat[35]))
-fid.close()
-"""
+if opts.doPeriodSearch:
+    baseline = max(hjd)-min(hjd)
+    if baseline<10:
+        fmin, fmax = 18, 1440
+    else:
+        fmin, fmax = 2/baseline, 480
+    
+    samples_per_peak = 10
+    
+    df = 1./(samples_per_peak * baseline)
+    nf = int(np.ceil((fmax - fmin) / df))
+    freqs = fmin + df * np.arange(nf)
+    
+    print('Cataloging lightcurves...')
+    catalogFile = os.path.join(path_out_dir,'catalog')
+    fid = open(catalogFile,'w')
+    for algorithm in algorithms:
+        periods_best, significances, pdots = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU)
+        period, significance = periods_best[0], significances[0]
+        stat = calc_stats(hjd, mag, magerr, period)
+    
+        fid.write('%s %.10f %.10f ' % (algorithm, period, significance))
+        fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stat[0], stat[1], stat[2], stat[3], stat[4], stat[5], stat[6], stat[7], stat[8], stat[9], stat[10], stat[11], stat[12], stat[13], stat[14], stat[15], stat[16], stat[17], stat[18], stat[19], stat[20], stat[21], stat[22], stat[23], stat[24], stat[25], stat[26], stat[27], stat[28], stat[29], stat[30], stat[31], stat[32], stat[33], stat[34], stat[35]))
+    fid.close()

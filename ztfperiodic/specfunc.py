@@ -25,18 +25,21 @@ def correlate_spec(spectral_data, band = [6475.0, 6650.0]):
     else:
         xmin, xmax = band[0], band[1]
         spectral_chunks = {}
-        for key in spectral_data:
+        for key in mykeys:
+            spectral_chunks[key] = {}
             idx = np.where((spectral_data[key]["lambda"] >= xmin) &
                            (spectral_data[key]["lambda"] <= xmax))[0]
             mywave = spectral_data[key]["lambda"][idx]
             myflux = spectral_data[key]["flux"][idx]
             # quick-and-dirty normalization
             myflux -= np.median(myflux)
-            myflux /= np.percentile(abs(myflux), 90)
-            
-            spectral_chunks[key] = {}
-            spectral_chunks[key]["lambda"] = mywave
-            spectral_chunks[key]["flux"] = myflux
+            if len(myflux) == 0: 
+                spectral_chunks[key]["lambda"] = []
+                spectral_chunks[key]["flux"] = []
+            else:
+                myflux /= np.percentile(abs(myflux), 90)
+                spectral_chunks[key]["lambda"] = mywave
+                spectral_chunks[key]["flux"] = myflux
         count = 0
         for ii in mykeys:
             for jj in mykeys[ii+1:]:
@@ -44,6 +47,14 @@ def correlate_spec(spectral_data, band = [6475.0, 6650.0]):
                 fl1 = spectral_chunks[ii]["flux"]
                 wv2 = spectral_chunks[jj]["lambda"]
                 fl2 = spectral_chunks[jj]["flux"]
+
+                if (len(wv1) == 0) or (len(wv2) == 0):
+                    correlation_funcs[count] = {}
+                    correlation_funcs[count]["velocity"] = []
+                    correlation_funcs[count]["correlation"] = []
+                    count += 1
+                    continue
+
                 """
                 plt.plot(wv1, fl1)
                 plt.plot(wv2, fl2)
@@ -64,8 +75,8 @@ def correlate_spec(spectral_data, band = [6475.0, 6650.0]):
                 This should give you ~ the same values of n as above
                 """
                 # interpolate the spectrum
-                func1 = interp1d(wv1, fl1)
-                func2 = interp1d(wv2, fl2)
+                func1 = interp1d(wv1, fl1, fill_value="extrapolate")
+                func2 = interp1d(wv2, fl2, fill_value="extrapolate")
                 y1 = func1(x)
                 y2 = func2(x)
                 """
