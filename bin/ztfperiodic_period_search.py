@@ -672,8 +672,9 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                     pass
                 else:
                     for key in correlation_funcs:
-                        ax_.plot(correlation_funcs[key]["velocity"], correlation_funcs[key]["correlation"])                     
-                ax.set_ylim([ymin,ymax])
+                        ax_.plot(correlation_funcs[key]["velocity"], correlation_funcs[key]["correlation"])
+                if np.isfinite(ymin) and np.isfinite(ymax):
+                    ax.set_ylim([ymin,ymax])
                 ax.set_xlim([xmin,xmax])
                 ax_.set_ylim([0,1])
                 ax_.set_xlim([-1000,1000])
