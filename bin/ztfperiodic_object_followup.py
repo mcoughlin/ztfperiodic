@@ -29,6 +29,7 @@ import astropy.io.fits
 
 import requests
 
+#sys.path.append("/Users/yuhanyao/Documents/GitHub/ztfperiodic/")
 import ztfperiodic
 from ztfperiodic import fdecomp
 from ztfperiodic.lcstats import calc_stats
@@ -39,6 +40,7 @@ from ztfperiodic.utils import get_kowalski
 from ztfperiodic.utils import get_lightcurve
 from ztfperiodic.utils import combine_lcs
 from ztfperiodic.periodsearch import find_periods
+from ztfperiodic.specfunc import correlate_spec
 
 from gatspy.periodic import LombScargle, LombScargleFast
 
@@ -47,46 +49,48 @@ try:
 except:
     print("penquins not installed... need to use matchfiles.")
 
+
 def parse_commandline():
     """
     Parse the options given on the command-line.
     """
     parser = optparse.OptionParser()
 
-    parser.add_option("--doGPU",  action="store_true", default=False)
-    parser.add_option("--doCPU",  action="store_true", default=False)
-    parser.add_option("--doSaveMemory",  action="store_true", default=False)
+    parser.add_option("--doGPU", action="store_true", default=False)
+    parser.add_option("--doCPU", action="store_true", default=False)
+    parser.add_option("--doSaveMemory", action="store_true", default=False)
 
-    parser.add_option("--dataDir",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/")
-    parser.add_option("-o","--outputDir",default="../output")
-    parser.add_option("-i","--inputDir",default="../input")
+    parser.add_option("--dataDir", default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/")
+    parser.add_option("-o", "--outputDir", default="../output")
+    parser.add_option("-i", "--inputDir", default="../input")
 
-    parser.add_option("-a","--algorithms",default="GCE,BLS")
+    parser.add_option("-a", "--algorithms", default="LS")
 
-    parser.add_option("-r","--ra",default=110.58940,type=float)
-    parser.add_option("-d","--declination",default=-18.65840,type=float)
-    parser.add_option("-f","--filt",default="r")
+    parser.add_option("-r", "--ra", default=237.3234518, type=float)
+    parser.add_option("-d", "--declination", default=39.8249067, type=float)
+    parser.add_option("-f", "--filt", default="r")
 
-    parser.add_option("-u","--user")
-    parser.add_option("-w","--pwd")
+    parser.add_option("-u", "--user")
+    parser.add_option("-w", "--pwd")
 
-    parser.add_option("--doPlots",  action="store_true", default=False)
-    parser.add_option("--doJustHR",  action="store_true", default=False)
-    parser.add_option("--doOverwrite",  action="store_true", default=False)
-    parser.add_option("--doSpectra",  action="store_true", default=False)
+    parser.add_option("--doPlots", action="store_true", default=False)
+    parser.add_option("--doJustHR", action="store_true", default=False)
+    parser.add_option("--doOverwrite", action="store_true", default=False)
+    parser.add_option("--doSpectra", action="store_true", default=False)
+    parser.add_option("--doPeriodSearch", action="store_true", default=False)
 
-    parser.add_option("--doPhase",  action="store_true", default=False)
-    parser.add_option("-p","--phase",default=0.016666,type=float)
+    parser.add_option("--doPhase", action="store_true", default=False)
+    parser.add_option("-p", "--phase", default=0.016666, type=float)
 
-    parser.add_option("-l","--lightcurve_source",default="Kowalski")
+    parser.add_option("-l", "--lightcurve_source", default="Kowalski")
  
-    parser.add_option("--program_ids",default="2,3")
-    parser.add_option("--min_epochs",default=1,type=int)
+    parser.add_option("--program_ids", default="1,2,3")
+    parser.add_option("--min_epochs", default=1, type=int)
 
-    parser.add_option("-n","--nstack",default=1,type=int)
-    parser.add_option("--objid",type=int)
+    parser.add_option("-n", "--nstack", default=1, type=int)
+    parser.add_option("--objid", type=int)
 
-    parser.add_option("--doRemoveHC",  action="store_true", default=False)
+    parser.add_option("--doRemoveHC", action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
@@ -107,7 +111,7 @@ min_epochs = opts.min_epochs
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
 
-WDcat = os.path.join(starCatalogDir,'GaiaHRSet.hdf5')
+WDcat = os.path.join(starCatalogDir,'GaiaHRSet.hdf5') # 993635 targets
 with h5py.File(WDcat, 'r') as f:
     gmag, bprpWD = f['gmag'][:], f['bp_rp'][:]
     parallax = f['parallax'][:]
@@ -135,7 +139,7 @@ if opts.doJustHR:
         plotName = os.path.join(path_out_dir,'gaia.pdf')
         plt.figure(figsize=(12,12))
         hist2 = plt.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
-        plt.plot(bp_rp,absmag,'x', c='c',zorder=1,markersize=20)
+        plt.plot(bp_rp,absmag,'x', c='r',zorder=1,markersize=20)
         plt.xlim([-1,4.0])
         plt.ylim([-5,18])
         plt.gca().invert_yaxis()
@@ -169,7 +173,7 @@ if opts.doSpectra:
     lamostpage = "http://dr4.lamost.org/spectrum/png/"
     lamostfits = "http://dr4.lamost.org/spectrum/fits/"
    
-    LAMOSTcat = os.path.join(starCatalogDir,'lamost.hdf5')
+    LAMOSTcat = os.path.join(starCatalogDir,'lamost.hdf5') # 4,209,894 rows
     with h5py.File(LAMOSTcat, 'r') as f:
         lamost_ra, lamost_dec = f['ra'][:], f['dec'][:]
     LAMOSTidxcat = os.path.join(starCatalogDir,'lamost_indices.hdf5')
@@ -177,18 +181,19 @@ if opts.doSpectra:
         lamost_obsid = f['obsid'][:]
         lamost_inverse = f['inverse'][:]
     lamost = SkyCoord(ra=lamost_ra*u.degree, dec=lamost_dec*u.degree, frame='icrs')
-    sep = coord.separation(lamost).deg
+    sep = coord.separation(lamost).deg # cross match a certain object with LAMOST
     idx = np.argmin(sep)
     if sep[idx] < 3.0/3600.0:
         idy = np.where(idx == lamost_inverse)[0]
         obsids = lamost_obsid[idy]
+        # for each obsid, download the spectra file (a fits file + a png file)
         for obsid in obsids:
             requestpage = "%s/%d" % (lamostpage, obsid)
             plotName = os.path.join(path_out_dir,'lamost_%d.png' % obsid)
             wget_command = "wget %s -O %s" % (requestpage, plotName)
             os.system(wget_command)
             lamost_im = plt.imread(plotName)
-    
+            
             requestpage = "%s/%d" % (lamostfits, obsid)
             fitsName = os.path.join(path_out_dir,'lamost_%d.fits.gz' % obsid)
             wget_command = "wget %s -O %s" % (requestpage, fitsName)
@@ -240,6 +245,7 @@ if opts.lightcurve_source == "Kowalski":
     fid = fid[idx]
 
     if opts.doRemoveHC:
+        # remove high cadence observation (30 mins)
         dt = np.diff(hjd)
         idx = np.setdiff1d(np.arange(len(hjd)),
                            np.where(dt < 30.0*60.0/86400.0)[0])
@@ -255,7 +261,6 @@ if opts.lightcurve_source == "Kowalski":
     if hjd.size == 0:
         print("No data available...")
         exit(0)
-
 elif opts.lightcurve_source == "matchfiles":
     df = get_lightcurve(dataDir, opts.ra, opts.declination, opts.filt, opts.user, opts.pwd)
     mag = df.psfmag.values
@@ -268,14 +273,15 @@ elif opts.lightcurve_source == "matchfiles":
         print("No data available...")
         exit(0)
 
+
 if opts.doPlots:
     plotName = os.path.join(path_out_dir,'gaia.pdf')
     plt.figure(figsize=(12,12))
-    asymmetric_error = [absmag[1], absmag[2]]
+    asymmetric_error = [[absmag[1]], [absmag[2]]]
     hist2 = plt.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
     if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
-        plt.errorbar(bp_rp,absmag[0],yerr=[asymmetric_error],
-                     c='r',zorder=1,fmt='x',markersize=20)
+        plt.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
+                     zorder=1,fmt='.r',markersize=20)
     plt.xlim([-1,4.0])
     plt.ylim([-5,18])
     plt.gca().invert_yaxis()
@@ -286,8 +292,10 @@ if opts.doPlots:
     plt.savefig(plotName)
     plt.close()
 
+
 if opts.doJustHR:
     exit(0)
+
 
 if not (opts.doCPU or opts.doGPU):
     print("--doCPU or --doGPU required")
@@ -299,12 +307,12 @@ lightcurves.append(lightcurve)
 
 ls = LombScargleFast(silence_warnings=True)
 hjddiff = np.max(hjd) - np.min(hjd)
-ls.optimizer.period_range = (1,hjddiff)
+ls.optimizer.period_range = (1, hjddiff)
 ls.fit(hjd,mag,magerr)
 period = ls.best_period
 
 # fit the lightcurve with fourier components, using BIC to decide the optimal number of pars
-LCfit = fdecomp.fit_best(np.c_[hjd,mag,magerr],period,5,plotname=False)
+LCfit = fdecomp.fit_best(np.c_[hjd,mag,magerr], period, 5, plotname=False)
 
 if opts.doPlots:
     photFile = os.path.join(path_out_dir,'phot.dat')
@@ -358,9 +366,12 @@ if opts.doPlots:
     plt.savefig(plotName)
     plt.close()
 
-    plotName = os.path.join(path_out_dir,'overall.pdf')
+    plotName = os.path.join(path_out_dir, 'overall.pdf')
     if len(spectral_data.keys()) > 0:
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(25,10))
+        fig = plt.figure(figsize=(16,16))
+        gs = fig.add_gridspec(nrows=6, ncols=2)
+        ax1 = fig.add_subplot(gs[:3, 0])
+        ax2 = fig.add_subplot(gs[:3, 1])
     else:
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,10))
 
@@ -384,25 +395,46 @@ if opts.doPlots:
     ax2.invert_yaxis()
     fig.colorbar(hist2[3],ax=ax2)
     if len(spectral_data.keys()) > 0:
-        xmin, xmax = 6475.0, 6650.0
-        ymin, ymax = -np.inf, np.inf
-        for key in spectral_data:
-            idx = np.where( (spectral_data[key]["lambda"] >= xmin) &
-                            (spectral_data[key]["lambda"] <= xmax))[0]
-            y1 = np.nanpercentile(spectral_data[key]["flux"][idx],1)
-            y99 = np.nanpercentile(spectral_data[key]["flux"][idx],99)
-            ydiff = y99 - y1
-            ymintmp = y1 - ydiff
-            ymaxtmp = y99 + ydiff
-            if ymin < ymintmp:
-                ymin = ymintmp
-            if ymaxtmp < ymax:
-                ymax = ymaxtmp
-            ax3.plot(spectral_data[key]["lambda"],spectral_data[key]["flux"],'--')
-        ax3.set_ylim([ymin,ymax])
-        ax3.set_xlim([xmin,xmax])
-        ax3.set_xlabel('Wavelength [A]')
-        ax3.set_ylabel('Flux')
+        bands = [[4750.0, 4950.0], [6475.0, 6650.0], [8450, 8700]]
+        for jj, band in enumerate(bands):
+            ax = fig.add_subplot(gs[jj+3, 0])
+            ax_ = fig.add_subplot(gs[jj+3, 1])
+            xmin, xmax = band[0], band[1]
+            ymin, ymax = np.inf, -np.inf
+            for key in spectral_data:
+                idx = np.where((spectral_data[key]["lambda"] >= xmin) &
+                               (spectral_data[key]["lambda"] <= xmax))[0]
+                myflux = spectral_data[key]["flux"][idx]
+                # quick-and-dirty normalization
+                myflux -= np.median(myflux)
+                myflux /= max(abs(myflux))
+                y1 = np.nanpercentile(myflux,1)
+                y99 = np.nanpercentile(myflux,99)
+                ydiff = y99 - y1
+                ymintmp = y1 - ydiff
+                ymaxtmp = y99 + ydiff
+                if ymin > ymintmp:
+                    ymin = ymintmp
+                if ymaxtmp > ymax:
+                    ymax = ymaxtmp
+                ax.plot(spectral_data[key]["lambda"][idx], myflux, '--')
+                correlation_funcs = correlate_spec(spectral_data, band = band)
+                # cross correlation
+                if correlation_funcs == {}:
+                    pass
+                else:
+                    for key in correlation_funcs:
+                        ax_.plot(correlation_funcs[key]["velocity"], correlation_funcs[key]["correlation"])
+            ax.set_ylim([ymin,ymax])
+            ax.set_xlim([xmin,xmax])
+            ax_.set_ylim([0,1])
+            ax_.set_xlim([-1000,1000])
+            if jj == len(bands)-1:
+                ax.set_xlabel('Wavelength [A]')
+                ax_.set_xlabel('Velocity [km/s]')
+            ax.set_ylabel('Flux')
+            if jj == 1:
+                ax_.set_ylabel('Correlation amplitude')
     plt.savefig(plotName)
     plt.close()
 
@@ -508,27 +540,27 @@ if opts.doPlots:
         fig.savefig(plotName, bbox_inches='tight')
         plt.close()
 
-baseline = max(hjd)-min(hjd)
-if baseline<10:
-    fmin, fmax = 18, 1440
-else:
-    fmin, fmax = 2/baseline, 480
-
-samples_per_peak = 10
-
-df = 1./(samples_per_peak * baseline)
-nf = int(np.ceil((fmax - fmin) / df))
-freqs = fmin + df * np.arange(nf)
-
-print('Cataloging lightcurves...')
-catalogFile = os.path.join(path_out_dir,'catalog')
-fid = open(catalogFile,'w')
-for algorithm in algorithms:
-    periods_best, significances, pdots = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU)
-    period, significance = periods_best[0], significances[0]
-    stat = calc_stats(hjd, mag, magerr, period)
-
-    fid.write('%s %.10f %.10f ' % (algorithm, period, significance))
-    fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stat[0], stat[1], stat[2], stat[3], stat[4], stat[5], stat[6], stat[7], stat[8], stat[9], stat[10], stat[11], stat[12], stat[13], stat[14], stat[15], stat[16], stat[17], stat[18], stat[19], stat[20], stat[21], stat[22], stat[23], stat[24], stat[25], stat[26], stat[27], stat[28], stat[29], stat[30], stat[31], stat[32], stat[33], stat[34], stat[35]))
-fid.close()
-
+if opts.doPeriodSearch:
+    baseline = max(hjd)-min(hjd)
+    if baseline<10:
+        fmin, fmax = 18, 1440
+    else:
+        fmin, fmax = 2/baseline, 480
+    
+    samples_per_peak = 10
+    
+    df = 1./(samples_per_peak * baseline)
+    nf = int(np.ceil((fmax - fmin) / df))
+    freqs = fmin + df * np.arange(nf)
+    
+    print('Cataloging lightcurves...')
+    catalogFile = os.path.join(path_out_dir,'catalog')
+    fid = open(catalogFile,'w')
+    for algorithm in algorithms:
+        periods_best, significances, pdots = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU)
+        period, significance = periods_best[0], significances[0]
+        stat = calc_stats(hjd, mag, magerr, period)
+    
+        fid.write('%s %.10f %.10f ' % (algorithm, period, significance))
+        fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stat[0], stat[1], stat[2], stat[3], stat[4], stat[5], stat[6], stat[7], stat[8], stat[9], stat[10], stat[11], stat[12], stat[13], stat[14], stat[15], stat[16], stat[17], stat[18], stat[19], stat[20], stat[21], stat[22], stat[23], stat[24], stat[25], stat[26], stat[27], stat[28], stat[29], stat[30], stat[31], stat[32], stat[33], stat[34], stat[35]))
+    fid.close()

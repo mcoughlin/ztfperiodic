@@ -34,6 +34,7 @@ from ztfperiodic.utils import get_simulated_list
 from ztfperiodic.utils import get_matchfile
 from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.periodsearch import find_periods
+from ztfperiodic.specfunc import correlate_spec
 
 try:
     from penquins import Kowalski
@@ -615,9 +616,9 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         if len(spectral_data.keys()) > 0:
             #fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(25,10))
             fig = plt.figure(figsize=(25,10))
-            gs = fig.add_gridspec(nrows=3, ncols=3)
-            ax1 = fig.add_subplot(gs[:, 0])
-            ax2 = fig.add_subplot(gs[:, 1])
+            gs = fig.add_gridspec(nrows=3, ncols=6)
+            ax1 = fig.add_subplot(gs[:, 0:2])
+            ax2 = fig.add_subplot(gs[:, 2:4])
             #ax3 = fig.add_subplot(gs[0, 2])
         else:
             fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
@@ -642,27 +643,47 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         if len(spectral_data.keys()) > 0:
             bands = [[4750.0, 4950.0], [6475.0, 6650.0], [8450, 8700]]
             for jj, band in enumerate(bands):
-                ax = fig.add_subplot(gs[jj, 2])
+                ax = fig.add_subplot(gs[jj, 4])
+                ax_ = fig.add_subplot(gs[jj, 5])
                 xmin, xmax = band[0], band[1]
-                ymin, ymax = -np.inf, np.inf
+                ymin, ymax = np.inf, -np.inf
                 for key in spectral_data:
                     idx = np.where( (spectral_data[key]["lambda"] >= xmin) &
                                     (spectral_data[key]["lambda"] <= xmax))[0]
-                    y1 = np.nanpercentile(spectral_data[key]["flux"][idx],1)
-                    y99 = np.nanpercentile(spectral_data[key]["flux"][idx],99)
+                    wave = spectral_data[key]["lambda"][idx]
+                    myflux = spectral_data[key]["flux"][idx]
+                    # quick-and-dirty normalization
+                    myflux -= np.median(myflux)
+                    if len(myflux) == 0: continue
+                    myflux /= np.max(np.abs(myflux))
+                    y1 = np.nanpercentile(myflux,1)
+                    y99 = np.nanpercentile(myflux,99)
                     ydiff = y99 - y1
                     ymintmp = y1 - ydiff
                     ymaxtmp = y99 + ydiff
-                    if ymin < ymintmp:
+                    if ymin > ymintmp:
                         ymin = ymintmp
-                    if ymaxtmp < ymax:
+                    if ymaxtmp > ymax:
                         ymax = ymaxtmp
-                    ax.plot(spectral_data[key]["lambda"],spectral_data[key]["flux"],'--')
-                ax.set_ylim([ymin,ymax])
+                    ax.plot(wave, myflux, '--')
+                correlation_funcs = correlate_spec(spectral_data, band = band)
+                # cross correlation
+                if correlation_funcs == {}:
+                    pass
+                else:
+                    for key in correlation_funcs:
+                        ax_.plot(correlation_funcs[key]["velocity"], correlation_funcs[key]["correlation"])
+                if np.isfinite(ymin) and np.isfinite(ymax):
+                    ax.set_ylim([ymin,ymax])
                 ax.set_xlim([xmin,xmax])
+                ax_.set_ylim([0,1])
+                ax_.set_xlim([-1000,1000])
                 if jj == len(bands)-1:
                     ax.set_xlabel('Wavelength [A]')
-                ax.set_ylabel('Flux')
+                    ax_.set_xlabel('Velocity [km/s]')
+                #ax.set_ylabel('Flux')
+                #if jj == 1:
+                #    ax_.set_ylabel('Correlation amplitude')
         if pdot == 0:
             plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
         else:
