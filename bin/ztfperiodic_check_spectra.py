@@ -68,16 +68,27 @@ def load_catalog(catalog,doFermi=False):
             significance = data_out[name]["significance"]
             spectra = data_out[name]["spectra"]
             vels, velerrs = [], []
+            allneg, allpos = True, True
+            diffs = []
             for key in spectra.keys():
+                if len(spectra[key]) < 2: continue
+                diff = np.sum(np.abs(np.diff(spectra[key][:,0])))
+                diffs.append(diff) 
                 for row in spectra[key]:
                     snr = row[0]/row[1]
                     Cpeak = row[2]
+                    if np.abs(row[0]) > 1000: continue
+                    if Cpeak < 0.5: continue
+                    if snr < 3: continue
                     vels.append(row[0])
                     velerrs.append(row[1])
-                    if snr < 3: continue
-                    if Cpeak < 0.3: continue
+                    if row[0] >= 0:
+                        allneg = False
+                    if row[0] <= 0:
+                        allpos = False
                     #print(ra, dec, period, significance, row)
             vels, velerrs = np.array(vels), np.array(velerrs)
+            difftot = np.mean(diffs)
             if len(vels) == 0: continue
             if len(vels) == 1:
                 vel, velerr = vels[0], velerrs[0]
@@ -89,8 +100,13 @@ def load_catalog(catalog,doFermi=False):
             if vel == 0.0: continue
             snr = np.abs(vel/velerr)
             velall.append(vel)
-            if snr > 3:
-                print(ra, dec, period, significance, vel, velerr, snr)
+            if difftot > 50:
+                print(ra, dec, period, significance, vel)
+            #if allneg or allpos:
+            #    if (np.abs(vel) > 20) and (significance>8):
+            #        print(ra, dec, period, significance, vel)
+            #if snr > 3:
+            #    print(ra, dec, period, significance, vel, velerr, snr)
         cnt = cnt + 1
 
     return velall
