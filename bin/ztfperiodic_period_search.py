@@ -725,7 +725,7 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                         ax_.plot(correlation_funcs[key]["velocity"], correlation_funcs[key]["correlation"])
                         ax_.plot([vpeak, vpeak], [0, Cpeak], 'k--')
                         ax_.text(250, yheights[kk], "v=%.0f +- %.0f"%(vpeak, vpeak_unc))
-                        data_out[name]["spectra"][jj] = np.vstack((data_out[name]["spectra"][jj], [vpeak, vpeak_unc]))
+                        data_out[name]["spectra"][jj] = np.vstack((data_out[name]["spectra"][jj], [vpeak, vpeak_unc, Cpeak]))
 
                 if np.isfinite(ymin) and np.isfinite(ymax):
                     ax.set_ylim([ymin,ymax])
