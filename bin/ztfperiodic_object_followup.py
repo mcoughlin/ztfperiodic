@@ -424,7 +424,12 @@ if opts.doPlots:
                     pass
                 else:
                     for key in correlation_funcs:
+                        vpeak = correlation_funcs[key]['v_peak']
+                        vpeak_unc = correlation_funcs[key]['v_peak_unc']
+                        Cpeak = correlation_funcs[key]['C_peak']
                         ax_.plot(correlation_funcs[key]["velocity"], correlation_funcs[key]["correlation"])
+                        ax_.plot([vpeak, vpeak], [0, Cpeak], 'k--')
+                        ax_.text(-250, 0.5, "v=%.2f +- %.2f"%(vpeak, vpeak_unc))
             ax.set_ylim([ymin,ymax])
             ax.set_xlim([xmin,xmax])
             ax_.set_ylim([0,1])
