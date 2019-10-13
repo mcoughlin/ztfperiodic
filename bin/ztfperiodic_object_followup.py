@@ -23,6 +23,7 @@ from matplotlib.colors import LogNorm
 
 from astropy.io import ascii
 from astropy import units as u
+import astropy.constants as const
 from astropy.coordinates import SkyCoord
 from astroquery.sdss import SDSS
 import astropy.io.fits
@@ -40,7 +41,7 @@ from ztfperiodic.utils import get_kowalski
 from ztfperiodic.utils import get_lightcurve
 from ztfperiodic.utils import combine_lcs
 from ztfperiodic.periodsearch import find_periods
-from ztfperiodic.specfunc import correlate_spec
+from ztfperiodic.specfunc import correlate_spec, adjust_subplots_band, tick_function
 
 from gatspy.periodic import LombScargle, LombScargleFast
 
@@ -261,6 +262,7 @@ if opts.lightcurve_source == "Kowalski":
     if hjd.size == 0:
         print("No data available...")
         exit(0)
+        
 elif opts.lightcurve_source == "matchfiles":
     df = get_lightcurve(dataDir, opts.ra, opts.declination, opts.filt, opts.user, opts.pwd)
     mag = df.psfmag.values
@@ -307,7 +309,7 @@ lightcurves.append(lightcurve)
 
 ls = LombScargleFast(silence_warnings=True)
 hjddiff = np.max(hjd) - np.min(hjd)
-ls.optimizer.period_range = (1, hjddiff)
+ls.optimizer.period_range = (0.1, hjddiff)
 ls.fit(hjd,mag,magerr)
 period = ls.best_period
 
@@ -316,10 +318,10 @@ LCfit = fdecomp.fit_best(np.c_[hjd,mag,magerr], period, 5, plotname=False)
 
 if opts.doPlots:
     photFile = os.path.join(path_out_dir,'phot.dat')
-    fid = open(photFile,'w')
+    filed = open(photFile,'w')
     for a, b, c in zip(hjd, mag, magerr):
-        fid.write('%s %.10f %.10f\n' % (a, b, c))
-    fid.close()
+        filed.write('%s %.10f %.10f\n' % (a, b, c))
+    filed.close()
 
     plotName = os.path.join(path_out_dir,'phot.pdf')
     plt.figure(figsize=(12,8))
@@ -342,10 +344,10 @@ if opts.doPlots:
     fids = [1,2,3]
     plotName = os.path.join(path_out_dir,'phot_color.pdf')
     plt.figure(figsize=(12,8))
-    for fid, color in zip(fids, colors):
+    for myfid, color in zip(fids, colors):
         for ii, key in enumerate(lightcurves_all.keys()):
             lc = lightcurves_all[key]
-            if not lc["fid"][0] == fid: continue
+            if not lc["fid"][0] == myfid: continue
             plt.errorbar(lc["hjd"]-hjd[0],lc["mag"],yerr=lc["magerr"],fmt='%so' % color)
     plt.xlabel('Time from %.5f [days]'%hjd[0])
     plt.ylabel('Magnitude [ab]')
@@ -365,7 +367,8 @@ if opts.doPlots:
     plt.ylabel("Power")
     plt.savefig(plotName)
     plt.close()
-
+    
+    ###### The overall plot ######
     plotName = os.path.join(path_out_dir, 'overall.pdf')
     if len(spectral_data.keys()) > 0:
         fig = plt.figure(figsize=(16,16))
@@ -375,16 +378,25 @@ if opts.doPlots:
     else:
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20,10))
 
-    ax1.errorbar(hjd-hjd[0],mag,yerr=magerr,fmt='ko')
-    fittedmodel = fdecomp.make_f(period)
-    ax1.plot(hjd-hjd[0],fittedmodel(hjd,*LCfit),'k-')
+    newphase = (hjd-hjd[0])/(period)%2
+    ixg = fid==1
+    ixr = fid==2
+    ixy = fid==3
+    ax1.errorbar(newphase[ixg], mag[ixg], yerr=magerr[ixg], fmt='bo')
+    ax1.errorbar(newphase[ixr], mag[ixr], yerr=magerr[ixr], fmt='ro')
+    ax1.errorbar(newphase[ixy], mag[ixy], yerr=magerr[ixy], fmt='yo')
+    # fittedmodel = fdecomp.make_f(period)
+    # ax1.plot(hjd-hjd[0],fittedmodel(hjd,*LCfit),'k-')
     ymed = np.nanmedian(mag)
-    y10, y90 = np.nanpercentile(mag,10), np.nanpercentile(mag,90)
+    y10, y90 = np.nanpercentile(mag,5), np.nanpercentile(mag,95)
     ystd = np.nanmedian(magerr)
-    ymin = y10 - 3*ystd
-    ymax = y90 + 3*ystd
+    ymin = y10 - 5*ystd
+    ymax = y90 + 5*ystd
     ax1.set_ylim([ymin,ymax])
+    ax1.set_title("P = %.2f day"%period, fontsize=16)
+    ax1.set_xlabel("phase")
     ax1.invert_yaxis()
+    
     asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
     hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
     if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
@@ -394,13 +406,19 @@ if opts.doPlots:
     ax2.set_ylim([-5,18])
     ax2.invert_yaxis()
     fig.colorbar(hist2[3],ax=ax2)
-    if len(spectral_data.keys()) > 0:
+    
+    nspec = len(spectral_data.keys())
+    if nspec > 1:
         bands = [[4750.0, 4950.0], [6475.0, 6650.0], [8450, 8700]]
+        npairs = int(nspec * (nspec-1)/2)
+        v_values = np.zeros((len(bands), npairs))
+        v_values_unc = np.zeros((len(bands), npairs))
         for jj, band in enumerate(bands):
             ax = fig.add_subplot(gs[jj+3, 0])
             ax_ = fig.add_subplot(gs[jj+3, 1])
             xmin, xmax = band[0], band[1]
             ymin, ymax = np.inf, -np.inf
+            
             for key in spectral_data:
                 idx = np.where((spectral_data[key]["lambda"] >= xmin) &
                                (spectral_data[key]["lambda"] <= xmax))[0]
@@ -434,6 +452,8 @@ if opts.doPlots:
                         ax_.plot(correlation_funcs[key]["velocity"], correlation_funcs[key]["correlation"])
                         ax_.plot([vpeak, vpeak], [0, Cpeak], 'k--')
                         ax_.text(500, yheights[kk], "v=%.0f +- %.0f"%(vpeak, vpeak_unc))
+                        v_values[jj][kk] = vpeak
+                        v_values_unc[jj][kk] = vpeak_unc
             ax.set_ylim([ymin,ymax])
             ax.set_xlim([xmin,xmax])
             ax_.set_ylim([0,1])
@@ -441,11 +461,42 @@ if opts.doPlots:
             if jj == len(bands)-1:
                 ax.set_xlabel('Wavelength [A]')
                 ax_.set_xlabel('Velocity [km/s]')
+                adjust_subplots_band(ax, ax_)
             else:
                 ax_.set_xticklabels([])
             ax.set_ylabel('Flux')
             if jj == 1:
                 ax_.set_ylabel('Correlation amplitude')
+                new_tick_locations = np.array([-900, -600, -300, 0, 300, 600, 900])
+                axmass = ax_.twiny()
+                axmass.set_xlim(ax_.get_xlim())
+                axmass.set_xticks(new_tick_locations)
+                axmass.set_xticklabels(tick_function(new_tick_locations, period))
+                axmass.set_xlabel("f($M$) ("+r'$M_\odot$'+')')
+            
+        # calculate mass functon
+        if npairs==1:
+            id_pair = 0
+        else:
+            # select a pair with:
+            # (1) reasonable variance among all band measurements
+            stds = np.std(v_values, axis=0)
+            if np.sum(stds<50)>=1:
+                v_values = v_values[:, stds<50]
+                v_values_unc = v_values_unc[:, stds<50]
+            # (2) largest (absolute) velosity variation
+            vsums = np.sum(abs(v_values), axis=0)
+            id_pair = np.where(vsums == max(vsums))[0][0]
+        v_adopt = np.median(v_values[:,id_pair])
+        id_band = np.where(v_values[:,id_pair]==v_adopt)[0][0]
+        v_adopt_unc = v_values_unc[id_band,id_pair]
+        K = abs(v_adopt/2.) # [km/s] assuming that the velocity variation is max and min in rv curve
+        K_unc = abs(v_adopt_unc/2.) # [km/s]
+        P = 2*period # [day] if ellipsodial modulation, amplitude are roughly the same, 
+                    # then the photometric period is probably half of the orbital period
+        fmass = (K * 100000)**3 * (P*86400) / (2*np.pi*const.G.cgs.value) / const.M_sun.cgs.value
+        fmass_unc = 3 * fmass / K * K_unc
+        ax2.set_title("f($M$) = %.2f +- %.2f ("%(fmass, fmass_unc)+r'$M_\odot$'+')', fontsize=16)
     plt.savefig(plotName)
     plt.close()
 

@@ -12,10 +12,13 @@ from scipy import fftpack
 from scipy.interpolate import interp1d
 from astropy.io import fits
 from astropy.time import Time
+import astropy.constants as const
 import matplotlib.pyplot as plt
+from matplotlib.ticker import AutoMinorLocator
 
 
-def correlate_spec(spectral_data, band = [6475.0, 6650.0], plot_figure = False):
+def correlate_spec(spectral_data, band = [6475.0, 6650.0], 
+                   period = None, plot_figure = False):
     """
     Cross correlate the spectra
     
@@ -172,8 +175,21 @@ def correlate_spec(spectral_data, band = [6475.0, 6650.0], plot_figure = False):
                     ax3.plot([nleft[id_left], nright[id_right]], [0.5, 0.5], 'k:')
                     ax3.legend(frameon=False)
                     ax3.set_title('r=%.2f'%r_value)
-                    ax4.set_title("v = %.2f +- %.2f [km/s]"%(v_peak, sigma_v))
-                    
+                    ax4.text(0, 0.5, "v = %.0f +- %.0f"%(v_peak, sigma_v))
+                    ax4.set_xlim(-1000, 1000)
+                    ax4.xaxis.set_minor_locator(AutoMinorLocator())
+                    ax4.yaxis.set_minor_locator(AutoMinorLocator())
+                    ax4.tick_params(direction='in', axis='both', which = 'both', top=True, right=True)
+                    ax4.tick_params(which='major', length=4)
+                    ax4.tick_params(which='minor', length=2)
+                    # add mass function x-axis
+                    if period!=None:
+                        new_tick_locations = np.array([-900, -600, -300, 0, 300, 600, 900])
+                        ax4_ = ax4.twiny()
+                        ax4_.set_xlim(ax4.get_xlim())
+                        ax4_.set_xticks(new_tick_locations)
+                        ax4_.set_xticklabels(tick_function(new_tick_locations, period))
+                        ax4_.set_xlabel("f($M$) ("+r'$M_\odot$'+')')
                 correlation_funcs[count] = {}
                 correlation_funcs[count]["velocity"] = vnew
                 correlation_funcs[count]["correlation"] = Cvnew
@@ -184,7 +200,34 @@ def correlate_spec(spectral_data, band = [6475.0, 6650.0], plot_figure = False):
                 count += 1
                 
         return correlation_funcs
+    
+    
+def tick_function(X, period):
+    K = X/2. # [km/s] assuming that the velocity variation is max and min in rv curve
+    P = 2*period # [day] if ellipsodial modulation, amplitude are roughly the same, 
+                    # then the photometric period is probably half of the orbital period
+    fmass = (K * 100000)**3 * (P*86400) / (2*np.pi*const.G.cgs.value) / const.M_sun.cgs.value
+    fmass_tick = []
+    for z in fmass:
+        if z!=0:
+            fmass_tick.append("%.1f"%z)
+        else:
+            fmass_tick.append("%d"%z)
+    return fmass_tick
                     
+    
+def adjust_subplots_band(ax, ax_):
+    ax.xaxis.set_minor_locator(AutoMinorLocator())
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
+    ax.tick_params(direction='in', axis='both', which = 'both', top=True, right=True)
+    ax.tick_params(which='major', length=4)
+    ax.tick_params(which='minor', length=2)
+    
+    ax_.xaxis.set_minor_locator(AutoMinorLocator())
+    ax_.yaxis.set_minor_locator(AutoMinorLocator())
+    ax_.tick_params(direction='in', axis='both', which = 'both', top=True, right=True)
+    ax_.tick_params(which='major', length=4)
+    ax_.tick_params(which='minor', length=2)
     
     
 def test_compute_spectra():
@@ -204,5 +247,13 @@ def test_compute_spectra():
         spectral_data[key]["flux"] = flux
         spectral_data[key]["obsjd"] = obsjd
     
-    band = [6500.0, 6625.0]
-    correlate_spec(spectral_data, band = band, plot_figure = True)
+    wmax = 6563 *(1. + 1500/3e+5)
+    wmin = 6563 *(1. - 1500/3e+5)
+    band = [wmin, wmax]
+    period = 0.49 # in day
+    correlate_spec(spectral_data, band = band, period = period, plot_figure = True)
+    
+    
+    
+    
+    

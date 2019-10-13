@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astroquery.sdss import SDSS
+import astropy.constants as const
 import astropy.io.fits
 
 import ztfperiodic
@@ -35,7 +36,7 @@ from ztfperiodic.utils import get_simulated_list
 from ztfperiodic.utils import get_matchfile
 from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.periodsearch import find_periods
-from ztfperiodic.specfunc import correlate_spec
+from ztfperiodic.specfunc import correlate_spec, adjust_subplots_band, tick_function
 
 try:
     from penquins import Kowalski
@@ -680,8 +681,12 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         ax2.set_ylim([-5,18])
         ax2.invert_yaxis()
         fig.colorbar(hist2[3],ax=ax2)
-        if len(spectral_data.keys()) > 0:
+        nspec = len(spectral_data.keys())
+        if nspec > 1:
             bands = [[4750.0, 4950.0], [6475.0, 6650.0], [8450, 8700]]
+            npairs = int(nspec * (nspec-1)/2)
+            v_values = np.zeros((len(bands), npairs))
+            v_values_unc = np.zeros((len(bands), npairs))
             data_out[name]["spectra"] = {}
             for jj, band in enumerate(bands):
                 data_out[name]["spectra"][jj] = np.empty((0,3))
@@ -725,6 +730,8 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                         ax_.plot(correlation_funcs[key]["velocity"], correlation_funcs[key]["correlation"])
                         ax_.plot([vpeak, vpeak], [0, Cpeak], 'k--')
                         ax_.text(250, yheights[kk], "v=%.0f +- %.0f"%(vpeak, vpeak_unc))
+                        v_values[jj][kk] = vpeak
+                        v_values_unc[jj][kk] = vpeak_unc
                         data_out[name]["spectra"][jj] = np.vstack((data_out[name]["spectra"][jj], [vpeak, vpeak_unc, Cpeak]))
 
                 if np.isfinite(ymin) and np.isfinite(ymax):
@@ -735,9 +742,38 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                 if jj == len(bands)-1:
                     ax.set_xlabel('Wavelength [A]')
                     ax_.set_xlabel('Velocity [km/s]')
-                #ax.set_ylabel('Flux')
-                #if jj == 1:
-                #    ax_.set_ylabel('Correlation amplitude')
+                    adjust_subplots_band(ax, ax_)
+                if jj==1:
+                    new_tick_locations = np.array([-900, -600, -300, 0, 300, 600, 900])
+                    axmass = ax_.twiny()
+                    axmass.set_xlim(ax_.get_xlim())
+                    axmass.set_xticks(new_tick_locations)
+                    axmass.set_xticklabels(tick_function(new_tick_locations, period))
+                    axmass.set_xlabel("f($M$) ("+r'$M_\odot$'+')')
+        # calculate mass functon
+        if npairs==1:
+            id_pair = 0
+        else:
+            # select a pair with:
+            # (1) reasonable variance among all band measurements
+            stds = np.std(v_values, axis=0)
+            if np.sum(stds<50)>=1:
+                v_values = v_values[:, stds<50]
+                v_values_unc = v_values_unc[:, stds<50]
+            # (2) largest (absolute) velosity variation
+            vsums = np.sum(abs(v_values), axis=0)
+            id_pair = np.where(vsums == max(vsums))[0][0]
+        v_adopt = np.median(v_values[:,id_pair])
+        id_band = np.where(v_values[:,id_pair]==v_adopt)[0][0]
+        v_adopt_unc = v_values_unc[id_band,id_pair]
+        K = abs(v_adopt/2.) # [km/s] assuming that the velocity variation is max and min in rv curve
+        K_unc = abs(v_adopt_unc/2.) # [km/s]
+        P = 2*period # [day] if ellipsodial modulation, amplitude are roughly the same, 
+                    # then the photometric period is probably half of the orbital period
+        fmass = (K * 100000)**3 * (P*86400) / (2*np.pi*const.G.cgs.value) / const.M_sun.cgs.value
+        fmass_unc = 3 * fmass / K * K_unc
+        data_out[name]["fmass"] = fmass
+        data_out[name]["fmass_unc"] = fmass_unc
         if pdot == 0:
             plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
         else:
