@@ -684,7 +684,7 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
             bands = [[4750.0, 4950.0], [6475.0, 6650.0], [8450, 8700]]
             data_out[name]["spectra"] = {}
             for jj, band in enumerate(bands):
-                data_out[name]["spectra"][jj] = np.empty((0,2))
+                data_out[name]["spectra"][jj] = np.empty((0,3))
 
                 ax = fig.add_subplot(gs[jj, 4])
                 ax_ = fig.add_subplot(gs[jj, 5])
