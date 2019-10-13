@@ -170,8 +170,8 @@ if opts.doSpectra:
             spectral_data[key]["lambda"] = lam
             spectral_data[key]["flux"] = flux
 
-    lamostpage = "http://dr4.lamost.org/spectrum/png/"
-    lamostfits = "http://dr4.lamost.org/spectrum/fits/"
+    lamostpage = "http://dr5.lamost.org/spectrum/png/"
+    lamostfits = "http://dr5.lamost.org/spectrum/fits/"
    
     LAMOSTcat = os.path.join(starCatalogDir,'lamost.hdf5') # 4,209,894 rows
     with h5py.File(LAMOSTcat, 'r') as f:
@@ -423,13 +423,17 @@ if opts.doPlots:
                 if correlation_funcs == {}:
                     pass
                 else:
-                    for key in correlation_funcs:
+                    if len(correlation_funcs) == 1:
+                        yheights = [0.5]
+                    else:
+                        yheights = np.linspace(0.25,0.75,len(correlation_funcs))
+                    for kk, key in enumerate(correlation_funcs):
                         vpeak = correlation_funcs[key]['v_peak']
                         vpeak_unc = correlation_funcs[key]['v_peak_unc']
                         Cpeak = correlation_funcs[key]['C_peak']
                         ax_.plot(correlation_funcs[key]["velocity"], correlation_funcs[key]["correlation"])
                         ax_.plot([vpeak, vpeak], [0, Cpeak], 'k--')
-                        ax_.text(-250, 0.5, "v=%.2f +- %.2f"%(vpeak, vpeak_unc))
+                        ax_.text(500, yheights[kk], "v=%.0f +- %.0f"%(vpeak, vpeak_unc))
             ax.set_ylim([ymin,ymax])
             ax.set_xlim([xmin,xmax])
             ax_.set_ylim([0,1])
@@ -437,6 +441,8 @@ if opts.doPlots:
             if jj == len(bands)-1:
                 ax.set_xlabel('Wavelength [A]')
                 ax_.set_xlabel('Velocity [km/s]')
+            else:
+                ax_.set_xticklabels([])
             ax.set_ylabel('Flux')
             if jj == 1:
                 ax_.set_ylabel('Correlation amplitude')
