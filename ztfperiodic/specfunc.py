@@ -17,6 +17,15 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
 
 
+def find_peak_ind(Cvnew, vnew, vlim = 1500):
+    ind_inverse = np.argsort(Cvnew)[::-1]
+    indmin = np.where(vnew>(-1*vlim))[0][0]
+    indmax = np.where(vnew<(vlim))[0][-1]
+    ix = (ind_inverse < indmax)&(ind_inverse > indmin)
+    ind_peak = ind_inverse[ix][0]
+    return ind_peak
+
+
 def correlate_spec(spectral_data, band = [6475.0, 6650.0], 
                    period = None, plot_figure = False):
     """
@@ -125,8 +134,10 @@ def correlate_spec(spectral_data, band = [6475.0, 6650.0],
                     ax4.set_xlabel("v [km/s]")
                     plt.tight_layout()
                 
-                C_peak = max(Cvnew)
-                ind_peak = np.where(Cvnew == C_peak)[0][0]
+                # there is an assumption that the rv variation can not be larger than 
+                # 1500 km/s
+                ind_peak = find_peak_ind(Cvnew, vnew, vlim = 1500)
+                C_peak = Cvnew[ind_peak]
                 v_peak = vnew[ind_peak]
                 n_peak = nnew[ind_peak]
                 alpha_max = sigma2 / sigma1 * C_peak
