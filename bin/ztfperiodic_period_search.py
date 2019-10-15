@@ -743,12 +743,16 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                     ax.set_xlabel('Wavelength [A]')
                     ax_.set_xlabel('Velocity [km/s]')
                     adjust_subplots_band(ax, ax_)
+                else:
+                    ax_.set_xticklabels([])
                 if jj==1:
-                    new_tick_locations = np.array([-900, -600, -300, 0, 300, 600, 900])
+                    new_tick_locations = np.array([-1000, -500, 0, 500, 1000])
                     axmass = ax_.twiny()
                     axmass.set_xlim(ax_.get_xlim())
                     axmass.set_xticks(new_tick_locations)
-                    axmass.set_xticklabels(tick_function(new_tick_locations, period))
+                    tick_labels = tick_function(new_tick_locations, period)
+                    tick_labels = ["{0:.0f}".format(float(x)) for x in tick_labels]
+                    axmass.set_xticklabels(tick_labels)
                     axmass.set_xlabel("f($M$) ("+r'$M_\odot$'+')')
         # calculate mass functon
         if npairs==1:
