@@ -12,10 +12,22 @@ from scipy import fftpack
 from scipy.interpolate import interp1d
 from astropy.io import fits
 from astropy.time import Time
+import astropy.constants as const
 import matplotlib.pyplot as plt
+from matplotlib.ticker import AutoMinorLocator
 
 
-def correlate_spec(spectral_data, band = [6475.0, 6650.0], plot_figure = False):
+def find_peak_ind(Cvnew, vnew, vlim = 1500):
+    ind_inverse = np.argsort(Cvnew)[::-1]
+    indmin = np.where(vnew>(-1*vlim))[0][0]
+    indmax = np.where(vnew<(vlim))[0][-1]
+    ix = (ind_inverse < indmax)&(ind_inverse > indmin)
+    ind_peak = ind_inverse[ix][0]
+    return ind_peak
+
+
+def correlate_spec(spectral_data, band = [6475.0, 6650.0], 
+                   period = None, plot_figure = False):
     """
     Cross correlate the spectra
     
@@ -122,8 +134,10 @@ def correlate_spec(spectral_data, band = [6475.0, 6650.0], plot_figure = False):
                     ax4.set_xlabel("v [km/s]")
                     plt.tight_layout()
                 
-                C_peak = max(Cvnew)
-                ind_peak = np.where(Cvnew == C_peak)[0][0]
+                # there is an assumption that the rv variation can not be larger than 
+                # 1500 km/s
+                ind_peak = find_peak_ind(Cvnew, vnew, vlim = 1500)
+                C_peak = Cvnew[ind_peak]
                 v_peak = vnew[ind_peak]
                 n_peak = nnew[ind_peak]
                 alpha_max = sigma2 / sigma1 * C_peak
@@ -153,12 +167,22 @@ def correlate_spec(spectral_data, band = [6475.0, 6650.0], plot_figure = False):
                 Cright = Cvnew[ixright]
                 nleft = nnew[~ixright]
                 Cleft = Cvnew[~ixright]
-                id_right = np.where(Cright<0.5*C_peak)[0][0]
+                id_right_ = np.where(Cright<0.5*C_peak)[0]
+                if len(id_right_)==0:
+                    id_right = -1
+                else:
+                    id_right = id_right_[0]
                 if abs(Cright[id_right]-0.5*C_peak) > abs(Cright[id_right-1]-0.5*C_peak):
                     id_right = id_right-1
-                id_left = np.where(Cleft<0.5*C_peak)[0][-1]
+                
+                id_left_ = np.where(Cleft<0.5*C_peak)[0]
+                if len(id_left_)==0:
+                    id_left = 0
+                else:
+                    id_left = id_left_[-1]
                 if abs(Cleft[id_left]-0.5*C_peak) > abs(Cleft[id_left+1]-0.5*C_peak):
-                    id_right = id_right+1
+                    id_left = id_left+1
+                    
                 width = nright[id_right] - nleft[id_left]
                 sigma_n = 3*width/(8*(1+r_value))
                 # convert sigma_n to sigma_v
@@ -172,8 +196,21 @@ def correlate_spec(spectral_data, band = [6475.0, 6650.0], plot_figure = False):
                     ax3.plot([nleft[id_left], nright[id_right]], [0.5, 0.5], 'k:')
                     ax3.legend(frameon=False)
                     ax3.set_title('r=%.2f'%r_value)
-                    ax4.set_title("v = %.2f +- %.2f [km/s]"%(v_peak, sigma_v))
-                    
+                    ax4.text(0, 0.5, "v = %.0f +- %.0f"%(v_peak, sigma_v))
+                    ax4.set_xlim(-1000, 1000)
+                    ax4.xaxis.set_minor_locator(AutoMinorLocator())
+                    ax4.yaxis.set_minor_locator(AutoMinorLocator())
+                    ax4.tick_params(direction='in', axis='both', which = 'both', top=True, right=True)
+                    ax4.tick_params(which='major', length=4)
+                    ax4.tick_params(which='minor', length=2)
+                    # add mass function x-axis
+                    if period!=None:
+                        new_tick_locations = np.array([-900, -600, -300, 0, 300, 600, 900])
+                        ax4_ = ax4.twiny()
+                        ax4_.set_xlim(ax4.get_xlim())
+                        ax4_.set_xticks(new_tick_locations)
+                        ax4_.set_xticklabels(tick_function(new_tick_locations, period))
+                        ax4_.set_xlabel("f($M$) ("+r'$M_\odot$'+')')
                 correlation_funcs[count] = {}
                 correlation_funcs[count]["velocity"] = vnew
                 correlation_funcs[count]["correlation"] = Cvnew
@@ -184,7 +221,34 @@ def correlate_spec(spectral_data, band = [6475.0, 6650.0], plot_figure = False):
                 count += 1
                 
         return correlation_funcs
+    
+    
+def tick_function(X, period):
+    K = X/2. # [km/s] assuming that the velocity variation is max and min in rv curve
+    P = 2*period # [day] if ellipsodial modulation, amplitude are roughly the same, 
+                    # then the photometric period is probably half of the orbital period
+    fmass = (K * 100000)**3 * (P*86400) / (2*np.pi*const.G.cgs.value) / const.M_sun.cgs.value
+    fmass_tick = []
+    for z in fmass:
+        if z!=0:
+            fmass_tick.append("%.1f"%z)
+        else:
+            fmass_tick.append("%d"%z)
+    return fmass_tick
                     
+    
+def adjust_subplots_band(ax, ax_):
+    ax.xaxis.set_minor_locator(AutoMinorLocator())
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
+    ax.tick_params(direction='in', axis='both', which = 'both', top=True, right=True)
+    ax.tick_params(which='major', length=4)
+    ax.tick_params(which='minor', length=2)
+    
+    ax_.xaxis.set_minor_locator(AutoMinorLocator())
+    ax_.yaxis.set_minor_locator(AutoMinorLocator())
+    ax_.tick_params(direction='in', axis='both', which = 'both', top=True, right=True)
+    ax_.tick_params(which='major', length=4)
+    ax_.tick_params(which='minor', length=2)
     
     
 def test_compute_spectra():
@@ -204,5 +268,13 @@ def test_compute_spectra():
         spectral_data[key]["flux"] = flux
         spectral_data[key]["obsjd"] = obsjd
     
-    band = [6500.0, 6625.0]
-    correlate_spec(spectral_data, band = band, plot_figure = True)
+    wmax = 6563 *(1. + 1500/3e+5)
+    wmin = 6563 *(1. - 1500/3e+5)
+    band = [wmin, wmax]
+    period = 0.49 # in day
+    correlate_spec(spectral_data, band = band, period = period, plot_figure = True)
+    
+    
+    
+    
+    

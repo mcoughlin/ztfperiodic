@@ -5,6 +5,7 @@ import tempfile
 import time
 import glob
 import optparse
+import pickle
 from functools import partial
 
 import tables
@@ -23,6 +24,7 @@ import matplotlib.pyplot as plt
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astroquery.sdss import SDSS
+import astropy.constants as const
 import astropy.io.fits
 
 import ztfperiodic
@@ -34,7 +36,7 @@ from ztfperiodic.utils import get_simulated_list
 from ztfperiodic.utils import get_matchfile
 from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.periodsearch import find_periods
-from ztfperiodic.specfunc import correlate_spec
+from ztfperiodic.specfunc import correlate_spec, adjust_subplots_band, tick_function
 
 try:
     from penquins import Kowalski
@@ -196,9 +198,15 @@ epoch_folders = ["0-100","100-500","500-all"]
 catalogDir = os.path.join(outputDir,'catalog',algorithm)
 if (opts.source_type == "catalog") and ("fermi" in catalog_file):
     catalogDir = os.path.join(catalogDir,'%d' % Ncatindex)
-
 if not os.path.isdir(catalogDir):
     os.makedirs(catalogDir)
+
+if opts.doSpectra:
+    spectraDir = os.path.join(outputDir,'spectra',algorithm)
+    if (opts.source_type == "spectra") and ("fermi" in spectra_file):
+        spectraDir = os.path.join(spectraDir,'%d' % Ncatindex)
+    if not os.path.isdir(spectraDir):
+        os.makedirs(spectraDir)
 
 lightcurves = []
 coordinates = []
@@ -209,6 +217,8 @@ print('Organizing lightcurves...')
 if opts.lightcurve_source == "Kowalski":
 
     catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
+    if opts.doSpectra:
+        spectraFile = os.path.join(spectraDir,"%d_%d_%d.pkl"%(field, ccd, quadrant))
 
     kow = []
     nquery = 10
@@ -225,6 +235,9 @@ if opts.lightcurve_source == "Kowalski":
 
     if opts.source_type == "quadrant":
         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.dat"%(field, ccd, quadrant,Ncatindex))
+        if opts.doSpectra:
+            spectraFile = os.path.join(spectraDir,"%d_%d_%d_%d.pkl"%(field, ccd, quadrant,Ncatindex))
+
         lightcurves, coordinates, filters, ids,\
         absmags, bp_rps, names, baseline =\
             get_kowalski_bulk(field, ccd, quadrant, kow, 
@@ -340,6 +353,9 @@ if opts.lightcurve_source == "Kowalski":
         catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").split("/")[-1]
         catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(catalog_file_split,
                                                            Ncatindex))
+        if opts.doSpectra:
+            spectraFile = os.path.join(spectraDir,"%s_%d.pkl"%(catalog_file_split,
+                                                               Ncatindex))
 
         if doSimulateLightcurves:
             lightcurves, coordinates, filters, ids,\
@@ -374,6 +390,8 @@ elif opts.lightcurve_source == "matchfiles":
 
     matchFileEnd = matchFile.split("/")[-1].replace("pytable","dat")
     catalogFile = os.path.join(catalogDir,matchFileEnd)
+    if opts.doSpectra:
+        spectraFile = os.path.join(spectraDir,matchFileEnd)
 
     lightcurves, coordinates, baseline = get_matchfile(matchFile)
     if opts.doRemoveBrightStars:
@@ -391,6 +409,8 @@ elif opts.lightcurve_source == "h5files":
 
     matchFileEnd = matchFile.split("/")[-1].replace("h5","dat")
     catalogFile = os.path.join(catalogDir,matchFileEnd)
+    if opts.doSpectra:
+        spectraFile = os.path.join(spectraDir,matchFileEnd)
     matchFileEndSplit = matchFileEnd.split("_")
     fil = matchFileEndSplit[2][1]
 
@@ -416,6 +436,8 @@ elif opts.lightcurve_source == "h5files":
 
 if len(lightcurves) == 0:
     touch(catalogFile)
+    if opts.doSpectra:
+        touch(spectraFile)
     print('No lightcurves available... exiting.')
     exit(0)
 
@@ -512,8 +534,8 @@ else:
         sigthresh = 7
 
 if opts.doSpectra:
-    lamostpage = "http://dr4.lamost.org/spectrum/png/"
-    lamostfits = "http://dr4.lamost.org/spectrum/fits/"
+    lamostpage = "http://dr5.lamost.org/spectrum/png/"
+    lamostfits = "http://dr5.lamost.org/spectrum/fits/"
 
     LAMOSTcat = os.path.join(starCatalogDir,'lamost.hdf5')
     with h5py.File(LAMOSTcat, 'r') as f:
@@ -526,6 +548,9 @@ if opts.doSpectra:
     lamost = SkyCoord(ra=lamost_ra*u.degree, dec=lamost_dec*u.degree, frame='icrs')    
 
 print('Cataloging / Plotting lightcurves...')
+if opts.doSpectra:
+    data_out = {}
+
 cnt = 0
 fid = open(catalogFile,'w')
 for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significance, pdot in zip(lightcurves,filters,ids,names,coordinates,absmags,bp_rps,periods_best,significances,pdots):
@@ -540,6 +565,19 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
      
     if opts.doVariability:
         significance = stats[cnt][5]        
+
+    if opts.doSpectra:
+        data_out[name] = {}
+        data_out[name]["name"] = name
+        data_out[name]["objid"] = objid
+        data_out[name]["RA"] = coordinate[0]
+        data_out[name]["Dec"] = coordinate[1]
+        data_out[name]["period"] = period
+        data_out[name]["significance"] = significance
+        data_out[name]["pdot"] = pdot
+        data_out[name]["filt"] = filt
+        if opts.doLightcurveStats:
+            data_out[name]["stats"] = stats[cnt]
 
     if opts.doPlots and (significance>sigthresh):
         RA, Dec = coordinate
@@ -577,7 +615,10 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         spectral_data = {}
         if opts.doSpectra:
             coord = SkyCoord(ra=RA*u.degree, dec=Dec*u.degree, frame='icrs')
-            xid = SDSS.query_region(coord, spectro=True)
+            try:
+                xid = SDSS.query_region(coord, spectro=True)
+            except:
+                xid = None
             if not xid is None:
                 spec = SDSS.get_spectra(matches=xid)[0]
                 for ii, sp in enumerate(spec):
@@ -640,9 +681,17 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         ax2.set_ylim([-5,18])
         ax2.invert_yaxis()
         fig.colorbar(hist2[3],ax=ax2)
-        if len(spectral_data.keys()) > 0:
+        nspec = len(spectral_data.keys())
+        npairs = 0
+        if nspec > 1:
             bands = [[4750.0, 4950.0], [6475.0, 6650.0], [8450, 8700]]
+            npairs = int(nspec * (nspec-1)/2)
+            v_values = np.zeros((len(bands), npairs))
+            v_values_unc = np.zeros((len(bands), npairs))
+            data_out[name]["spectra"] = {}
             for jj, band in enumerate(bands):
+                data_out[name]["spectra"][jj] = np.empty((0,3))
+
                 ax = fig.add_subplot(gs[jj, 4])
                 ax_ = fig.add_subplot(gs[jj, 5])
                 xmin, xmax = band[0], band[1]
@@ -671,8 +720,23 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                 if correlation_funcs == {}:
                     pass
                 else:
-                    for key in correlation_funcs:
+                    if len(correlation_funcs) == 1:
+                        yheights = [0.5]
+                    else:
+                        yheights = np.linspace(0.25,0.75,len(correlation_funcs))
+                    for kk, key in enumerate(correlation_funcs):
+                        if not 'v_peak' in correlation_funcs[key]:
+                            continue
+                        vpeak = correlation_funcs[key]['v_peak']
+                        vpeak_unc = correlation_funcs[key]['v_peak_unc']
+                        Cpeak = correlation_funcs[key]['C_peak']
                         ax_.plot(correlation_funcs[key]["velocity"], correlation_funcs[key]["correlation"])
+                        ax_.plot([vpeak, vpeak], [0, Cpeak], 'k--')
+                        ax_.text(250, yheights[kk], "v=%.0f +- %.0f"%(vpeak, vpeak_unc))
+                        v_values[jj][kk] = vpeak
+                        v_values_unc[jj][kk] = vpeak_unc
+                        data_out[name]["spectra"][jj] = np.vstack((data_out[name]["spectra"][jj], [vpeak, vpeak_unc, Cpeak]))
+
                 if np.isfinite(ymin) and np.isfinite(ymax):
                     ax.set_ylim([ymin,ymax])
                 ax.set_xlim([xmin,xmax])
@@ -681,9 +745,43 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                 if jj == len(bands)-1:
                     ax.set_xlabel('Wavelength [A]')
                     ax_.set_xlabel('Velocity [km/s]')
-                #ax.set_ylabel('Flux')
-                #if jj == 1:
-                #    ax_.set_ylabel('Correlation amplitude')
+                    adjust_subplots_band(ax, ax_)
+                else:
+                    ax_.set_xticklabels([])
+                if jj==1:
+                    new_tick_locations = np.array([-1000, -500, 0, 500, 1000])
+                    axmass = ax_.twiny()
+                    axmass.set_xlim(ax_.get_xlim())
+                    axmass.set_xticks(new_tick_locations)
+                    tick_labels = tick_function(new_tick_locations, period)
+                    tick_labels = ["{0:.0f}".format(float(x)) for x in tick_labels]
+                    axmass.set_xticklabels(tick_labels)
+                    axmass.set_xlabel("f($M$) ("+r'$M_\odot$'+')')
+        if npairs > 0:
+            # calculate mass functon
+            if npairs==1:
+                id_pair = 0
+            else:
+                # select a pair with:
+                # (1) reasonable variance among all band measurements
+                stds = np.std(v_values, axis=0)
+                if np.sum(stds<50)>=1:
+                    v_values = v_values[:, stds<50]
+                    v_values_unc = v_values_unc[:, stds<50]
+                # (2) largest (absolute) velosity variation
+                vsums = np.sum(abs(v_values), axis=0)
+                id_pair = np.where(vsums == max(vsums))[0][0]
+            v_adopt = np.median(v_values[:,id_pair])
+            id_band = np.where(v_values[:,id_pair]==v_adopt)[0][0]
+            v_adopt_unc = v_values_unc[id_band,id_pair]
+            K = abs(v_adopt/2.) # [km/s] assuming that the velocity variation is max and min in rv curve
+            K_unc = abs(v_adopt_unc/2.) # [km/s]
+            P = 2*period # [day] if ellipsodial modulation, amplitude are roughly the same, 
+                        # then the photometric period is probably half of the orbital period
+            fmass = (K * 100000)**3 * (P*86400) / (2*np.pi*const.G.cgs.value) / const.M_sun.cgs.value
+            fmass_unc = 3 * fmass / K * K_unc
+            data_out[name]["fmass"] = fmass
+            data_out[name]["fmass_unc"] = fmass_unc
         if pdot == 0:
             plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
         else:
@@ -693,3 +791,8 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
 
     cnt = cnt + 1
 fid.close()
+
+if opts.doSpectra:
+    with open(spectraFile, 'wb') as handle:
+        pickle.dump(data_out, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
