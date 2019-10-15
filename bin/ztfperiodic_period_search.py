@@ -682,6 +682,7 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         ax2.invert_yaxis()
         fig.colorbar(hist2[3],ax=ax2)
         nspec = len(spectral_data.keys())
+        npairs = 0
         if nspec > 1:
             bands = [[4750.0, 4950.0], [6475.0, 6650.0], [8450, 8700]]
             npairs = int(nspec * (nspec-1)/2)
@@ -724,6 +725,8 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                     else:
                         yheights = np.linspace(0.25,0.75,len(correlation_funcs))
                     for kk, key in enumerate(correlation_funcs):
+                        if not 'v_peak' in correlation_funcs[key]:
+                            continue
                         vpeak = correlation_funcs[key]['v_peak']
                         vpeak_unc = correlation_funcs[key]['v_peak_unc']
                         Cpeak = correlation_funcs[key]['C_peak']
@@ -754,30 +757,31 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                     tick_labels = ["{0:.0f}".format(float(x)) for x in tick_labels]
                     axmass.set_xticklabels(tick_labels)
                     axmass.set_xlabel("f($M$) ("+r'$M_\odot$'+')')
-        # calculate mass functon
-        if npairs==1:
-            id_pair = 0
-        else:
-            # select a pair with:
-            # (1) reasonable variance among all band measurements
-            stds = np.std(v_values, axis=0)
-            if np.sum(stds<50)>=1:
-                v_values = v_values[:, stds<50]
-                v_values_unc = v_values_unc[:, stds<50]
-            # (2) largest (absolute) velosity variation
-            vsums = np.sum(abs(v_values), axis=0)
-            id_pair = np.where(vsums == max(vsums))[0][0]
-        v_adopt = np.median(v_values[:,id_pair])
-        id_band = np.where(v_values[:,id_pair]==v_adopt)[0][0]
-        v_adopt_unc = v_values_unc[id_band,id_pair]
-        K = abs(v_adopt/2.) # [km/s] assuming that the velocity variation is max and min in rv curve
-        K_unc = abs(v_adopt_unc/2.) # [km/s]
-        P = 2*period # [day] if ellipsodial modulation, amplitude are roughly the same, 
-                    # then the photometric period is probably half of the orbital period
-        fmass = (K * 100000)**3 * (P*86400) / (2*np.pi*const.G.cgs.value) / const.M_sun.cgs.value
-        fmass_unc = 3 * fmass / K * K_unc
-        data_out[name]["fmass"] = fmass
-        data_out[name]["fmass_unc"] = fmass_unc
+        if npairs > 0:
+            # calculate mass functon
+            if npairs==1:
+                id_pair = 0
+            else:
+                # select a pair with:
+                # (1) reasonable variance among all band measurements
+                stds = np.std(v_values, axis=0)
+                if np.sum(stds<50)>=1:
+                    v_values = v_values[:, stds<50]
+                    v_values_unc = v_values_unc[:, stds<50]
+                # (2) largest (absolute) velosity variation
+                vsums = np.sum(abs(v_values), axis=0)
+                id_pair = np.where(vsums == max(vsums))[0][0]
+            v_adopt = np.median(v_values[:,id_pair])
+            id_band = np.where(v_values[:,id_pair]==v_adopt)[0][0]
+            v_adopt_unc = v_values_unc[id_band,id_pair]
+            K = abs(v_adopt/2.) # [km/s] assuming that the velocity variation is max and min in rv curve
+            K_unc = abs(v_adopt_unc/2.) # [km/s]
+            P = 2*period # [day] if ellipsodial modulation, amplitude are roughly the same, 
+                        # then the photometric period is probably half of the orbital period
+            fmass = (K * 100000)**3 * (P*86400) / (2*np.pi*const.G.cgs.value) / const.M_sun.cgs.value
+            fmass_unc = 3 * fmass / K * K_unc
+            data_out[name]["fmass"] = fmass
+            data_out[name]["fmass_unc"] = fmass_unc
         if pdot == 0:
             plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
         else:

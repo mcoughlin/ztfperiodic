@@ -67,6 +67,9 @@ def load_catalog(catalog,doFermi=False):
             period = data_out[name]["period"]
             significance = data_out[name]["significance"]
             spectra = data_out[name]["spectra"]
+            fmass, fmass_unc = data_out[name]["fmass"], data_out[name]["fmass_unc"]
+            print(fmass, fmass_unc)
+
             vels, velerrs = [], []
             allneg, allpos = True, True
             diffs = []
