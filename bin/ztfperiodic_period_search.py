@@ -620,7 +620,11 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
             except:
                 xid = None
             if not xid is None:
-                spec = SDSS.get_spectra(matches=xid)[0]
+                try:
+                    spec = SDSS.get_spectra(matches=xid)[0]
+                except:
+                    spec = []
+                    pass
                 for ii, sp in enumerate(spec):
                     try:
                         sp.data["loglam"]
