@@ -66,6 +66,7 @@ def parse_commandline():
     parser.add_option("-n","--Ncore",default=4,type=int)
 
     parser.add_option("--doSimulateLightcurves",  action="store_true", default=False)
+    parser.add_option("--doNotPeriodFind",  action="store_true", default=False)
     parser.add_option("--doUsePDot",  action="store_true", default=False)
     parser.add_option("--doVariability",  action="store_true", default=False)
     parser.add_option("--doQuadrantFile",  action="store_true", default=False)
@@ -90,6 +91,7 @@ def parse_commandline():
     parser.add_option("--Ncatindex",default=0,type=int)
 
     parser.add_option("--stardist",default=100.0,type=float)
+    parser.add_option("--sigthresh",default=None,type=float)
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
@@ -379,6 +381,7 @@ if opts.lightcurve_source == "Kowalski":
                                   doCombineFilt=doCombineFilt,
                                   doRemoveHC=doRemoveHC,
                                   doExtinction=doExtinction)
+
     else:
         print("Source type unknown...")
         exit(0)
@@ -490,18 +493,23 @@ freq = 1/P
 #freqs = np.append(freqs, freq)
 #freqs = freq*np.ones(freqs.shape)
 
-print('Analyzing %d lightcurves...' % len(lightcurves))
-start_time = time.time()
-periods_best, significances, pdots = find_periods(algorithm, lightcurves, 
-                                                  freqs, 
-                                                  doGPU=opts.doGPU,
-                                                  doCPU=opts.doCPU,
-                                                  doSaveMemory=opts.doSaveMemory,
-                                                  doRemoveTerrestrial=opts.doRemoveTerrestrial,
-                                                  freqs_to_remove=freqs_to_remove,
-                                                  doUsePDot=opts.doUsePDot)
-end_time = time.time()
-print('Lightcurve analysis took %.2f seconds' % (end_time - start_time))
+if opts.doNotPeriodFind:
+    periods_best = np.ones((len(lightcurves),1))
+    significances = np.ones((len(lightcurves),1))
+    pdots = np.ones((len(lightcurves),1))
+else:
+    print('Analyzing %d lightcurves...' % len(lightcurves))
+    start_time = time.time()
+    periods_best, significances, pdots = find_periods(algorithm, lightcurves, 
+                                                      freqs, 
+                                                      doGPU=opts.doGPU,
+                                                      doCPU=opts.doCPU,
+                                                      doSaveMemory=opts.doSaveMemory,
+                                                      doRemoveTerrestrial=opts.doRemoveTerrestrial,
+                                                      freqs_to_remove=freqs_to_remove,
+                                                      doUsePDot=opts.doUsePDot)
+    end_time = time.time()
+    print('Lightcurve analysis took %.2f seconds' % (end_time - start_time))
 
 if opts.doLightcurveStats:
     print('Running lightcurve stats...')
@@ -521,17 +529,20 @@ if opts.doLightcurveStats:
             stat = calc_stats(t, mag, magerr, period)
             stats.append(stat)
 
-if opts.doVariability:
-    sigthresh = 0.15
+if not opts.sigthresh is None:
+    sigthresh = opts.sigthresh
 else:
-    if algorithm == "LS":
-        sigthresh = 1e6
-    elif algorithm == "FFT":
-        sigthresh = 0
-    elif algorithm == "GCE":
-        sigthresh = 7
+    if opts.doVariability:
+        sigthresh = 0.15
     else:
-        sigthresh = 7
+        if algorithm == "LS":
+            sigthresh = 1e6
+        elif algorithm == "FFT":
+            sigthresh = 0
+        elif algorithm == "GCE":
+            sigthresh = 7
+        else:
+            sigthresh = 7
 
 if opts.doSpectra:
     lamostpage = "http://dr5.lamost.org/spectrum/png/"
@@ -666,6 +677,8 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
             ax2 = fig.add_subplot(gs[:, 2:4])
             #ax3 = fig.add_subplot(gs[0, 2])
         else:
+            if opts.doNotPeriodFind:
+                continue
             fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
         ax1.errorbar(phases, magnitude,err,ls='none',c='k')
         period2=period
