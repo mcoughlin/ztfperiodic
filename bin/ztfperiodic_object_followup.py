@@ -30,7 +30,6 @@ import astropy.io.fits
 
 import requests
 
-#sys.path.append("/Users/yuhanyao/Documents/GitHub/ztfperiodic/")
 import ztfperiodic
 from ztfperiodic import fdecomp
 from ztfperiodic.lcstats import calc_stats
@@ -43,7 +42,7 @@ from ztfperiodic.utils import combine_lcs
 from ztfperiodic.periodsearch import find_periods
 from ztfperiodic.specfunc import correlate_spec, adjust_subplots_band, tick_function
 
-from gatspy.periodic import LombScargle, LombScargleFast
+from gatspy.periodic import LombScargleFast
 
 try:
     from penquins import Kowalski
@@ -311,7 +310,20 @@ ls = LombScargleFast(silence_warnings=True)
 hjddiff = np.max(hjd) - np.min(hjd)
 ls.optimizer.period_range = (0.1, hjddiff)
 ls.fit(hjd,mag,magerr)
-period = ls.best_period
+
+# https://github.com/astroML/gatspy/blob/master/examples/FastLombScargle.ipynb
+oversampling = 2
+N = len(hjd)
+df = 1. / (oversampling * hjddiff) # frequency grid spacing
+fmin = 1 / hjddiff
+fmax = 10 # minimum period is 0.05 d
+Nf = (fmax - fmin) // df
+freqs = fmin + df * np.arange(Nf)
+periods = 1 / freqs
+powers = ls._score_frequency_grid(fmin, df, Nf)
+ind_best = np.argsort(powers)[-1]
+period = periods[ind_best]
+power = powers[ind_best]
 
 # fit the lightcurve with fourier components, using BIC to decide the optimal number of pars
 LCfit = fdecomp.fit_best(np.c_[hjd,mag,magerr], period, 5, plotname=False)
