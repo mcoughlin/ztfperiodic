@@ -522,7 +522,7 @@ def get_simulated(ra, dec, min_epochs = 1, name = None, doUsePDot = False):
         objid = '%10d' % int(np.random.uniform(low=0.0, high=1e10))
 
         hjd = ztfperiodic.simulate.time()
-        flux, p = ztfperiodic.simulate.pdot_lc(t_obs=hjd, Pdot=pdots[i],
+        flux, p, errs = ztfperiodic.simulate.pdot_lc(t_obs=hjd, Pdot=pdots[i],
                                                period=1/freq)
         mag = -2.5*np.log10(flux)
         magerr = 0.05*np.ones(mag.shape)
