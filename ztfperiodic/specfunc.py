@@ -167,21 +167,27 @@ def correlate_spec(spectral_data, band = [6475.0, 6650.0],
                 Cright = Cvnew[ixright]
                 nleft = nnew[~ixright]
                 Cleft = Cvnew[~ixright]
-                id_right_ = np.where(Cright<0.5*C_peak)[0]
-                if len(id_right_)==0:
+                if len(Cright) == 1:
                     id_right = -1
                 else:
-                    id_right = id_right_[0]
-                if abs(Cright[id_right]-0.5*C_peak) > abs(Cright[id_right-1]-0.5*C_peak):
-                    id_right = id_right-1
+                    id_right_ = np.where(Cright<0.5*C_peak)[0]
+                    if len(id_right_)==0:
+                        id_right = -1
+                    else:
+                        id_right = id_right_[0]
+                    if abs(Cright[id_right]-0.5*C_peak) > abs(Cright[id_right-1]-0.5*C_peak):
+                        id_right = id_right-1
                 
-                id_left_ = np.where(Cleft<0.5*C_peak)[0]
-                if len(id_left_)==0:
+                if len(Cleft) == 1:
                     id_left = 0
                 else:
-                    id_left = id_left_[-1]
-                if abs(Cleft[id_left]-0.5*C_peak) > abs(Cleft[id_left+1]-0.5*C_peak):
-                    id_left = id_left+1
+                    id_left_ = np.where(Cleft<0.5*C_peak)[0]
+                    if len(id_left_)==0:
+                        id_left = 0
+                    else:
+                        id_left = id_left_[-1]
+                    if abs(Cleft[id_left]-0.5*C_peak) > abs(Cleft[id_left+1]-0.5*C_peak):
+                        id_left = id_left+1
                     
                 width = nright[id_right] - nleft[id_left]
                 sigma_n = 3*width/(8*(1+r_value))
