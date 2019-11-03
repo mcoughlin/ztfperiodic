@@ -1,17 +1,13 @@
 
 import os, sys
-import optparse
 import pandas as pd
 import numpy as np
 import tables
 import glob
 import time
-import scipy.constants as ct
 
 import matplotlib
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 import matplotlib.patches as patches
 
 from astropy.io import ascii
@@ -24,11 +20,10 @@ import tqdm
 
 from astroquery.vizier import Vizier
 
-from gatspy.periodic import LombScargle, LombScargleFast
-
 LOGIN_URL = "https://irsa.ipac.caltech.edu/account/signon/login.do"
 meta_baseurl="https://irsa.ipac.caltech.edu/ibe/search/ztf/products/"
 data_baseurl="https://irsa.ipac.caltech.edu/ibe/data/ztf/products/"
+
 
 def gaia_query(ra_deg, dec_deg, rad_deg, maxmag=25,
                maxsources=1):
@@ -39,11 +34,21 @@ def gaia_query(ra_deg, dec_deg, rad_deg, maxmag=25,
                 maxmag: upper limit G magnitude (optional)
                 maxsources: maximum number of sources
     returns: astropy.table object
+    
+    See below for explanation:
+    https://gea.esac.esa.int/archive/documentation/GDR2/Gaia_archive/chap_datamodel/sec_dm_main_tables/ssec_dm_gaia_source.html
+    
     """
     vquery = Vizier(columns=['Source', 'RA_ICRS', 'DE_ICRS',
                              'phot_g_mean_mag','phot_r_mean_mag',
                              'e_Gmag',
-                             'Plx', 'e_Plx', 'BP-RP', 'e_BPmag', 'e_RPmag',
+                             'Plx', 'e_Plx', 
+                'gofAL', #Goodness of fit statistic of model wrt along-scan observations, 
+                # it should approximately follow a normal distribution with zero mean value and unit standard deviation, > 3 are suspicious
+                'chi2AL', 
+                'epsi',
+                'sepsi', # astrometric_excess_noise_sig should be zero in half of the cases and approximately follow the positive half of a normal distribution with zero mean and unit standard deviation for the other half.
+                             'BP-RP', 'e_BPmag', 'e_RPmag',
                              'Teff', 'Rad', 'Lum'],
                     column_filters={"phot_g_mean_mag":
                                     ("<%f" % maxmag),
@@ -61,6 +66,7 @@ def gaia_query(ra_deg, dec_deg, rad_deg, maxmag=25,
         return source[0]
     except:
         return []
+    
 
 def ps1_query(ra_deg, dec_deg, rad_deg, maxmag=25,
                maxsources=1):

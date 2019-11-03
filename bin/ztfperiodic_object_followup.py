@@ -15,7 +15,8 @@ import glob
 
 import matplotlib
 matplotlib.use('Agg')
-matplotlib.rcParams.update({'font.size': 16})
+fs = 16
+matplotlib.rcParams.update({'font.size': fs})
 matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -28,14 +29,11 @@ from astropy.coordinates import SkyCoord
 from astroquery.sdss import SDSS
 import astropy.io.fits
 
-import requests
-
 import ztfperiodic
 from ztfperiodic import fdecomp
 from ztfperiodic.lcstats import calc_stats
 from ztfperiodic.utils import gaia_query
 from ztfperiodic.utils import ps1_query
-from ztfperiodic.utils import load_file
 from ztfperiodic.utils import get_kowalski
 from ztfperiodic.utils import get_lightcurve
 from ztfperiodic.utils import combine_lcs
@@ -117,6 +115,8 @@ with h5py.File(WDcat, 'r') as f:
     parallax = f['parallax'][:]
 absmagWD=gmag+5*(np.log10(np.abs(parallax))-2)
 
+gaia = gaia_query(opts.ra, opts.declination, 5/3600.0)
+
 if not opts.objid is None:
     path_out_dir='%s/%.5f_%.5f/%d'%(outputDir, opts.ra, 
                                     opts.declination, opts.objid)
@@ -131,8 +131,8 @@ if opts.doOverwrite:
 if not os.path.isdir(path_out_dir):
     os.makedirs(path_out_dir)
 
+
 if opts.doJustHR:
-    gaia = gaia_query(opts.ra, opts.declination, 5/3600.0)
 
     if opts.doPlots:
         bp_rp, absmag = gaia['BP-RP'], gaia['Gmag'] + 5*(np.log10(gaia['Plx']) - 2)
@@ -368,13 +368,11 @@ if opts.doPlots:
     plt.close()
 
     plotName = os.path.join(path_out_dir,'periodogram.pdf')
-    periods = np.logspace(-3,-1,10000)
-    #periods = np.logspace(0,2,10000)
-    periodogram = ls.periodogram(periods)
+    
     plt.figure(figsize=(12,8))
-    plt.loglog(periods,periodogram)
+    plt.loglog(periods,powers)
     if opts.doPhase:
-        plt.plot([phase,phase],[0,np.max(periodogram)],'r--')
+        plt.plot([period,period],[1e-3,np.max(powers)],'r--')
     plt.xlabel("Period [days]")
     plt.ylabel("Power")
     plt.savefig(plotName)
@@ -409,14 +407,35 @@ if opts.doPlots:
     ax1.set_xlabel("phase")
     ax1.invert_yaxis()
     
-    asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
-    hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
-    if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
-        ax2.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
-                     c='r',zorder=1,fmt='o')
+    bp_rp = gaia['BP-RP'].data.data[0]
+    Plx = gaia['Plx'].data.data[0] # mas
+    e_Plx = gaia['e_Plx'].data.data[0] # mas
+    chi2AL = gaia["chi2AL"].data.data[0]
+    gofAL = gaia["gofAL"].data.data[0]
+    epsi = gaia["epsi"].data.data[0]
+    sepsi = gaia["sepsi"].data.data[0]
+    Gmag = gaia['Gmag'].data.data[0]
+    
+    
+    if (~np.isnan(bp_rp))&(~np.isnan(Plx)):
+        if Plx > 0 :
+            d_pc = 1 / (Plx*1e-3)
+            d_pc_upper = 1 / ((Plx-e_Plx)*1e-3)
+            d_pc_lower = 1 / ((Plx+e_Plx)*1e-3)
+    
+            absmag = Gmag - 5 * (np.log10(d_pc)-1)
+            absmag_lower = Gmag - 5 * (np.log10(d_pc_lower)-1)
+            absmag_upper = Gmag - 5 * (np.log10(d_pc_upper)-1)
+
+            ax2.plot(bp_rp, absmag, 'o', c='r', zorder=1, markersize=5)
+            ax2.plot([bp_rp, bp_rp], [absmag_lower, absmag_upper], 'r-')
+        
+            ax2.set_title("d = %d [pc], gof = %d"%(d_pc, gofAL), fontsize = fs)
+    
     ax2.set_xlim([-1,4.0])
-    ax2.set_ylim([-5,18])
-    ax2.invert_yaxis()
+    ax2.set_ylim([18,-5])
+    
+    hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
     fig.colorbar(hist2[3],ax=ax2)
     
     nspec = len(spectral_data.keys())
@@ -579,14 +598,7 @@ if opts.doPlots:
         #ymax = y90 + 7*ystd
         #ax1.set_ylim([ymin,ymax])
         ax1.invert_yaxis()
-        asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
-        hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
-        if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
-            ax2.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
-                         c='r',zorder=1,fmt='o')
-        ax2.set_xlim([-1,4.0])
-        ax2.set_ylim([-5,18])
-        ax2.invert_yaxis()
+        
         fig.colorbar(hist2[3],ax=ax2)
         if len(spectral_data.keys()) > 0:
             xmin, xmax = 6475.0, 6650.0
