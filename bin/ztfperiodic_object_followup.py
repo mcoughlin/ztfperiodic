@@ -10,6 +10,8 @@ import os
 import optparse
 import numpy as np
 import h5py
+import glob
+import pickle
 
 import matplotlib
 matplotlib.use('Agg')
@@ -82,6 +84,8 @@ def parse_commandline():
 
     parser.add_option("-n", "--nstack", default=1, type=int)
     parser.add_option("--objid", type=int)
+
+    parser.add_option("--pickle_file", default="../data/lsst/ellc_OpSim1520_0000.pickle")
 
     parser.add_option("--doRemoveHC", action="store_true", default=False)
 
@@ -243,7 +247,38 @@ elif opts.lightcurve_source == "matchfiles":
     if len(df) == 0:
         print("No data available...")
         exit(0)
+elif opts.lightcurve_source == "pickle":
+    # open a file, where you stored the pickled data
+    fid = open(opts.pickle_file, 'rb')
+    # dump information to that file
+    ls = pickle.load(fid)
+    # close the file
+    fid.close()
 
+    for ii, lkey in enumerate(ls.keys()):
+        l = ls[lkey]
+        if ii == 0:
+            hjd, mag, magerr = l["OpSimDates"], l["magObs"]-np.median(l["magObs"]), l["e_magObs"]
+        else:
+            hjd = np.hstack((hjd,l["OpSimDates"]))
+            mag = np.hstack((mag,l["magObs"]-np.median(l["magObs"])))
+            magerr = np.hstack((magerr,l["e_magObs"]))
+
+    hjd, mag, magerr = np.array(hjd), np.array(mag), np.array(magerr)
+    fid = np.ones(hjd.shape)
+
+    hjd = hjd - np.min(hjd)
+
+    print(np.min(hjd), np.max(hjd))
+
+    lightcurve = {'hjd': hjd, 'mag': mag, 'magerr': magerr, 'fid': fid}
+    lightcurves_all = {'test': lightcurve}
+
+    if len(hjd) == 0:
+        print("No data available...")
+        exit(0)
+
+    bp_rp, absmag = np.nan, [np.nan, np.nan, np.nan]
 
 if opts.doPlots:
     plotName = os.path.join(path_out_dir,'gaia.pdf')
@@ -510,7 +545,7 @@ if opts.doPeriodSearch:
     else:
         fmin, fmax = 2/baseline, 480
     
-    samples_per_peak = 10
+    samples_per_peak = 3
     
     df = 1./(samples_per_peak * baseline)
     nf = int(np.ceil((fmax - fmin) / df))
