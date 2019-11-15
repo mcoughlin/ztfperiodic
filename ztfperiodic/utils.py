@@ -6,6 +6,8 @@ import tables
 import glob
 import time
 
+from scipy.interpolate import interpolate as interp
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.patches as patches
@@ -19,6 +21,13 @@ import requests
 import tqdm
 
 from astroquery.vizier import Vizier
+
+import matplotlib
+matplotlib.use('Agg')
+matplotlib.rcParams.update({'font.size': 16})
+matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
+from matplotlib.colors import LogNorm
+import matplotlib.pyplot as plt
 
 LOGIN_URL = "https://irsa.ipac.caltech.edu/account/signon/login.do"
 meta_baseurl="https://irsa.ipac.caltech.edu/ibe/search/ztf/products/"
@@ -826,7 +835,112 @@ def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
 
     return lightcurve
 
-def get_matchfile(f):
+def get_matchfile(f, min_epochs = 1, doRemoveHC=False,
+                  Ncatalog = 1, Ncatindex = 0):
+
+    bands = {'g': 1, 'r': 2, 'i': 3, 'z': 4, 'J': 5}
+
+    fsplit = f.split("/")[-1].replace(".pytable","").split("_")
+    filt = bands[fsplit[2][1]]
+    
+    baseline = 0
+    cnt=0
+    names = []
+    lightcurves, coordinates, filters, ids = [], [], [], []
+    absmags, bp_rps = [], []
+
+    with tables.open_file(f) as store:
+        for tbl in store.walk_nodes("/", "Table"):
+            if tbl.name in ["sourcedata", "transientdata"]:
+                group = tbl._v_parent
+                break
+
+        srcdata = pd.DataFrame.from_records(group.sourcedata[:])
+        srcdata.sort_values('matchid', axis=0, inplace=True)
+        srcdata2 = store.root.matches.sources[:]
+        sources = pd.DataFrame.from_records(store.root.matches.sources.read_where('nobs>100'))
+        exposures = pd.DataFrame.from_records(store.root.matches.exposures.read_where(('(((programid>1) | ((programid==1) & (obsmjd<58484))| (programpi=="TESS")))')))
+        merged = srcdata.merge(exposures, on="expid")
+
+    matchids = sources[:]['matchid'].values
+    matchids_split = np.array_split(matchids, Ncatalog)
+    matchids = matchids_split[Ncatindex]
+
+    tt = np.unique(np.sort(merged.obshjd.values))
+    tt = tt - tt[0]
+    if doRemoveHC:
+        dt = np.diff(tt)
+        idx = np.setdiff1d(np.arange(len(tt)),
+                           np.where(dt < 30.0*60.0/86400.0)[0])
+        tt = tt[idx]
+
+    #magmat = np.nan*np.ones((len(tt),len(matchids)))
+
+    for ii, k in enumerate(matchids):
+        df = merged[merged['matchid'] == k]
+        df=df[df.catflags == 0]
+        df2=sources[:][sources[:].matchid == k]
+
+        RA=df2.ra.values[0]
+        Dec=df2.dec.values[0]
+        mag = df.mag.values.astype(np.float32)+17.0
+        magerr=df.magerr.values.astype(np.float32)/1000.0
+        obsHJD = df.obshjd-np.min(df.obshjd)
+        hjd = obsHJD.values
+
+        if doRemoveHC:
+            dt = np.diff(hjd)
+            idx = np.setdiff1d(np.arange(len(hjd)),
+                               np.where(dt < 30.0*60.0/86400.0)[0])
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+
+        #f = interp.interp1d(hjd, mag, fill_value='extrapolate')
+        #yinterp = f(tt)
+        #if len(hjd) > float(len(tt))/3.0:
+        #    magmat[:, ii] = yinterp - np.median(yinterp)
+
+        if len(hjd) < min_epochs: continue
+
+        coordinate=(RA,Dec)
+        coordinates.append(coordinate)
+        lightcurve=(hjd,mag,magerr)
+        lightcurves.append(lightcurve)
+        filters.append([filt])
+        ids.append(k)
+
+        absmags.append([np.nan, np.nan, np.nan])
+        bp_rps.append(np.nan)
+
+        ra_hex, dec_hex = convert_to_hex(RA*24/360.0,delimiter=''), convert_to_hex(Dec,delimiter='')
+        if dec_hex[0] == "-":
+            objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+        else:
+            objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+        names.append(objname)
+
+        newbaseline = max(hjd)-min(hjd)
+        if newbaseline>baseline:
+            baseline=newbaseline
+        cnt = cnt + 1
+
+    #magmat_sum = np.nansum(magmat, axis=0)
+    #idx = np.where(magmat_sum > 0)[0]
+    #magmat = magmat[:, idx]
+
+    #UA, sA, VA = np.linalg.svd(magmat.T, full_matrices=True)
+    #VA = VA.T
+
+    #plt.figure()
+    #for ii, row in enumerate(magmat.T):
+    #    plt.plot(tt, row)
+    #plt.plot(tt, sA[0]*VA[:,0], 'k--')
+    #plt.ylim([-1,1.0])
+    #plt.savefig('test.png')
+    #plt.close()
+
+    return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
+
+def get_matchfile_original(f):
 
     lightcurves, coordinates = [], []
     baseline = 0

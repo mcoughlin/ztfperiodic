@@ -75,7 +75,7 @@ def parse_commandline():
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     #parser.add_option("-m","--matchFile",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.pytable") 
-    parser.add_option("-m","--matchFile",default="/media/Data/mcoughlin/Matchfiles/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.h5")
+    parser.add_option("-m","--matchFile",default="/home/mcoughlin/ZTF/matchfiles/rc00/fr000201-000250/ztf_000245_zg_c01_q1_match.pytable")
     parser.add_option("-b","--batch_size",default=1,type=int)
     parser.add_option("-k","--kowalski_batch_size",default=1000,type=int)
     parser.add_option("-a","--algorithm",default="CE")
@@ -165,6 +165,7 @@ doRemoveHC = opts.doRemoveHC
 doSimulateLightcurves = opts.doSimulateLightcurves
 doUsePDot = opts.doUsePDot
 doExtinction = opts.doExtinction
+Ncatalog = opts.Ncatalog
 Ncatindex = opts.Ncatindex
 
 if opts.doQuadrantFile:
@@ -244,7 +245,7 @@ if opts.lightcurve_source == "Kowalski":
         absmags, bp_rps, names, baseline =\
             get_kowalski_bulk(field, ccd, quadrant, kow, 
                               program_ids=program_ids, min_epochs=min_epochs,
-                              num_batches=opts.Ncatalog, nb=Ncatindex)
+                              num_batches=Ncatalog, nb=Ncatindex)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\
                 slicestardist(lightcurves, coordinates, filters,
@@ -333,10 +334,10 @@ if opts.lightcurve_source == "Kowalski":
             if ("fermi" in catalog_file):
                 amaj, amin, phi = amaj[idx], amin[idx], phi[idx]
 
-        names_split = np.array_split(names,opts.Ncatalog)
-        ras_split = np.array_split(ras,opts.Ncatalog)
-        decs_split = np.array_split(decs,opts.Ncatalog)
-        errs_split = np.array_split(errs,opts.Ncatalog)
+        names_split = np.array_split(names,Ncatalog)
+        ras_split = np.array_split(ras,Ncatalog)
+        decs_split = np.array_split(decs,Ncatalog)
+        errs_split = np.array_split(errs,Ncatalog)
 
         names = names_split[Ncatindex]
         ras = ras_split[Ncatindex]
@@ -344,9 +345,9 @@ if opts.lightcurve_source == "Kowalski":
         errs = errs_split[Ncatindex]
 
         if ("fermi" in catalog_file):
-            amaj_split = np.array_split(amaj,opts.Ncatalog)
-            amin_split = np.array_split(amin,opts.Ncatalog)
-            phi_split = np.array_split(phi,opts.Ncatalog)
+            amaj_split = np.array_split(amaj,Ncatalog)
+            amin_split = np.array_split(amin,Ncatalog)
+            phi_split = np.array_split(phi,Ncatalog)
 
             amaj = amaj_split[Ncatindex]
             amin = amin_split[Ncatindex]
@@ -396,10 +397,17 @@ elif opts.lightcurve_source == "matchfiles":
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,matchFileEnd)
 
-    lightcurves, coordinates, baseline = get_matchfile(matchFile)
+    lightcurves, coordinates, filters, ids,\
+    absmags, bp_rps, names, baseline = get_matchfile(matchFile,
+                                                     min_epochs=min_epochs,
+                                                     doRemoveHC=doRemoveHC,
+                                                     Ncatalog=Ncatalog,
+                                                     Ncatindex=Ncatindex)
+
     if opts.doRemoveBrightStars:
-        lightcurves, coordinates, filters, ids =\
-            slicestardist(lightcurves, coordinates, filters, ids)
+        lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\
+            slicestardist(lightcurves, coordinates, filters,
+                          ids, absmags, bp_rps, names)
 
     if len(lightcurves) == 0:
         print("No data available...")
