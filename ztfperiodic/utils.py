@@ -192,8 +192,8 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
-    #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190718": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
-    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20190718": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } }
+    #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20191101": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
+    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20191101": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } }
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
@@ -204,7 +204,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
         print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec)) 
         return {}
 
-    key1, key2, key3 = 'ZTF_sources_20190718', 'Gaia_DR2', 'ZTF_alerts'
+    key1, key2, key3 = 'ZTF_sources_20191101', 'Gaia_DR2', 'ZTF_alerts'
     data1, data2, data3 = r["result_data"][key1], r["result_data"][key2], r["result_data"][key3]
     key = list(data1.keys())[0]
     data = data1[key]
@@ -695,11 +695,12 @@ def combine_lcs(ls):
 
 def get_kowalski_bulk(field, ccd, quadrant, kow,
                       program_ids = [2,3], min_epochs = 1, max_error = 2.0,
-                      num_batches=1, nb=0):
+                      num_batches=1, nb=0,
+                      doRemoveHC=False, doHCOnly=False):
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
-    qu = {"query_type":"general_search","query":"db['ZTF_sources_20190718'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
+    qu = {"query_type":"general_search","query":"db['ZTF_sources_20191101'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
     r = database_query(kow, qu, nquery = 10)
 
     if not "result_data" in r:
@@ -720,14 +721,14 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
     for nb in [nb]:
         print("Querying batch number %d/%d..."%(nb, num_batches))
 
-        qu = {"query_type":"general_search","query":"db['ZTF_sources_20190718'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
+        qu = {"query_type":"general_search","query":"db['ZTF_sources_20191101'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
         r = database_query(kow, qu, nquery = 10)
 
         if not "result_data" in r:
             print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
             continue
 
-        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20190718'].find_one({})"}
+        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20191101'].find_one({})"}
         #r = kow.query(query=qu)
 
         datas = r["result_data"]["query_result"]
@@ -761,6 +762,21 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
             fid = fid[idx]
             ra, dec = ra[idx], dec[idx]
+
+            if doRemoveHC:
+                dt = np.diff(hjd)
+                idx = np.setdiff1d(np.arange(len(hjd)),
+                                   np.where(dt < 30.0*60.0/86400.0)[0])
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                fid = fid[idx]
+                ra, dec = ra[idx], dec[idx]
+            elif doHCOnly:
+                dt = np.diff(hjd)
+                idx = np.setdiff1d(np.arange(len(hjd)),
+                                   np.where(dt >= 30.0*60.0/86400.0)[0])
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                fid = fid[idx]
+                ra, dec = ra[idx], dec[idx]
 
             if len(hjd) < min_epochs: continue
 
@@ -835,7 +851,35 @@ def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
 
     return lightcurve
 
-def get_matchfile(f, min_epochs = 1, doRemoveHC=False,
+def find_matchfile(matchfileDir, objid = 10593142036566):
+        
+    fs=str(objid)
+    fieldID=fs[1:5]
+    rcID=fs[5:7]
+    filterid=fs[7]
+
+    if int(filterid)==1:
+        filterid='g'
+    elif int(filterid)==2:
+        filterid='r'
+    elif int(filterid)==3:
+        filterid='i'
+
+    ccdid=int((np.ceil((float(rcID)+1) / 4)))
+    if ccdid<10:
+        ccdid=str(0)+str(ccdid)
+    else:
+        ccdid=str(ccdid)
+    quadrant= str((int(rcID) % 4) +1)
+    rounded=(int(50 * np.ceil(float(fieldID[0:5])/50)))
+    if(rounded>999):
+        filename=matchfileDir+'/rc'+rcID+'/fr00'+str(rounded-49)+'-00'+str(rounded)+'/ztf_00'+fieldID+'_z'+filterid+'_c'+ccdid+'_q'+quadrant+'_match.pytable'
+    else:
+        filename=matchfileDir+'/rc'+rcID+'/fr000'+str(rounded-49)+'-000'+str(rounded)+'/ztf_00'+fieldID+'_z'+filterid+'_c'+ccdid+'_q'+quadrant+'_match.pytable'
+
+    return filename
+
+def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
                   Ncatalog = 1, Ncatindex = 0):
 
     bands = {'g': 1, 'r': 2, 'i': 3, 'z': 4, 'J': 5}
@@ -866,17 +910,19 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False,
     matchids_split = np.array_split(matchids, Ncatalog)
     matchids = matchids_split[Ncatindex]
 
-    tt = np.unique(np.sort(merged.obshjd.values))
-    tt = tt - tt[0]
-    if doRemoveHC:
+    if doHCOnly:
+        tt = np.unique(np.sort(merged.obshjd.values))
         dt = np.diff(tt)
         idx = np.setdiff1d(np.arange(len(tt)),
-                           np.where(dt < 30.0*60.0/86400.0)[0])
+                           np.where(dt > 30.0*60.0/86400.0)[0])
         tt = tt[idx]
-
-    #magmat = np.nan*np.ones((len(tt),len(matchids)))
+        magmat = np.nan*np.ones((len(tt),len(matchids)))
+        hjds = []
 
     for ii, k in enumerate(matchids):
+        if np.mod(ii,100) == 0:
+            print("Reading ID %d/%d" % (ii, len(matchids)))
+ 
         df = merged[merged['matchid'] == k]
         df=df[df.catflags == 0]
         df2=sources[:][sources[:].matchid == k]
@@ -885,21 +931,32 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False,
         Dec=df2.dec.values[0]
         mag = df.mag.values.astype(np.float32)+17.0
         magerr=df.magerr.values.astype(np.float32)/1000.0
-        obsHJD = df.obshjd-np.min(df.obshjd)
+        obsHJD = df.obshjd
         hjd = obsHJD.values
+
+        idx = np.argsort(hjd)
+        hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
 
         if doRemoveHC:
             dt = np.diff(hjd)
             idx = np.setdiff1d(np.arange(len(hjd)),
                                np.where(dt < 30.0*60.0/86400.0)[0])
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+        elif doHCOnly:
+            dt = np.diff(hjd)
+            idx = np.setdiff1d(np.arange(len(hjd)),
+                               np.where(dt >= 30.0*60.0/86400.0)[0])
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
 
-        #f = interp.interp1d(hjd, mag, fill_value='extrapolate')
-        #yinterp = f(tt)
-        #if len(hjd) > float(len(tt))/3.0:
-        #    magmat[:, ii] = yinterp - np.median(yinterp)
+        if doHCOnly:
+            f = interp.interp1d(hjd, mag, fill_value='extrapolate')
+            yinterp = f(tt)
+            if len(hjd) > float(len(tt))/3.0:
+                magmat[:, ii] = yinterp - np.median(yinterp)
 
         if len(hjd) < min_epochs: continue
+        hjds.append(hjd)
+        hjd = hjd - np.min(hjd)
 
         coordinate=(RA,Dec)
         coordinates.append(coordinate)
@@ -923,20 +980,16 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False,
             baseline=newbaseline
         cnt = cnt + 1
 
-    #magmat_sum = np.nansum(magmat, axis=0)
-    #idx = np.where(magmat_sum > 0)[0]
-    #magmat = magmat[:, idx]
-
-    #UA, sA, VA = np.linalg.svd(magmat.T, full_matrices=True)
-    #VA = VA.T
-
-    #plt.figure()
-    #for ii, row in enumerate(magmat.T):
-    #    plt.plot(tt, row)
-    #plt.plot(tt, sA[0]*VA[:,0], 'k--')
-    #plt.ylim([-1,1.0])
-    #plt.savefig('test.png')
-    #plt.close()
+    if doHCOnly:
+        magmat_median = np.nanmedian(magmat, axis=1)
+        f = interp.interp1d(tt, magmat_median, fill_value='extrapolate')
+        lightcurves2 = []
+        for ii in range(len(lightcurves)):
+            lightcurve2 = (lightcurves[ii][0],
+                           lightcurves[ii][1] - f(hjds[ii]),
+                           lightcurves[ii][2])
+            lightcurves2.append(lightcurve2)
+        lightcurves = lightcurves2
 
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
 

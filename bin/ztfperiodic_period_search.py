@@ -34,6 +34,7 @@ from ztfperiodic.utils import get_kowalski_bulk
 from ztfperiodic.utils import get_kowalski_list
 from ztfperiodic.utils import get_simulated_list
 from ztfperiodic.utils import get_matchfile
+from ztfperiodic.utils import find_matchfile
 from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.periodsearch import find_periods
 from ztfperiodic.specfunc import correlate_spec, adjust_subplots_band, tick_function
@@ -57,6 +58,7 @@ def parse_commandline():
     parser.add_option("--doLightcurveStats",  action="store_true", default=False)
     parser.add_option("--doRemoveBrightStars",  action="store_true", default=False)
     parser.add_option("--doRemoveHC",  action="store_true", default=False)
+    parser.add_option("--doHCOnly",  action="store_true", default=False)
     parser.add_option("--doLongPeriod",  action="store_true", default=False)
     parser.add_option("--doCombineFilt",  action="store_true", default=False)
     parser.add_option("--doExtinction",  action="store_true", default=False)
@@ -76,6 +78,8 @@ def parse_commandline():
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     #parser.add_option("-m","--matchFile",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.pytable") 
     parser.add_option("-m","--matchFile",default="/home/mcoughlin/ZTF/matchfiles/rc00/fr000201-000250/ztf_000245_zg_c01_q1_match.pytable")
+    parser.add_option("--matchfileDir",default="/home/mcoughlin/ZTF/matchfiles/")
+
     parser.add_option("-b","--batch_size",default=1,type=int)
     parser.add_option("-k","--kowalski_batch_size",default=1000,type=int)
     parser.add_option("-a","--algorithm",default="CE")
@@ -162,6 +166,7 @@ catalog_file = opts.catalog_file
 quadrant_file = opts.quadrant_file
 doCombineFilt = opts.doCombineFilt
 doRemoveHC = opts.doRemoveHC
+doHCOnly = opts.doHCOnly
 doSimulateLightcurves = opts.doSimulateLightcurves
 doUsePDot = opts.doUsePDot
 doExtinction = opts.doExtinction
@@ -245,7 +250,8 @@ if opts.lightcurve_source == "Kowalski":
         absmags, bp_rps, names, baseline =\
             get_kowalski_bulk(field, ccd, quadrant, kow, 
                               program_ids=program_ids, min_epochs=min_epochs,
-                              num_batches=Ncatalog, nb=Ncatindex)
+                              num_batches=Ncatalog, nb=Ncatindex,
+                              doRemoveHC=doRemoveHC, doHCOnly=doHCOnly)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\
                 slicestardist(lightcurves, coordinates, filters,
@@ -397,10 +403,12 @@ elif opts.lightcurve_source == "matchfiles":
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,matchFileEnd)
 
+    matchFile = find_matchfile(opts.matchfileDir)
     lightcurves, coordinates, filters, ids,\
     absmags, bp_rps, names, baseline = get_matchfile(matchFile,
                                                      min_epochs=min_epochs,
                                                      doRemoveHC=doRemoveHC,
+                                                     doHCOnly=doHCOnly,
                                                      Ncatalog=Ncatalog,
                                                      Ncatindex=Ncatindex)
 
