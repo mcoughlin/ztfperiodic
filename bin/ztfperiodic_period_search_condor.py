@@ -27,7 +27,7 @@ def parse_commandline():
     parser.add_option("--doCPU",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output")
-    parser.add_option("-d","--dataDir",default="/home/mcoughlin/ZTF/Matchfiles")
+    parser.add_option("--matchfileDir",default="/home/mcoughlin/ZTF/matchfiles/")
     parser.add_option("-b","--batch_size",default=1,type=int)
     parser.add_option("-a","--algorithm",default="CE")
 
@@ -35,6 +35,7 @@ def parse_commandline():
     parser.add_option("--doLongPeriod",  action="store_true", default=False)
     parser.add_option("--doCombineFilt",  action="store_true", default=False)
     parser.add_option("--doRemoveHC",  action="store_true", default=False)
+    parser.add_option("--doHCOnly",  action="store_true", default=False)
     parser.add_option("--doUsePDot",  action="store_true", default=False)
     parser.add_option("--doSpectra",  action="store_true", default=False)
     parser.add_option("--doQuadrantScale",  action="store_true", default=False)
@@ -73,13 +74,15 @@ if opts.doCombineFilt:
     extra_flags.append("--doCombineFilt")
 if opts.doRemoveHC:
     extra_flags.append("--doRemoveHC")
+if opts.doHCOnly:
+    extra_flags.append("--doHCOnly")
 if opts.doUsePDot:
     extra_flags.append("--doUsePDot")
 if opts.doSpectra:
     extra_flags.append("--doSpectra")
 extra_flags = " ".join(extra_flags)
 
-dataDir = opts.dataDir
+matchfileDir = opts.matchfileDir
 outputDir = opts.outputDir
 batch_size = opts.batch_size
 
@@ -129,7 +132,7 @@ if opts.lightcurve_source == "Kowalski":
 
     elif opts.source_type == "catalog":
         for ii in range(Ncatalog):
-            fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --user %s --pwd %s --batch_size %d -l Kowalski --source_type catalog --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --catalog_file %s --doPlots --Ncatalog %d --Ncatindex %d %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, opts.user, opts.pwd,opts.batch_size, opts.algorithm, opts.catalog_file,opts.Ncatalog,ii,extra_flags))
+            fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --user %s --pwd %s --batch_size %d -l Kowalski --source_type catalog --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --catalog_file %s --doLightcurveStats --doPlots --Ncatalog %d --Ncatindex %d %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, opts.user, opts.pwd,opts.batch_size, opts.algorithm, opts.catalog_file,opts.Ncatalog,ii,extra_flags))
 
             fid.write('JOB %d condor.sub\n'%(job_number))
             fid.write('RETRY %d 3\n'%(job_number))
@@ -138,15 +141,16 @@ if opts.lightcurve_source == "Kowalski":
             job_number = job_number + 1
 
 elif opts.lightcurve_source == "matchfiles":
-    directory="%s/*/*/*"%opts.dataDir
+    directory="%s/*/*/*.pytable"%opts.matchfileDir
     for f in glob.iglob(directory):
-        fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --matchFile %s -l matchfiles --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats --algorithm %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, f, opts.algorithm,extra_flags))
+        for ii in range(Ncatalog):
+            fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --matchFile %s -l matchfiles --source_type quadrants --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --doLightcurveStats --Ncatalog %d --Ncatindex %d --matchfileDir %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, f, opts.algorithm, opts.Ncatalog,ii, matchfileDir, extra_flags))
 
-        fid.write('JOB %d condor.sub\n'%(job_number))
-        fid.write('RETRY %d 3\n'%(job_number))
-        fid.write('VARS %d jobNumber="%d" matchFile="%s"\n'%(job_number,job_number,f))
-        fid.write('\n\n')
-        job_number = job_number + 1
+            fid.write('JOB %d condor.sub\n'%(job_number))
+            fid.write('RETRY %d 3\n'%(job_number))
+            fid.write('VARS %d jobNumber="%d" matchFile="%s" Ncatindex="%d" Ncatalog="%d"\n'%(job_number,job_number,f,ii,opts.Ncatalog))
+            fid.write('\n\n')
+            job_number = job_number + 1
 
 fid1.close()
 fid.close()
@@ -161,7 +165,7 @@ if opts.lightcurve_source == "Kowalski":
     elif opts.source_type == "catalog":
         fid.write('arguments = %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 10.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --Ncatindex $(Ncatindex) --algorithm %s %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,opts.algorithm,extra_flags))
 else:
-    fid.write('arguments = %s --outputDir %s --batch_size %d --matchFile $(matchFile) -l matchfiles --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --doLightcurveStats --algorithm %s %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.algorithm,extra_flags))
+    fid.write('arguments = %s --outputDir %s --batch_size %d --matchFile $(matchFile) -l matchfiles --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --doRemoveTerrestrial --doRemoveBrightStars --program_ids 1,2,3 --doPlots --doLightcurveStats --matchfileDir %s --algorithm %s %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.algorithm,matchfileDir,extra_flags))
 fid.write('requirements = OpSys == "LINUX"\n');
 fid.write('request_memory = 8192\n');
 if opts.doCPU:

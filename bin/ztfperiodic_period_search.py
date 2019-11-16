@@ -403,7 +403,7 @@ elif opts.lightcurve_source == "matchfiles":
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,matchFileEnd)
 
-    matchFile = find_matchfile(opts.matchfileDir)
+    #matchFile = find_matchfile(opts.matchfileDir)
     lightcurves, coordinates, filters, ids,\
     absmags, bp_rps, names, baseline = get_matchfile(matchFile,
                                                      min_epochs=min_epochs,
