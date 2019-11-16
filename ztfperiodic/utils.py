@@ -948,13 +948,14 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
                                np.where(dt >= 30.0*60.0/86400.0)[0])
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
 
+        if len(hjd) < min_epochs: continue
+
         if doHCOnly:
             f = interp.interp1d(hjd, mag, fill_value='extrapolate')
             yinterp = f(tt)
             if len(hjd) > float(len(tt))/3.0:
                 magmat[:, ii] = yinterp - np.median(yinterp)
 
-        if len(hjd) < min_epochs: continue
         hjds.append(hjd)
         hjd = hjd - np.min(hjd)
 

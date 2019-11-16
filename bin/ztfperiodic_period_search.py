@@ -398,8 +398,9 @@ elif opts.lightcurve_source == "matchfiles":
         print("%s missing..."%matchFile)
         exit(0)
 
-    matchFileEnd = matchFile.split("/")[-1].replace("pytable","dat")
-    catalogFile = os.path.join(catalogDir,matchFileEnd)
+    matchFile_split = matchFile.replace(".pytable","").replace(".hdf5","").split("/")[-1]
+    catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(matchFile_split,
+                                                           Ncatindex))
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,matchFileEnd)
 

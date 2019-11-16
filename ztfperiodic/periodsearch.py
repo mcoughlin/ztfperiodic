@@ -122,9 +122,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
 
         elif algorithm == "GCE":
             from gcex.gce import ConditionalEntropy
-        
-            nphase = 50
-            ce = ConditionalEntropy(phase_bins=nphase)
+            ce = ConditionalEntropy(phase_bins=phase_bins, mag_bins=mag_bins)
 
             if doUsePDot:
                 num_pdots = 10
@@ -158,11 +156,16 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 print("Number of lightcurves: %d" % len(lightcurves_stack))
                 print("Batch size: %d" % batch_size)
                 print("Number of frequency bins: %d" % len(freqs))
-                print("Number of phase bins: %d" % nphase)
+                print("Number of phase bins: %d" % phase_bins)
+                print("Number of magnitude bins: %d" % mag_bins)
 
                 results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdot, show_progress=False)
                 periods = 1./freqs
            
+                if not len(lightcurves) == len(results):
+                    print("GCE failed with memory error...")
+                    exit(1)
+
                 for jj, (lightcurve, entropies2) in enumerate(zip(lightcurves,results)):
                     for kk, entropies in enumerate(entropies2):
                         significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
