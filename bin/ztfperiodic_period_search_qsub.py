@@ -35,6 +35,7 @@ def parse_commandline():
     parser.add_option("--doLongPeriod",  action="store_true", default=False)
     parser.add_option("--doCombineFilt",  action="store_true", default=False)
     parser.add_option("--doRemoveHC",  action="store_true", default=False)
+    parser.add_option("--doHCOnly",  action="store_true", default=False)
     parser.add_option("--doUsePDot",  action="store_true", default=False)
     parser.add_option("--doSpectra",  action="store_true", default=False)
     parser.add_option("--doQuadrantScale",  action="store_true", default=False)
@@ -75,8 +76,8 @@ if opts.doCombineFilt:
     extra_flags.append("--doCombineFilt")
 if opts.doRemoveHC:
     extra_flags.append("--doRemoveHC")
-if opts.doUsePDot:
-    extra_flags.append("--doUsePDot")
+if opts.doHCOnly:
+    extra_flags.append("--doHCOnly")
 if opts.doUsePDot:
     extra_flags.append("--doUsePDot")
 if opts.doSpectra:
@@ -86,6 +87,7 @@ extra_flags = " ".join(extra_flags)
 matchfileDir = opts.matchfileDir
 outputDir = opts.outputDir
 batch_size = opts.batch_size
+Ncatalog = opts.Ncatalog
 
 qsubDir = os.path.join(outputDir,'qsub')
 if not os.path.isdir(qsubDir):
@@ -116,6 +118,9 @@ if opts.lightcurve_source == "Kowalski":
 elif opts.lightcurve_source == "matchfiles":
     bands = {1: 'g', 2: 'r', 3: 'i', 4: 'z', 5: 'J'}
     directory="%s/*/*/*.pytable"%opts.matchfileDir
+    job_number = 0
+    quadrantfile = os.path.join(qsubDir,'qsub.dat')
+    fid = open(quadrantfile,'w')
     for f in glob.iglob(directory):
         if not opts.qid is None:
             if not ("rc%02d"%opts.qid) in f:
@@ -127,7 +132,7 @@ elif opts.lightcurve_source == "matchfiles":
             fid.write('%d %s %d\n' % (job_number, f, ii))
  
             job_number = job_number + 1
-fid.close()
+    fid.close()
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
