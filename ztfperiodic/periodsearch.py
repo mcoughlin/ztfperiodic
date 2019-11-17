@@ -162,10 +162,6 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdot, show_progress=False)
                 periods = 1./freqs
            
-                if not len(lightcurves) == len(results):
-                    print("GCE failed with memory error...")
-                    exit(1)
-
                 for jj, (lightcurve, entropies2) in enumerate(zip(lightcurves,results)):
                     for kk, entropies in enumerate(entropies2):
                         significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)

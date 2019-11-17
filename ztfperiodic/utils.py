@@ -778,6 +778,13 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                 fid = fid[idx]
                 ra, dec = ra[idx], dec[idx]
 
+                dt = np.diff(hjd)
+                print(dt)
+                idx = np.where(dt < 1e-3)[0]
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                fid = fid[idx]
+                ra, dec = ra[idx], dec[idx]
+
             if len(hjd) < min_epochs: continue
 
             lightcurve=(hjd,mag,magerr)
@@ -902,8 +909,9 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
         srcdata = pd.DataFrame.from_records(group.sourcedata[:])
         srcdata.sort_values('matchid', axis=0, inplace=True)
         srcdata2 = store.root.matches.sources[:]
-        sources = pd.DataFrame.from_records(store.root.matches.sources.read_where('nobs>100'))
+        sources = pd.DataFrame.from_records(store.root.matches.sources.read_where('nobs>%d' % min_epochs))
         exposures = pd.DataFrame.from_records(store.root.matches.exposures.read_where(('(((programid>1) | ((programid==1) & (obsmjd<58484))| (programpi=="TESS")))')))
+        exposures = pd.DataFrame.from_records(store.root.matches.exposures.read_where(('programid>0')))
         merged = srcdata.merge(exposures, on="expid")
 
     matchids = sources[:]['matchid'].values
@@ -948,6 +956,14 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
                                np.where(dt >= 30.0*60.0/86400.0)[0])
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
 
+            dt = np.diff(hjd)
+            idy = np.where(dt > 1e-2)[0]
+            ddy = np.diff(idy)
+            if len(ddy) > 0:
+                idpeak = np.argmax(ddy)
+                idx = np.arange(idy[idpeak]+1, idy[idpeak+1]-1)
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+
         if len(hjd) < min_epochs: continue
 
         if doHCOnly:
@@ -991,6 +1007,14 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
                            lightcurves[ii][2])
             lightcurves2.append(lightcurve2)
         lightcurves = lightcurves2
+
+    #plt.figure()
+    #for ii in range(len(lightcurves)):
+    #    plt.plot(lightcurves[ii][0], lightcurves[ii][1])
+    #plt.xlim([0,0.15])
+    #plt.savefig('test.png')
+    #plt.close()
+    #exit(0)
 
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
 

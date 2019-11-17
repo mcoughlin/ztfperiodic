@@ -608,6 +608,10 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
             data_out[name]["stats"] = stats[cnt]
 
     if opts.doPlots and (significance>sigthresh):
+        if opts.doHCOnly and np.isclose(period, 1.0/fmin, rtol=1e-2):
+            print("Vetoing... period is 1/fmax")
+            continue
+
         RA, Dec = coordinate
         figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec,
                                                   period, "".join(filt_str))
