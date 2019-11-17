@@ -40,6 +40,8 @@ def parse_commandline():
     parser.add_option("--doSpectra",  action="store_true", default=False)
     parser.add_option("--doQuadrantScale",  action="store_true", default=False)
 
+    parser.add_option("--doVariability",  action="store_true", default=False)
+
     parser.add_option("-l","--lightcurve_source",default="Kowalski")
     parser.add_option("-s","--source_type",default="quadrant")
     parser.add_option("--catalog_file",default="../input/xray.dat")
@@ -82,6 +84,9 @@ if opts.doUsePDot:
     extra_flags.append("--doUsePDot")
 if opts.doSpectra:
     extra_flags.append("--doSpectra")
+if opts.doVariability:
+    extra_flags.append("--doVariability")
+    extra_flags.append("--doNotPeriodFind")
 extra_flags = " ".join(extra_flags)
 
 matchfileDir = opts.matchfileDir
@@ -92,10 +97,6 @@ Ncatalog = opts.Ncatalog
 qsubDir = os.path.join(outputDir,'qsub')
 if not os.path.isdir(qsubDir):
     os.makedirs(qsubDir)
-
-logDir = os.path.join(qsubDir,'logs')
-if not os.path.isdir(logDir):
-    os.makedirs(logDir)
 
 if opts.doQuadrantScale:
     kow = Kowalski(username=opts.user, password=opts.pwd)

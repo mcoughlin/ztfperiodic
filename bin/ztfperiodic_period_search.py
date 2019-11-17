@@ -626,16 +626,21 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         RA, Dec = coordinate
         figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec,
                                                   period, "".join(filt_str))
-        idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
-        if folders[idx.astype(int)] == None:
-            continue
+
+        if opts.doNotPeriodFind:
+            thisfolder = 'noperiod'
+        else:
+            idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
+            thisfolder = folders[idx.astype(int)]
+            if thisfolder == None:
+                continue
 
         nepoch = np.array(len(copy[:,0]))
         idx2 = np.where((nepoch>=epoch_ranges[:-1]) & (nepoch<=epoch_ranges[1:]))[0][0]
         if epoch_folders[idx2.astype(int)] == None:
             continue
 
-        folder = os.path.join(basefolder,folders[idx.astype(int)],epoch_folders[idx2.astype(int)])
+        folder = os.path.join(basefolder,thisfolder,epoch_folders[idx2.astype(int)])
         if not os.path.isdir(folder):
             os.makedirs(folder)
         pngfile = os.path.join(folder,figfile)
