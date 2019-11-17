@@ -174,11 +174,20 @@ Ncatalog = opts.Ncatalog
 Ncatindex = opts.Ncatindex
 
 if opts.doQuadrantFile:
-    quad_out = np.loadtxt(quadrant_file)
-    idx = np.where(quad_out[:,0] == opts.quadrant_index)[0]
-    row = quad_out[idx,:][0]
-    field, ccd, quadrant = row[1], row[2], row[3]
-    Ncatindex = row[4]
+    if opts.lightcurve_source == "Kowalski":
+        quad_out = np.loadtxt(quadrant_file)
+        idx = np.where(quad_out[:,0] == opts.quadrant_index)[0]
+        row = quad_out[idx,:][0]
+        field, ccd, quadrant = row[1], row[2], row[3]
+        Ncatindex = row[4]
+    elif opts.lightcurve_source == "matchfiles":
+        lines = [line.rstrip('\n') for line in open(quadrant_file)]
+        for line in lines:
+            lineSplit = list(filter(None,line.split(" ")))
+            if int(lineSplit[0]) == opts.quadrant_index:
+                matchFile = lineSplit[1]
+                print("Using matchfile %s" % matchFile)
+                Ncatindex = int(lineSplit[2])
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
