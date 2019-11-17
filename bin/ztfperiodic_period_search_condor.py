@@ -45,6 +45,8 @@ def parse_commandline():
     parser.add_option("--catalog_file",default="../input/xray.dat")
     parser.add_option("--Ncatalog",default=1000,type=int)
 
+    parser.add_option("--doVariability",  action="store_true", default=False)
+
     parser.add_option("--qid",default=None,type=int)
     parser.add_option("--fid",default=None,type=int)
 
@@ -83,6 +85,9 @@ if opts.doUsePDot:
     extra_flags.append("--doUsePDot")
 if opts.doSpectra:
     extra_flags.append("--doSpectra")
+if opts.doVariability:
+    extra_flags.append("--doVariability")
+    extra_flags.append("--doNotPeriodFind")
 extra_flags = " ".join(extra_flags)
 
 matchfileDir = opts.matchfileDir

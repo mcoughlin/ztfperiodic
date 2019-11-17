@@ -714,8 +714,6 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
             ax2 = fig.add_subplot(gs[:, 2:4])
             #ax3 = fig.add_subplot(gs[0, 2])
         else:
-            if opts.doNotPeriodFind:
-                continue
             fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
         ax1.errorbar(phases, magnitude,err,ls='none',c='k')
         period2=period
