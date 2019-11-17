@@ -963,6 +963,9 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
                 idpeak = np.argmax(ddy)
                 idx = np.arange(idy[idpeak]+1, idy[idpeak+1]-1)
                 hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            elif len(idy) == 1:
+                idx = np.arange(idy[0]-1)
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
 
         if len(hjd) < min_epochs: continue
 

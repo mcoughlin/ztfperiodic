@@ -474,6 +474,8 @@ else:
     else:
         fmin, fmax = 2/baseline, 480
 
+print('Using baseline: %.5f, fmin: %.5f, fmax %.5f' %(baseline, fmin, fmax))
+
 if (opts.source_type == "catalog") and ("fermi" in catalog_file):
     basefolder = os.path.join(basefolder,'%d' % Ncatindex)
 
