@@ -134,6 +134,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             else:
                 pdots_to_test = np.array([0.0])
 
+            maxn = -np.inf
             lightcurves_stack = [] 
             for lightcurve in lightcurves:
                 idx = np.argsort(lightcurve[0])
@@ -145,6 +146,9 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                                               lightcurve[1])).T
                 lightcurves_stack.append(lightcurve_stack)
 
+                if len(idx) > maxn:
+                    maxn = len(idx)
+
             periods_best = np.zeros((len(lightcurves),1))
             significances = np.zeros((len(lightcurves),1))
             pdots = np.zeros((len(lightcurves),1))
@@ -154,6 +158,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 print("Running pdot %d / %d" % (ii+1, len(pdots_split)))
 
                 print("Number of lightcurves: %d" % len(lightcurves_stack))
+                print("Max length of lightcurves: %d" % maxn)
                 print("Batch size: %d" % batch_size)
                 print("Number of frequency bins: %d" % len(freqs))
                 print("Number of phase bins: %d" % phase_bins)

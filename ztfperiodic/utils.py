@@ -920,10 +920,6 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
 
     if doHCOnly:
         tt = np.unique(np.sort(merged.obshjd.values))
-        dt = np.diff(tt)
-        idx = np.setdiff1d(np.arange(len(tt)),
-                           np.where(dt > 30.0*60.0/86400.0)[0])
-        tt = tt[idx]
         magmat = np.nan*np.ones((len(tt),len(matchids)))
         hjds = []
 
@@ -970,10 +966,9 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
         if len(hjd) < min_epochs: continue
 
         if doHCOnly:
-            f = interp.interp1d(hjd, mag, fill_value='extrapolate')
+            f = interp.interp1d(hjd, mag, fill_value=np.nan, bounds_error=False)
             yinterp = f(tt)
-            if len(hjd) > float(len(tt))/3.0:
-                magmat[:, ii] = yinterp - np.median(yinterp)
+            magmat[:, ii] = yinterp - np.nanmedian(yinterp)
 
         hjds.append(hjd)
         hjd = hjd - np.min(hjd)
@@ -1005,8 +1000,10 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
         f = interp.interp1d(tt, magmat_median, fill_value='extrapolate')
         lightcurves2 = []
         for ii in range(len(lightcurves)):
+            magmat_median_array = f(hjds[ii])
+            magmat_median_array[np.isnan(magmat_median_array)] = 0.0
             lightcurve2 = (lightcurves[ii][0],
-                           lightcurves[ii][1] - f(hjds[ii]),
+                           lightcurves[ii][1] - magmat_median_array,
                            lightcurves[ii][2])
             lightcurves2.append(lightcurve2)
         lightcurves = lightcurves2
