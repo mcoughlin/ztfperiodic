@@ -49,6 +49,8 @@ def parse_commandline():
     parser.add_option("--doCutNObs",  action="store_true", default=False)
     parser.add_option("-n","--NObs",default=500,type=int)
 
+    parser.add_option("--doUseMatchfileFile",  action="store_true", default=False)
+
     parser.add_option("--qid",default=None,type=int)
     parser.add_option("--fid",default=None,type=int)
 
@@ -159,8 +161,13 @@ if opts.lightcurve_source == "Kowalski":
 
 elif opts.lightcurve_source == "matchfiles":
     bands = {1: 'g', 2: 'r', 3: 'i', 4: 'z', 5: 'J'}
-    directory="%s/*/*/*.pytable"%opts.matchfileDir
-    for f in glob.iglob(directory):
+    if opts.doUseMatchfileFile:
+        filename = "../input/matchfiles.txt"
+        filenames = [line.rstrip('\n') for line in open(filename)]
+    else:
+        directory="%s/*/*/*.pytable"%opts.matchfileDir
+        filenames = [f for f in glob.iglob(directory)]
+    for f in filenames:
         field_id = int(f.split("/")[-1].split("_")[1])
         if opts.doCutNObs:
             if not field_id in fields_list:

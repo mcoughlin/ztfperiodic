@@ -403,6 +403,15 @@ if opts.lightcurve_source == "Kowalski":
         exit(0)
 
 elif opts.lightcurve_source == "matchfiles":
+    if ":" in matchFile:
+        matchFile_end = matchFile.split(":")[-1].split("/")[-1]
+        matchFile_out = "/scratch/mcoughlin/%s" % matchFile_end
+        if not os.path.isfile(matchFile_out):
+            print('Fetching %s...' % matchFile)
+            wget_command = "scp -i /home/mcoughlin/.ssh/id_rsa_passwordless %s %s" % (matchFile, matchFile_out)
+            os.system(wget_command)
+        matchFile = matchFile_out
+
     if not os.path.isfile(matchFile):
         print("%s missing..."%matchFile)
         exit(0)
