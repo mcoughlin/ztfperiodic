@@ -46,6 +46,8 @@ def parse_commandline():
     parser.add_option("--Ncatalog",default=1000,type=int)
 
     parser.add_option("--doVariability",  action="store_true", default=False)
+    parser.add_option("--doCutNObs",  action="store_true", default=False)
+    parser.add_option("-n","--NObs",default=500,type=int)
 
     parser.add_option("--qid",default=None,type=int)
     parser.add_option("--fid",default=None,type=int)
@@ -102,6 +104,13 @@ logDir = os.path.join(condorDir,'logs')
 if not os.path.isdir(logDir):
     os.makedirs(logDir)
 
+if opts.doCutNObs:
+    nobsfile = "../input/nobs.dat"
+    nobs_data = np.loadtxt(nobsfile)
+    idx = np.where((nobs_data[:,4] >= opts.NObs) | (nobs_data[:,5] >= opts.NObs))[0]
+    nobs_data = nobs_data[idx,:]
+    fields_list = nobs_data[:,0]
+
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 condordag = os.path.join(condorDir,'condor.dag')
@@ -152,6 +161,10 @@ elif opts.lightcurve_source == "matchfiles":
     bands = {1: 'g', 2: 'r', 3: 'i', 4: 'z', 5: 'J'}
     directory="%s/*/*/*.pytable"%opts.matchfileDir
     for f in glob.iglob(directory):
+        field_id = int(f.split("/")[-1].split("_")[1])
+        if opts.doCutNObs:
+            if not field_id in fields_list:
+                continue
         if not opts.qid is None:
             if not ("rc%02d"%opts.qid) in f:
                 continue
