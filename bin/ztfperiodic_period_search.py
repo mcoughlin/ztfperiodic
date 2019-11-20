@@ -103,6 +103,9 @@ def parse_commandline():
     parser.add_option("-p","--program_ids",default="2,3")
     parser.add_option("--min_epochs",default=50,type=int)
 
+    parser.add_option("--doRsyncFiles",  action="store_true", default=False)
+    parser.add_option("--rsync_directory",default="mcoughlin@schoty.caltech.edu:/gdata/Data/ztfperiodic_results")
+
     opts, args = parser.parse_args()
 
     return opts
@@ -234,7 +237,7 @@ fil = 'all'
 print('Organizing lightcurves...')
 if opts.lightcurve_source == "Kowalski":
 
-    catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
+    catalogFile = os.path.join(catalogDir,"%d_%d_%d.h5"%(field, ccd, quadrant))
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,"%d_%d_%d.pkl"%(field, ccd, quadrant))
 
@@ -252,7 +255,7 @@ if opts.lightcurve_source == "Kowalski":
         raise Exception('Kowalski connection failed...')
 
     if opts.source_type == "quadrant":
-        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.dat"%(field, ccd, quadrant,Ncatindex))
+        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
         if opts.doSpectra:
             spectraFile = os.path.join(spectraDir,"%d_%d_%d_%d.pkl"%(field, ccd, quadrant,Ncatindex))
 
@@ -369,8 +372,8 @@ if opts.lightcurve_source == "Kowalski":
             amin = amin_split[Ncatindex]
             phi = phi_split[Ncatindex]
 
-        catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").split("/")[-1]
-        catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(catalog_file_split,
+        catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+        catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(catalog_file_split,
                                                            Ncatindex))
         if opts.doSpectra:
             spectraFile = os.path.join(spectraDir,"%s_%d.pkl"%(catalog_file_split,
@@ -417,8 +420,8 @@ elif opts.lightcurve_source == "matchfiles":
         print("%s missing..."%matchFile)
         exit(0)
 
-    matchFile_split = matchFile.replace(".pytable","").replace(".hdf5","").split("/")[-1]
-    catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(matchFile_split,
+    matchFile_split = matchFile.replace(".pytable","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+    catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(matchFile_split,
                                                            Ncatindex))
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,matchFileEnd)
@@ -446,7 +449,7 @@ elif opts.lightcurve_source == "h5files":
         print("%s missing..."%matchFile)
         exit(0)
 
-    matchFileEnd = matchFile.split("/")[-1].replace("h5","dat")
+    matchFileEnd = matchFile.split("/")[-1].replace("h5","h5")
     catalogFile = os.path.join(catalogDir,matchFileEnd)
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,matchFileEnd)
@@ -602,18 +605,55 @@ print('Cataloging / Plotting lightcurves...')
 if opts.doSpectra:
     data_out = {}
 
+if opts.doLightcurveStats:
+    str_stats = np.empty((0,2))
+    data_stats = np.empty((0,43))
+else:
+    str_stats = np.empty((0,2))
+    data_stats = np.empty((0,6))
+
 cnt = 0
 fid = open(catalogFile,'w')
 for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significance, pdot in zip(lightcurves,filters,ids,names,coordinates,absmags,bp_rps,periods_best,significances,pdots):
     filt_str = "_".join([str(x) for x in filt])
 
     if opts.doLightcurveStats:
-        fid.write('%s %d %.10f %.10f %.10f %.10f %.10e %s '%(name, objid, coordinate[0], coordinate[1], period, significance, pdot, filt_str))
-        fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
+        str_stats = np.append(str_stats,
+                              np.array([[np.string_(name),
+                                         np.string_(filt_str)]]), axis=0)
+                                         
+        data_stats = np.append(data_stats,
+                               np.array([[objid, coordinate[0],
+                                          coordinate[1], period, significance,
+                                          pdot,
+                                          stats[cnt][0], stats[cnt][1],
+                                          stats[cnt][2], stats[cnt][3],
+                                          stats[cnt][4], stats[cnt][5],
+                                          stats[cnt][6], stats[cnt][7],
+                                          stats[cnt][8], stats[cnt][9],
+                                          stats[cnt][10], stats[cnt][11],
+                                          stats[cnt][11], stats[cnt][12],
+                                          stats[cnt][13], stats[cnt][14],
+                                          stats[cnt][15], stats[cnt][16],
+                                          stats[cnt][17], stats[cnt][18],
+                                          stats[cnt][19], stats[cnt][20],
+                                          stats[cnt][21], stats[cnt][22],
+                                          stats[cnt][23], stats[cnt][24],
+                                          stats[cnt][25], stats[cnt][26],
+                                          stats[cnt][27], stats[cnt][28],
+                                          stats[cnt][29], stats[cnt][30],
+                                          stats[cnt][31], stats[cnt][32],
+                                          stats[cnt][33], stats[cnt][34],
+                                          stats[cnt][35]]]), axis=0)
     else:
-        fid.write('%s %d %.10f %.10f %.10f %.10f %.10e %s\n'%(name, objid, coordinate[0], coordinate[1], period, significance, pdot, filt_str))
-        fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
-     
+        str_stats = np.append(str_stats,
+                              np.array([[np.string_(name),
+                                         np.string_(filt_str)]]), axis=0)
+        data_stats = np.append(data_stats,
+                               np.array([[objid, coordinate[0],
+                                          coordinate[1], period, significance,
+                                          pdot]]), axis=0)
+
     if opts.doVariability:
         significance = stats[cnt][5]        
 
@@ -854,9 +894,19 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         plt.close()
 
     cnt = cnt + 1
-fid.close()
+
+with h5py.File(catalogFile, 'w') as hf:
+    hf.create_dataset("names",  data=str_stats[:,0])
+    hf.create_dataset("filters",  data=str_stats[:,1])
+    hf.create_dataset("stats",  data=data_stats)
 
 if opts.doSpectra:
     with open(spectraFile, 'wb') as handle:
         pickle.dump(data_out, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+if opts.doRsyncFiles:
+    outputDirSplit = outputDir.split("/")[-1]
+    rsync_command = "rsync -zarvh %s %s" % (outputDir,
+                                            opts.rsync_directory)
+    print(rsync_command)
+    os.system(rsync_command)

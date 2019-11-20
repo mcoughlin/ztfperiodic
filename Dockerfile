@@ -6,6 +6,7 @@ RUN apt-get update && \
 
 RUN apt-get update && apt-get -y install \
     cython3 \
+    gfortran \
     git \
     python3-astroplan \
     python3-astropy \
@@ -21,7 +22,8 @@ RUN apt-get update && apt-get -y install \
     python3-scipy \
     python3-seaborn \
     python3-tqdm \
-    python3-pyvo && \
+    python3-pyvo \
+    rsync && \
     rm -rf /var/lib/apt/lists/*
 
 # Install requirements. Do this before installing our own package, because
@@ -29,11 +31,21 @@ RUN apt-get update && apt-get -y install \
 COPY requirements.txt /
 RUN pip3 install --no-cache-dir -r \
     /requirements.txt \
-    git+https://github.com/dmitryduev/broker.git \
-    git+https://github.com/mikekatz04/gce.git
+    git+https://github.com/dmitryduev/broker.git
+    #git+https://github.com/mikekatz04/gce.git
 RUN rm /requirements.txt
 
 COPY . /src
 RUN pip3 install --no-cache-dir /src
 
-ENTRYPOINT ["python3","ztfperiodic_period_search.py"]
+#COPY docker/etc/ssh/ssh_known_hosts /etc/ssh/ssh_known_hosts
+
+RUN useradd -mr ztfperiodic
+USER ztfperiodic:ztfperiodic
+WORKDIR /home/ztfperiodic
+
+COPY id_rsa /home/ztfperiodic/.ssh/id_rsa
+COPY docker/etc/ssh/ssh_known_hosts /home/ztfperiodic/.ssh/known_hosts
+
+ENTRYPOINT ["/bin/bash"]
+#ENTRYPOINT ["python3","ztfperiodic_period_search.py"]
