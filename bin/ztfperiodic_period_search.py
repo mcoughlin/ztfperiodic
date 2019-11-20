@@ -125,10 +125,10 @@ def slicestardist(lightcurves, coordinates, filters, ids, absmags, bp_rps, names
         decs.append(coordinate[1])
     ras, decs = np.array(decs), np.array(decs)
 
-    filename = "%s/bsc5.hdf5" % starCatalogDir
+    filename = "%s/bsc5.hdf5" % inputDir
     sep = brightstardist(filename,ras,decs)
     idx1 = np.where(sep >= opts.stardist)[0]
-    filename = "%s/Gaia.hdf5" % starCatalogDir
+    filename = "%s/Gaia.hdf5" % inputDir
     sep = brightstardist(filename,ras,decs)
     idx2 = np.where(sep >= opts.stardist)[0]
     idx = np.union1d(idx1,idx2).astype(int)
@@ -191,8 +191,9 @@ if opts.doQuadrantFile:
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
+inputDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"input")
 
-WDcat = os.path.join(starCatalogDir,'GaiaHRSet.hdf5')
+WDcat = os.path.join(inputDir,'GaiaHRSet.hdf5')
 with h5py.File(WDcat, 'r') as f:
     gmag, bprpWD = f['gmag'][:], f['bp_rp'][:]
     parallax = f['parallax'][:]
@@ -337,10 +338,10 @@ if opts.lightcurve_source == "Kowalski":
             names = np.array(names)
 
         if opts.doRemoveBrightStars:
-            filename = "%s/bsc5.hdf5" % starCatalogDir
+            filename = "%s/bsc5.hdf5" % inputDir
             sep = brightstardist(filename,ras,decs)
             idx1 = np.where(sep >= opts.stardist)[0]
-            filename = "%s/Gaia.hdf5" % starCatalogDir
+            filename = "%s/Gaia.hdf5" % inputDir
             sep = brightstardist(filename,ras,decs)
             idx2 = np.where(sep >= opts.stardist)[0]
             idx = np.union1d(idx1,idx2)
@@ -504,6 +505,8 @@ df = 1./(samples_per_peak * baseline)
 nf = int(np.ceil((fmax - fmin) / df))
 
 freqs = fmin + df * np.arange(nf)
+
+freqs = freqs[:10]
 
 if opts.doRemoveTerrestrial:
     freqs_to_remove = [[3e-2,4e-2], [47.99,48.01], [46.99,47.01], [45.99,46.01], [3.95,4.05], [2.95,3.05], [1.95,2.05], [0.95,1.05], [0.48, 0.52]]

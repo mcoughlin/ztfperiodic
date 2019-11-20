@@ -63,16 +63,18 @@ setup_requires = [
     'pytest-runner',
 ]
 install_requires = [
-    'numpy',
-    'scipy',
     'astropy',
-    'matplotlib',
-    'gatspy',
     'astroquery',
-    'pandas',
+    'ellc',
+    'fast_histogram',
+    'gatspy',
     'h5py',
-    'tqdm',
-    'tables'
+    'matplotlib',
+    'numpy',
+    'pandas',
+    'scipy',
+    'tables',
+    'tqdm'
 ]
 tests_require = [
     'pytest'
