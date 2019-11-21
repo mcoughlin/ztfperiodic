@@ -509,8 +509,6 @@ nf = int(np.ceil((fmax - fmin) / df))
 
 freqs = fmin + df * np.arange(nf)
 
-freqs = freqs[:10]
-
 if opts.doRemoveTerrestrial:
     freqs_to_remove = [[3e-2,4e-2], [47.99,48.01], [46.99,47.01], [45.99,46.01], [3.95,4.05], [2.95,3.05], [1.95,2.05], [0.95,1.05], [0.48, 0.52]]
 else:
@@ -687,6 +685,11 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
             if thisfolder == None:
                 continue
 
+        if opts.doGPU and (algorithm == "PDM"):
+            copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
+        else:
+            copy = np.ma.copy(lightcurve).T
+
         nepoch = np.array(len(copy[:,0]))
         idx2 = np.where((nepoch>=epoch_ranges[:-1]) & (nepoch<=epoch_ranges[1:]))[0][0]
         if epoch_folders[idx2.astype(int)] == None:
@@ -696,11 +699,6 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         if not os.path.isdir(folder):
             os.makedirs(folder)
         pngfile = os.path.join(folder,figfile)
-
-        if opts.doGPU and (algorithm == "PDM"):
-            copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
-        else:
-            copy = np.ma.copy(lightcurve).T
 
         if opts.doVariability:
             phases = copy[:,0]
