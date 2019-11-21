@@ -38,3 +38,5 @@ If copying to schoty, copy a netrc that can talk to schoty into the current dire
 nvidia-docker build -t python-ztfperiodic .
 nvidia-docker run -it python-ztfperiodic
 
+For debugging:
+docker run -it python-ztfperiodic    
