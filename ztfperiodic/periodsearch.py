@@ -11,7 +11,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                  doGPU=False, doCPU=False, doSaveMemory=False,
                  doRemoveTerrestrial=False,
                  doRemoveWindow=False,
-                 doUsePDot=False,
+                 doUsePDot=False, doSingleTimeSegment=False,
                  freqs_to_remove=None,
                  phase_bins=20, mag_bins=10):
 
@@ -122,9 +122,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
 
         elif algorithm == "GCE":
             from gcex.gce import ConditionalEntropy
-        
-            nphase = 50
-            ce = ConditionalEntropy(phase_bins=nphase)
+            ce = ConditionalEntropy(phase_bins=phase_bins, mag_bins=mag_bins)
 
             if doUsePDot:
                 num_pdots = 10
@@ -136,16 +134,34 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             else:
                 pdots_to_test = np.array([0.0])
 
-            lightcurves_stack = [] 
+            if doSingleTimeSegment:
+                tt = np.empty((0,1))
+                for lightcurve in lightcurves:
+                    tt = np.unique(np.append(tt, lightcurve[0]))
+
+            maxn = -np.inf
+            lightcurves_stack = []
             for lightcurve in lightcurves:
-                idx = np.argsort(lightcurve[0])
-                lightcurve = (lightcurve[0][idx],
-                              lightcurve[1][idx],
-                              lightcurve[2][idx])
+                if doSingleTimeSegment:
+                    xy, x_ind, y_ind = np.intersect1d(tt, lightcurve[0], 
+                                                      return_indices=True)
+                    mag_array = 999*np.ones(tt.shape)
+                    magerr_array = 999*np.ones(tt.shape)
+                    mag_array[x_ind] = lightcurve[1][y_ind]
+                    magerr_array[x_ind] = lightcurve[2][y_ind]
+                    lightcurve = (tt, mag_array, magerr_array)
+                else:
+                    idx = np.argsort(lightcurve[0])
+                    lightcurve = (lightcurve[0][idx],
+                                  lightcurve[1][idx],
+                                  lightcurve[2][idx])
 
                 lightcurve_stack = np.vstack((lightcurve[0],
                                               lightcurve[1])).T
                 lightcurves_stack.append(lightcurve_stack)
+
+                if len(idx) > maxn:
+                    maxn = len(idx)
 
             periods_best = np.zeros((len(lightcurves),1))
             significances = np.zeros((len(lightcurves),1))
@@ -156,9 +172,11 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 print("Running pdot %d / %d" % (ii+1, len(pdots_split)))
 
                 print("Number of lightcurves: %d" % len(lightcurves_stack))
+                print("Max length of lightcurves: %d" % maxn)
                 print("Batch size: %d" % batch_size)
                 print("Number of frequency bins: %d" % len(freqs))
-                print("Number of phase bins: %d" % nphase)
+                print("Number of phase bins: %d" % phase_bins)
+                print("Number of magnitude bins: %d" % mag_bins)
 
                 results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdot, show_progress=False)
                 periods = 1./freqs

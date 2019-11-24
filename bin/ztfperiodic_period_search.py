@@ -34,6 +34,7 @@ from ztfperiodic.utils import get_kowalski_bulk
 from ztfperiodic.utils import get_kowalski_list
 from ztfperiodic.utils import get_simulated_list
 from ztfperiodic.utils import get_matchfile
+from ztfperiodic.utils import find_matchfile
 from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.periodsearch import find_periods
 from ztfperiodic.specfunc import correlate_spec, adjust_subplots_band, tick_function
@@ -56,7 +57,10 @@ def parse_commandline():
     parser.add_option("--doRemoveTerrestrial",  action="store_true", default=False)
     parser.add_option("--doLightcurveStats",  action="store_true", default=False)
     parser.add_option("--doRemoveBrightStars",  action="store_true", default=False)
+    parser.add_option("--doSingleTimeSegment",  action="store_true", default=False)
+
     parser.add_option("--doRemoveHC",  action="store_true", default=False)
+    parser.add_option("--doHCOnly",  action="store_true", default=False)
     parser.add_option("--doLongPeriod",  action="store_true", default=False)
     parser.add_option("--doCombineFilt",  action="store_true", default=False)
     parser.add_option("--doExtinction",  action="store_true", default=False)
@@ -75,7 +79,9 @@ def parse_commandline():
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     #parser.add_option("-m","--matchFile",default="/media/Data2/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.pytable") 
-    parser.add_option("-m","--matchFile",default="/media/Data/mcoughlin/Matchfiles/rc63/fr000251-000300/ztf_000259_zr_c16_q4_match.h5")
+    parser.add_option("-m","--matchFile",default="/home/mcoughlin/ZTF/matchfiles/rc00/fr000201-000250/ztf_000245_zg_c01_q1_match.pytable")
+    parser.add_option("--matchfileDir",default="/home/mcoughlin/ZTF/matchfiles/")
+
     parser.add_option("-b","--batch_size",default=1,type=int)
     parser.add_option("-k","--kowalski_batch_size",default=1000,type=int)
     parser.add_option("-a","--algorithm",default="CE")
@@ -99,6 +105,9 @@ def parse_commandline():
     parser.add_option("-p","--program_ids",default="2,3")
     parser.add_option("--min_epochs",default=50,type=int)
 
+    parser.add_option("--doRsyncFiles",  action="store_true", default=False)
+    parser.add_option("--rsync_directory",default="mcoughlin@schoty.caltech.edu:/gdata/Data/ztfperiodic_results")
+
     opts, args = parser.parse_args()
 
     return opts
@@ -121,10 +130,10 @@ def slicestardist(lightcurves, coordinates, filters, ids, absmags, bp_rps, names
         decs.append(coordinate[1])
     ras, decs = np.array(decs), np.array(decs)
 
-    filename = "%s/bsc5.hdf5" % starCatalogDir
+    filename = "%s/bsc5.hdf5" % inputDir
     sep = brightstardist(filename,ras,decs)
     idx1 = np.where(sep >= opts.stardist)[0]
-    filename = "%s/Gaia.hdf5" % starCatalogDir
+    filename = "%s/Gaia.hdf5" % inputDir
     sep = brightstardist(filename,ras,decs)
     idx2 = np.where(sep >= opts.stardist)[0]
     idx = np.union1d(idx1,idx2).astype(int)
@@ -162,22 +171,34 @@ catalog_file = opts.catalog_file
 quadrant_file = opts.quadrant_file
 doCombineFilt = opts.doCombineFilt
 doRemoveHC = opts.doRemoveHC
+doHCOnly = opts.doHCOnly
 doSimulateLightcurves = opts.doSimulateLightcurves
 doUsePDot = opts.doUsePDot
 doExtinction = opts.doExtinction
+Ncatalog = opts.Ncatalog
 Ncatindex = opts.Ncatindex
 
 if opts.doQuadrantFile:
-    quad_out = np.loadtxt(quadrant_file)
-    idx = np.where(quad_out[:,0] == opts.quadrant_index)[0]
-    row = quad_out[idx,:][0]
-    field, ccd, quadrant = row[1], row[2], row[3]
-    Ncatindex = row[4]
+    if opts.lightcurve_source == "Kowalski":
+        quad_out = np.loadtxt(quadrant_file)
+        idx = np.where(quad_out[:,0] == opts.quadrant_index)[0]
+        row = quad_out[idx,:][0]
+        field, ccd, quadrant = row[1], row[2], row[3]
+        Ncatindex = row[4]
+    elif opts.lightcurve_source == "matchfiles":
+        lines = [line.rstrip('\n') for line in open(quadrant_file)]
+        for line in lines:
+            lineSplit = list(filter(None,line.split(" ")))
+            if int(lineSplit[0]) == opts.quadrant_index:
+                matchFile = lineSplit[1]
+                print("Using matchfile %s" % matchFile)
+                Ncatindex = int(lineSplit[2])
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
+inputDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"input")
 
-WDcat = os.path.join(starCatalogDir,'GaiaHRSet.hdf5')
+WDcat = os.path.join(inputDir,'GaiaHRSet.hdf5')
 with h5py.File(WDcat, 'r') as f:
     gmag, bprpWD = f['gmag'][:], f['bp_rp'][:]
     parallax = f['parallax'][:]
@@ -218,7 +239,7 @@ fil = 'all'
 print('Organizing lightcurves...')
 if opts.lightcurve_source == "Kowalski":
 
-    catalogFile = os.path.join(catalogDir,"%d_%d_%d.dat"%(field, ccd, quadrant))
+    catalogFile = os.path.join(catalogDir,"%d_%d_%d.h5"%(field, ccd, quadrant))
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,"%d_%d_%d.pkl"%(field, ccd, quadrant))
 
@@ -236,7 +257,7 @@ if opts.lightcurve_source == "Kowalski":
         raise Exception('Kowalski connection failed...')
 
     if opts.source_type == "quadrant":
-        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.dat"%(field, ccd, quadrant,Ncatindex))
+        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
         if opts.doSpectra:
             spectraFile = os.path.join(spectraDir,"%d_%d_%d_%d.pkl"%(field, ccd, quadrant,Ncatindex))
 
@@ -244,7 +265,8 @@ if opts.lightcurve_source == "Kowalski":
         absmags, bp_rps, names, baseline =\
             get_kowalski_bulk(field, ccd, quadrant, kow, 
                               program_ids=program_ids, min_epochs=min_epochs,
-                              num_batches=opts.Ncatalog, nb=Ncatindex)
+                              num_batches=Ncatalog, nb=Ncatindex,
+                              doRemoveHC=doRemoveHC, doHCOnly=doHCOnly)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\
                 slicestardist(lightcurves, coordinates, filters,
@@ -321,10 +343,10 @@ if opts.lightcurve_source == "Kowalski":
             names = np.array(names)
 
         if opts.doRemoveBrightStars:
-            filename = "%s/bsc5.hdf5" % starCatalogDir
+            filename = "%s/bsc5.hdf5" % inputDir
             sep = brightstardist(filename,ras,decs)
             idx1 = np.where(sep >= opts.stardist)[0]
-            filename = "%s/Gaia.hdf5" % starCatalogDir
+            filename = "%s/Gaia.hdf5" % inputDir
             sep = brightstardist(filename,ras,decs)
             idx2 = np.where(sep >= opts.stardist)[0]
             idx = np.union1d(idx1,idx2)
@@ -333,10 +355,10 @@ if opts.lightcurve_source == "Kowalski":
             if ("fermi" in catalog_file):
                 amaj, amin, phi = amaj[idx], amin[idx], phi[idx]
 
-        names_split = np.array_split(names,opts.Ncatalog)
-        ras_split = np.array_split(ras,opts.Ncatalog)
-        decs_split = np.array_split(decs,opts.Ncatalog)
-        errs_split = np.array_split(errs,opts.Ncatalog)
+        names_split = np.array_split(names,Ncatalog)
+        ras_split = np.array_split(ras,Ncatalog)
+        decs_split = np.array_split(decs,Ncatalog)
+        errs_split = np.array_split(errs,Ncatalog)
 
         names = names_split[Ncatindex]
         ras = ras_split[Ncatindex]
@@ -344,16 +366,16 @@ if opts.lightcurve_source == "Kowalski":
         errs = errs_split[Ncatindex]
 
         if ("fermi" in catalog_file):
-            amaj_split = np.array_split(amaj,opts.Ncatalog)
-            amin_split = np.array_split(amin,opts.Ncatalog)
-            phi_split = np.array_split(phi,opts.Ncatalog)
+            amaj_split = np.array_split(amaj,Ncatalog)
+            amin_split = np.array_split(amin,Ncatalog)
+            phi_split = np.array_split(phi,Ncatalog)
 
             amaj = amaj_split[Ncatindex]
             amin = amin_split[Ncatindex]
             phi = phi_split[Ncatindex]
 
-        catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").split("/")[-1]
-        catalogFile = os.path.join(catalogDir,"%s_%d.dat"%(catalog_file_split,
+        catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+        catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(catalog_file_split,
                                                            Ncatindex))
         if opts.doSpectra:
             spectraFile = os.path.join(spectraDir,"%s_%d.pkl"%(catalog_file_split,
@@ -387,19 +409,38 @@ if opts.lightcurve_source == "Kowalski":
         exit(0)
 
 elif opts.lightcurve_source == "matchfiles":
+    if ":" in matchFile:
+        matchFile_end = matchFile.split(":")[-1].split("/")[-1]
+        matchFile_out = "/scratch/mcoughlin/%s" % matchFile_end
+        if not os.path.isfile(matchFile_out):
+            print('Fetching %s...' % matchFile)
+            wget_command = "scp -i /home/mcoughlin/.ssh/id_rsa_passwordless %s %s" % (matchFile, matchFile_out)
+            os.system(wget_command)
+        matchFile = matchFile_out
+
     if not os.path.isfile(matchFile):
         print("%s missing..."%matchFile)
         exit(0)
 
-    matchFileEnd = matchFile.split("/")[-1].replace("pytable","dat")
-    catalogFile = os.path.join(catalogDir,matchFileEnd)
+    matchFile_split = matchFile.replace(".pytable","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+    catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(matchFile_split,
+                                                           Ncatindex))
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,matchFileEnd)
 
-    lightcurves, coordinates, baseline = get_matchfile(matchFile)
+    #matchFile = find_matchfile(opts.matchfileDir)
+    lightcurves, coordinates, filters, ids,\
+    absmags, bp_rps, names, baseline = get_matchfile(matchFile,
+                                                     min_epochs=min_epochs,
+                                                     doRemoveHC=doRemoveHC,
+                                                     doHCOnly=doHCOnly,
+                                                     Ncatalog=Ncatalog,
+                                                     Ncatindex=Ncatindex)
+
     if opts.doRemoveBrightStars:
-        lightcurves, coordinates, filters, ids =\
-            slicestardist(lightcurves, coordinates, filters, ids)
+        lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\
+            slicestardist(lightcurves, coordinates, filters,
+                          ids, absmags, bp_rps, names)
 
     if len(lightcurves) == 0:
         print("No data available...")
@@ -410,7 +451,7 @@ elif opts.lightcurve_source == "h5files":
         print("%s missing..."%matchFile)
         exit(0)
 
-    matchFileEnd = matchFile.split("/")[-1].replace("h5","dat")
+    matchFileEnd = matchFile.split("/")[-1].replace("h5","h5")
     catalogFile = os.path.join(catalogDir,matchFileEnd)
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,matchFileEnd)
@@ -456,6 +497,8 @@ else:
         fmin, fmax = 2/baseline, 48
     else:
         fmin, fmax = 2/baseline, 480
+
+print('Using baseline: %.5f, fmin: %.5f, fmax %.5f' %(baseline, fmin, fmax))
 
 if (opts.source_type == "catalog") and ("fermi" in catalog_file):
     basefolder = os.path.join(basefolder,'%d' % Ncatindex)
@@ -507,7 +550,8 @@ else:
                                                       doSaveMemory=opts.doSaveMemory,
                                                       doRemoveTerrestrial=opts.doRemoveTerrestrial,
                                                       freqs_to_remove=freqs_to_remove,
-                                                      doUsePDot=opts.doUsePDot)
+                                                      doUsePDot=opts.doUsePDot,
+                                                      doSingleTimeSegment=opts.doSingleTimeSegment)
     end_time = time.time()
     print('Lightcurve analysis took %.2f seconds' % (end_time - start_time))
 
@@ -562,18 +606,55 @@ print('Cataloging / Plotting lightcurves...')
 if opts.doSpectra:
     data_out = {}
 
+if opts.doLightcurveStats:
+    str_stats = np.empty((0,2))
+    data_stats = np.empty((0,43))
+else:
+    str_stats = np.empty((0,2))
+    data_stats = np.empty((0,6))
+
 cnt = 0
 fid = open(catalogFile,'w')
 for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significance, pdot in zip(lightcurves,filters,ids,names,coordinates,absmags,bp_rps,periods_best,significances,pdots):
     filt_str = "_".join([str(x) for x in filt])
 
     if opts.doLightcurveStats:
-        fid.write('%s %d %.10f %.10f %.10f %.10f %.10e %s '%(name, objid, coordinate[0], coordinate[1], period, significance, pdot, filt_str))
-        fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
+        str_stats = np.append(str_stats,
+                              np.array([[np.string_(name),
+                                         np.string_(filt_str)]]), axis=0)
+                                         
+        data_stats = np.append(data_stats,
+                               np.array([[objid, coordinate[0],
+                                          coordinate[1], period, significance,
+                                          pdot,
+                                          stats[cnt][0], stats[cnt][1],
+                                          stats[cnt][2], stats[cnt][3],
+                                          stats[cnt][4], stats[cnt][5],
+                                          stats[cnt][6], stats[cnt][7],
+                                          stats[cnt][8], stats[cnt][9],
+                                          stats[cnt][10], stats[cnt][11],
+                                          stats[cnt][11], stats[cnt][12],
+                                          stats[cnt][13], stats[cnt][14],
+                                          stats[cnt][15], stats[cnt][16],
+                                          stats[cnt][17], stats[cnt][18],
+                                          stats[cnt][19], stats[cnt][20],
+                                          stats[cnt][21], stats[cnt][22],
+                                          stats[cnt][23], stats[cnt][24],
+                                          stats[cnt][25], stats[cnt][26],
+                                          stats[cnt][27], stats[cnt][28],
+                                          stats[cnt][29], stats[cnt][30],
+                                          stats[cnt][31], stats[cnt][32],
+                                          stats[cnt][33], stats[cnt][34],
+                                          stats[cnt][35]]]), axis=0)
     else:
-        fid.write('%s %d %.10f %.10f %.10f %.10f %.10e %s\n'%(name, objid, coordinate[0], coordinate[1], period, significance, pdot, filt_str))
-        fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stats[cnt][0], stats[cnt][1], stats[cnt][2], stats[cnt][3], stats[cnt][4], stats[cnt][5], stats[cnt][6], stats[cnt][7], stats[cnt][8], stats[cnt][9], stats[cnt][10], stats[cnt][11], stats[cnt][12], stats[cnt][13], stats[cnt][14], stats[cnt][15], stats[cnt][16], stats[cnt][17], stats[cnt][18], stats[cnt][19], stats[cnt][20], stats[cnt][21], stats[cnt][22], stats[cnt][23], stats[cnt][24], stats[cnt][25], stats[cnt][26], stats[cnt][27], stats[cnt][28], stats[cnt][29], stats[cnt][30], stats[cnt][31], stats[cnt][32], stats[cnt][33], stats[cnt][34], stats[cnt][35]))
-     
+        str_stats = np.append(str_stats,
+                              np.array([[np.string_(name),
+                                         np.string_(filt_str)]]), axis=0)
+        data_stats = np.append(data_stats,
+                               np.array([[objid, coordinate[0],
+                                          coordinate[1], period, significance,
+                                          pdot]]), axis=0)
+
     if opts.doVariability:
         significance = stats[cnt][5]        
 
@@ -591,27 +672,36 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
             data_out[name]["stats"] = stats[cnt]
 
     if opts.doPlots and (significance>sigthresh):
+        if opts.doHCOnly and np.isclose(period, 1.0/fmin, rtol=1e-2):
+            print("Vetoing... period is 1/fmax")
+            continue
+
         RA, Dec = coordinate
         figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec,
                                                   period, "".join(filt_str))
-        idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
-        if folders[idx.astype(int)] == None:
-            continue
+
+        if opts.doNotPeriodFind:
+            thisfolder = 'noperiod'
+        else:
+            idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
+            thisfolder = folders[idx.astype(int)]
+            if thisfolder == None:
+                continue
+
+        if opts.doGPU and (algorithm == "PDM"):
+            copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
+        else:
+            copy = np.ma.copy(lightcurve).T
 
         nepoch = np.array(len(copy[:,0]))
         idx2 = np.where((nepoch>=epoch_ranges[:-1]) & (nepoch<=epoch_ranges[1:]))[0][0]
         if epoch_folders[idx2.astype(int)] == None:
             continue
 
-        folder = os.path.join(basefolder,folders[idx.astype(int)],epoch_folders[idx2.astype(int)])
+        folder = os.path.join(basefolder,thisfolder,epoch_folders[idx2.astype(int)])
         if not os.path.isdir(folder):
             os.makedirs(folder)
         pngfile = os.path.join(folder,figfile)
-
-        if opts.doGPU and (algorithm == "PDM"):
-            copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
-        else:
-            copy = np.ma.copy(lightcurve).T
 
         if opts.doVariability:
             phases = copy[:,0]
@@ -677,8 +767,6 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
             ax2 = fig.add_subplot(gs[:, 2:4])
             #ax3 = fig.add_subplot(gs[0, 2])
         else:
-            if opts.doNotPeriodFind:
-                continue
             fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
         ax1.errorbar(phases, magnitude,err,ls='none',c='k')
         period2=period
@@ -807,9 +895,19 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         plt.close()
 
     cnt = cnt + 1
-fid.close()
+
+with h5py.File(catalogFile, 'w') as hf:
+    hf.create_dataset("names",  data=str_stats[:,0])
+    hf.create_dataset("filters",  data=str_stats[:,1])
+    hf.create_dataset("stats",  data=data_stats)
 
 if opts.doSpectra:
     with open(spectraFile, 'wb') as handle:
         pickle.dump(data_out, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
+if opts.doRsyncFiles:
+    outputDirSplit = outputDir.split("/")[-1]
+    rsync_command = "rsync -zarvh %s %s" % (outputDir,
+                                            opts.rsync_directory)
+    print(rsync_command)
+    os.system(rsync_command)

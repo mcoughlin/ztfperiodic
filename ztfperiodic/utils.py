@@ -6,6 +6,8 @@ import tables
 import glob
 import time
 
+from scipy.interpolate import interpolate as interp
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.patches as patches
@@ -19,6 +21,13 @@ import requests
 import tqdm
 
 from astroquery.vizier import Vizier
+
+import matplotlib
+matplotlib.use('Agg')
+matplotlib.rcParams.update({'font.size': 16})
+matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
+from matplotlib.colors import LogNorm
+import matplotlib.pyplot as plt
 
 LOGIN_URL = "https://irsa.ipac.caltech.edu/account/signon/login.do"
 meta_baseurl="https://irsa.ipac.caltech.edu/ibe/search/ztf/products/"
@@ -686,7 +695,8 @@ def combine_lcs(ls):
 
 def get_kowalski_bulk(field, ccd, quadrant, kow,
                       program_ids = [2,3], min_epochs = 1, max_error = 2.0,
-                      num_batches=1, nb=0):
+                      num_batches=1, nb=0,
+                      doRemoveHC=False, doHCOnly=False):
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
@@ -752,6 +762,28 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
             fid = fid[idx]
             ra, dec = ra[idx], dec[idx]
+
+            if doRemoveHC:
+                dt = np.diff(hjd)
+                idx = np.setdiff1d(np.arange(len(hjd)),
+                                   np.where(dt < 30.0*60.0/86400.0)[0])
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                fid = fid[idx]
+                ra, dec = ra[idx], dec[idx]
+            elif doHCOnly:
+                dt = np.diff(hjd)
+                idx = np.setdiff1d(np.arange(len(hjd)),
+                                   np.where(dt >= 30.0*60.0/86400.0)[0])
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                fid = fid[idx]
+                ra, dec = ra[idx], dec[idx]
+
+                dt = np.diff(hjd)
+                print(dt)
+                idx = np.where(dt < 1e-3)[0]
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                fid = fid[idx]
+                ra, dec = ra[idx], dec[idx]
 
             if len(hjd) < min_epochs: continue
 
@@ -826,7 +858,167 @@ def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
 
     return lightcurve
 
-def get_matchfile(f):
+def find_matchfile(matchfileDir, objid = 10593142036566):
+        
+    fs=str(objid)
+    fieldID=fs[1:5]
+    rcID=fs[5:7]
+    filterid=fs[7]
+
+    if int(filterid)==1:
+        filterid='g'
+    elif int(filterid)==2:
+        filterid='r'
+    elif int(filterid)==3:
+        filterid='i'
+
+    ccdid=int((np.ceil((float(rcID)+1) / 4)))
+    if ccdid<10:
+        ccdid=str(0)+str(ccdid)
+    else:
+        ccdid=str(ccdid)
+    quadrant= str((int(rcID) % 4) +1)
+    rounded=(int(50 * np.ceil(float(fieldID[0:5])/50)))
+    if(rounded>999):
+        filename=matchfileDir+'/rc'+rcID+'/fr00'+str(rounded-49)+'-00'+str(rounded)+'/ztf_00'+fieldID+'_z'+filterid+'_c'+ccdid+'_q'+quadrant+'_match.pytable'
+    else:
+        filename=matchfileDir+'/rc'+rcID+'/fr000'+str(rounded-49)+'-000'+str(rounded)+'/ztf_00'+fieldID+'_z'+filterid+'_c'+ccdid+'_q'+quadrant+'_match.pytable'
+
+    return filename
+
+def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
+                  Ncatalog = 1, Ncatindex = 0):
+
+    bands = {'g': 1, 'r': 2, 'i': 3, 'z': 4, 'J': 5}
+
+    fsplit = f.split("/")[-1].replace(".pytable","").split("_")
+    filt = bands[fsplit[2][1]]
+    
+    baseline = 0
+    cnt=0
+    names = []
+    lightcurves, coordinates, filters, ids = [], [], [], []
+    absmags, bp_rps = [], []
+
+    with tables.open_file(f) as store:
+        for tbl in store.walk_nodes("/", "Table"):
+            if tbl.name in ["sourcedata", "transientdata"]:
+                group = tbl._v_parent
+                break
+
+        srcdata = pd.DataFrame.from_records(group.sourcedata[:])
+        srcdata.sort_values('matchid', axis=0, inplace=True)
+        srcdata2 = store.root.matches.sources[:]
+        sources = pd.DataFrame.from_records(store.root.matches.sources.read_where('nobs>%d' % min_epochs))
+        exposures = pd.DataFrame.from_records(store.root.matches.exposures.read_where(('(((programid>1) | ((programid==1) & (obsmjd<58484))| (programpi=="TESS")))')))
+        exposures = pd.DataFrame.from_records(store.root.matches.exposures.read_where(('programid>0')))
+        merged = srcdata.merge(exposures, on="expid")
+
+    matchids = sources[:]['matchid'].values
+    matchids_split = np.array_split(matchids, Ncatalog)
+    matchids = matchids_split[Ncatindex]
+
+    if doHCOnly:
+        tt = np.unique(np.sort(merged.obshjd.values))
+        magmat = np.nan*np.ones((len(tt),len(matchids)))
+        hjds = []
+
+    for ii, k in enumerate(matchids):
+        if np.mod(ii,100) == 0:
+            print("Reading ID %d/%d" % (ii, len(matchids)))
+ 
+        df = merged[merged['matchid'] == k]
+        df=df[df.catflags == 0]
+        df2=sources[:][sources[:].matchid == k]
+
+        RA=df2.ra.values[0]
+        Dec=df2.dec.values[0]
+        mag = df.mag.values.astype(np.float32)+17.0
+        magerr=df.magerr.values.astype(np.float32)/1000.0
+        obsHJD = df.obshjd
+        hjd = obsHJD.values
+
+        idx = np.argsort(hjd)
+        hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+
+        if doRemoveHC:
+            dt = np.diff(hjd)
+            idx = np.setdiff1d(np.arange(len(hjd)),
+                               np.where(dt < 30.0*60.0/86400.0)[0])
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+        elif doHCOnly:
+            dt = np.diff(hjd)
+            idx = np.setdiff1d(np.arange(len(hjd)),
+                               np.where(dt >= 30.0*60.0/86400.0)[0])
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+
+            dt = np.diff(hjd)
+            idy = np.where(dt > 1e-2)[0]
+            ddy = np.diff(idy)
+            if len(ddy) > 0:
+                idpeak = np.argmax(ddy)
+                idx = np.arange(idy[idpeak]+1, idy[idpeak+1]-1)
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            elif len(idy) == 1:
+                idx = np.arange(idy[0]-1)
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+
+        if len(hjd) < min_epochs: continue
+
+        if doHCOnly:
+            f = interp.interp1d(hjd, mag, fill_value=np.nan, bounds_error=False)
+            yinterp = f(tt)
+            magmat[:, ii] = yinterp - np.nanmedian(yinterp)
+
+        hjds.append(hjd)
+        hjd = hjd - np.min(hjd)
+
+        coordinate=(RA,Dec)
+        coordinates.append(coordinate)
+        lightcurve=(hjd,mag,magerr)
+        lightcurves.append(lightcurve)
+        filters.append([filt])
+        ids.append(k)
+
+        absmags.append([np.nan, np.nan, np.nan])
+        bp_rps.append(np.nan)
+
+        ra_hex, dec_hex = convert_to_hex(RA*24/360.0,delimiter=''), convert_to_hex(Dec,delimiter='')
+        if dec_hex[0] == "-":
+            objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+        else:
+            objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+        names.append(objname)
+
+        newbaseline = max(hjd)-min(hjd)
+        if newbaseline>baseline:
+            baseline=newbaseline
+        cnt = cnt + 1
+
+    if doHCOnly:
+        magmat_median = np.nanmedian(magmat, axis=1)
+        f = interp.interp1d(tt, magmat_median, fill_value='extrapolate')
+        lightcurves2 = []
+        for ii in range(len(lightcurves)):
+            magmat_median_array = f(hjds[ii])
+            magmat_median_array[np.isnan(magmat_median_array)] = 0.0
+            lightcurve2 = (lightcurves[ii][0],
+                           lightcurves[ii][1] - magmat_median_array,
+                           lightcurves[ii][2])
+            lightcurves2.append(lightcurve2)
+        lightcurves = lightcurves2
+
+    #plt.figure()
+    #for ii in range(len(lightcurves)):
+    #    plt.plot(lightcurves[ii][0], lightcurves[ii][1])
+    #plt.xlim([0,0.15])
+    #plt.savefig('test.png')
+    #plt.close()
+    #exit(0)
+
+    return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
+
+def get_matchfile_original(f):
 
     lightcurves, coordinates = [], []
     baseline = 0
