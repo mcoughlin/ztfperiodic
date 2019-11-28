@@ -12,7 +12,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.patches as patches
 
-from astropy.io import ascii
+import astropy.io.ascii as asci
 from astropy import units as u
 from astropy.time import Time
 from astropy.coordinates import SkyCoord, BarycentricTrueEcliptic, EarthLocation
@@ -121,6 +121,7 @@ def get_cookie(username, password):
     cookies = response.cookies
     return cookies
 
+
 def load_file(url, localdir = "/tmp", auth = None, chunks=1024, outf=None, showpbar=False):
     """Load a file from the specified URL and save it locally.
 
@@ -155,6 +156,7 @@ def load_file(url, localdir = "/tmp", auth = None, chunks=1024, outf=None, showp
         for block in iterator:
             handle.write(block)
     return os.stat(file).st_size
+
 
 def haversine_np(lon1, lat1, lon2, lat2):
     """
@@ -813,18 +815,22 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
 
-def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
 
+def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
+    """
+    Get the light curve from ipac database website
+    user & pwd to ipac database
+    """
     directory="%s/*/*/*"%dataDir
     lightcurve = []
 
     querystr="?POS=%.4f,%.4f"%(ra, dec)
     querystr+="&ct=csv"
-    url=os.path.join(meta_baseurl, 'sci')
+    url = os.path.join(meta_baseurl, 'sci')
     tmpfile="tmp.tbl"
     load_file(url+querystr, outf=tmpfile, auth=(user, pwd), showpbar=True)
 
-    data = ascii.read(tmpfile)
+    data = asci.read(tmpfile)
 
     for f in glob.iglob(directory):
         fsplit = f.split("/")[-1].split("_")
@@ -858,47 +864,47 @@ def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
 
     return lightcurve
 
+
 def find_matchfile(matchfileDir, objid = 10593142036566):
-        
+    """
+    Find the filepath based on an objid 
+    On Schoty: matchfileDir = "/gdata/Data/Matchfiles/ztfweb.ipac.caltech.edu/ztf/ops/srcmatch"
+    """
     fs=str(objid)
     fieldID=fs[1:5]
     rcID=fs[5:7]
-    filterid=fs[7]
-
-    if int(filterid)==1:
+    filterID=fs[7]
+    if int(filterID)==1:
         filterid='g'
-    elif int(filterid)==2:
+    elif int(filterID)==2:
         filterid='r'
-    elif int(filterid)==3:
+    elif int(filterID)==3:
         filterid='i'
-
     ccdid=int((np.ceil((float(rcID)+1) / 4)))
     if ccdid<10:
         ccdid=str(0)+str(ccdid)
     else:
         ccdid=str(ccdid)
     quadrant= str((int(rcID) % 4) +1)
-    rounded=(int(50 * np.ceil(float(fieldID[0:5])/50)))
-    if(rounded>999):
-        filename=matchfileDir+'/rc'+rcID+'/fr00'+str(rounded-49)+'-00'+str(rounded)+'/ztf_00'+fieldID+'_z'+filterid+'_c'+ccdid+'_q'+quadrant+'_match.pytable'
+    rounded=int(50 * np.ceil(float(fieldID[0:5])/50))
+    if (rounded>999):
+        filename=matchfileDir+'/rc'+rcID+'/fr00'+str(rounded-49)+'-00'+str(rounded)+\
+            '/ztf_00'+fieldID+'_z'+filterid+'_c'+ccdid+'_q'+quadrant+'_match.pytable'
     else:
-        filename=matchfileDir+'/rc'+rcID+'/fr000'+str(rounded-49)+'-000'+str(rounded)+'/ztf_00'+fieldID+'_z'+filterid+'_c'+ccdid+'_q'+quadrant+'_match.pytable'
-
+        filename=matchfileDir+'/rc'+rcID+'/fr000'+str(rounded-49)+'-000'+str(rounded)+\
+            '/ztf_00'+fieldID+'_z'+filterid+'_c'+ccdid+'_q'+quadrant+'_match.pytable'
     return filename
+
 
 def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
                   Ncatalog = 1, Ncatindex = 0):
-
+    """
+    Read matchfile (hdf file) light curves given the filename
+    e.g.: f = '/path/to/fr000551-000600/ztf_000593_zr_c04_q3_match.pytable'
+    """
     bands = {'g': 1, 'r': 2, 'i': 3, 'z': 4, 'J': 5}
-
     fsplit = f.split("/")[-1].replace(".pytable","").split("_")
     filt = bands[fsplit[2][1]]
-    
-    baseline = 0
-    cnt=0
-    names = []
-    lightcurves, coordinates, filters, ids = [], [], [], []
-    absmags, bp_rps = [], []
 
     with tables.open_file(f) as store:
         for tbl in store.walk_nodes("/", "Table"):
@@ -908,7 +914,7 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
 
         srcdata = pd.DataFrame.from_records(group.sourcedata[:])
         srcdata.sort_values('matchid', axis=0, inplace=True)
-        srcdata2 = store.root.matches.sources[:]
+        # srcdata2 = store.root.matches.sources[:]
         sources = pd.DataFrame.from_records(store.root.matches.sources.read_where('nobs>%d' % min_epochs))
         exposures = pd.DataFrame.from_records(store.root.matches.exposures.read_where(('(((programid>1) | ((programid==1) & (obsmjd<58484))| (programpi=="TESS")))')))
         exposures = pd.DataFrame.from_records(store.root.matches.exposures.read_where(('programid>0')))
@@ -920,8 +926,13 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
 
     if doHCOnly:
         tt = np.unique(np.sort(merged.obshjd.values))
-        magmat = np.nan*np.ones((len(tt),len(matchids)))
-        hjds = []
+        magmat = np.nan*np.ones((len(tt),len(matchids))) # (nepoch x nsources)
+        
+    baseline = 0
+    names = []
+    lightcurves, coordinates, filters, ids = [], [], [], []
+    absmags, bp_rps = [], []
+    hjds = []
 
     for ii, k in enumerate(matchids):
         if np.mod(ii,100) == 0:
@@ -993,7 +1004,6 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
         newbaseline = max(hjd)-min(hjd)
         if newbaseline>baseline:
             baseline=newbaseline
-        cnt = cnt + 1
 
     if doHCOnly:
         magmat_median = np.nanmedian(magmat, axis=1)
@@ -1018,8 +1028,8 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
 
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
 
-def get_matchfile_original(f):
 
+def get_matchfile_original(f):
     lightcurves, coordinates = [], []
     baseline = 0
     with tables.open_file(f) as store:
@@ -1040,9 +1050,6 @@ def get_matchfile_original(f):
         idx = np.where(counts>50)[0]
 
         matchids, idx2 = np.unique(matchids[idx],return_index=True)
-        ncounts = counts[idx][idx2]
-        nmatchids = len(idx)
-
         cnt = 0
         for k in matchids:
             if np.mod(cnt,100) == 0:
@@ -1066,8 +1073,8 @@ def get_matchfile_original(f):
 
     return lightcurves, coordinates, baseline
 
-def database_query(kow, qu, nquery = 5):
 
+def database_query(kow, qu, nquery = 5):
     r = {}
     cnt = 0
     while cnt < nquery:
@@ -1078,17 +1085,17 @@ def database_query(kow, qu, nquery = 5):
         cnt = cnt + 1
     return r
 
-def BJDConvert(mjd, RA, Dec):
-        times=mjd
-        t = Time(times,format='mjd',scale='utc')
-        t2=t.tdb
-        c = SkyCoord(RA,Dec, unit="deg")
-        d=c.transform_to(BarycentricTrueEcliptic)
-        Palomar=EarthLocation.of_site('Palomar')
-        delta=t2.light_travel_time(c,kind='barycentric',location=Palomar)
-        BJD_TDB=t2+delta
 
-        return BJD_TDB
+def BJDConvert(mjd, RA, Dec):
+    times=mjd
+    t = Time(times,format='mjd',scale='utc')
+    t2=t.tdb
+    c = SkyCoord(RA,Dec, unit="deg")
+    Palomar=EarthLocation.of_site('Palomar')
+    delta=t2.light_travel_time(c,kind='barycentric',location=Palomar)
+    BJD_TDB=t2+delta    
+    return BJD_TDB
+
 
 def JD2HJD(jd,ra,dec):
     objectcoords = SkyCoord(ra*u.deg,dec*u.deg, frame='icrs')
@@ -1109,6 +1116,7 @@ def angular_distance(ra1, dec1, ra2, dec2):
          np.cos(dec1*np.pi/180.)*np.cos(dec2*np.pi/180.)*np.sin(delt_lon/2.0)**2 ) )
 
     return dist/np.pi*180.
+
 
 def convert_to_hex(val, delimiter=':', force_sign=False):
     """
@@ -1145,6 +1153,7 @@ def convert_to_hex(val, delimiter=':', force_sign=False):
     else:
         deg_str = '{:02d}'.format(degree * s_factor)
     return '{0:s}{3:s}{1:02d}{3:s}{2:.2f}'.format(deg_str, minute, second, delimiter)
+
 
 def overlapping_histogram(a, bins): 
     a =  a.ravel() 

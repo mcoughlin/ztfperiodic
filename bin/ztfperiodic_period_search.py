@@ -57,6 +57,8 @@ def parse_commandline():
     parser.add_option("--doRemoveTerrestrial",  action="store_true", default=False)
     parser.add_option("--doLightcurveStats",  action="store_true", default=False)
     parser.add_option("--doRemoveBrightStars",  action="store_true", default=False)
+    parser.add_option("--doSingleTimeSegment",  action="store_true", default=False)
+
     parser.add_option("--doRemoveHC",  action="store_true", default=False)
     parser.add_option("--doHCOnly",  action="store_true", default=False)
     parser.add_option("--doLongPeriod",  action="store_true", default=False)
@@ -548,7 +550,8 @@ else:
                                                       doSaveMemory=opts.doSaveMemory,
                                                       doRemoveTerrestrial=opts.doRemoveTerrestrial,
                                                       freqs_to_remove=freqs_to_remove,
-                                                      doUsePDot=opts.doUsePDot)
+                                                      doUsePDot=opts.doUsePDot,
+                                                      doSingleTimeSegment=opts.doSingleTimeSegment)
     end_time = time.time()
     print('Lightcurve analysis took %.2f seconds' % (end_time - start_time))
 

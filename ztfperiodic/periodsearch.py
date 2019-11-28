@@ -11,7 +11,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                  doGPU=False, doCPU=False, doSaveMemory=False,
                  doRemoveTerrestrial=False,
                  doRemoveWindow=False,
-                 doUsePDot=False,
+                 doUsePDot=False, doSingleTimeSegment=False,
                  freqs_to_remove=None,
                  phase_bins=20, mag_bins=10):
 
@@ -134,13 +134,27 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             else:
                 pdots_to_test = np.array([0.0])
 
+            if doSingleTimeSegment:
+                tt = np.empty((0,1))
+                for lightcurve in lightcurves:
+                    tt = np.unique(np.append(tt, lightcurve[0]))
+
             maxn = -np.inf
-            lightcurves_stack = [] 
+            lightcurves_stack = []
             for lightcurve in lightcurves:
-                idx = np.argsort(lightcurve[0])
-                lightcurve = (lightcurve[0][idx],
-                              lightcurve[1][idx],
-                              lightcurve[2][idx])
+                if doSingleTimeSegment:
+                    xy, x_ind, y_ind = np.intersect1d(tt, lightcurve[0], 
+                                                      return_indices=True)
+                    mag_array = 999*np.ones(tt.shape)
+                    magerr_array = 999*np.ones(tt.shape)
+                    mag_array[x_ind] = lightcurve[1][y_ind]
+                    magerr_array[x_ind] = lightcurve[2][y_ind]
+                    lightcurve = (tt, mag_array, magerr_array)
+                else:
+                    idx = np.argsort(lightcurve[0])
+                    lightcurve = (lightcurve[0][idx],
+                                  lightcurve[1][idx],
+                                  lightcurve[2][idx])
 
                 lightcurve_stack = np.vstack((lightcurve[0],
                                               lightcurve[1])).T
