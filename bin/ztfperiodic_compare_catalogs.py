@@ -35,17 +35,100 @@ def parse_commandline():
     parser.add_option("--doPlots",  action="store_true", default=False)
     parser.add_option("--doFermi",  action="store_true", default=False)
     parser.add_option("--doSimbad",  action="store_true", default=False)
+    parser.add_option("--doCrossMatch",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output_quadrants/catalog/compare")
     parser.add_option("--catalog1",default="/home/mcoughlin/ZTF/output_quadrants/catalog/LS")
     parser.add_option("--catalog2",default="/home/mcoughlin/ZTF/output_quadrants/catalog/CE")
    
+    parser.add_option("--catalog_file",default="../catalogs/CRTS.dat")    
+
     parser.add_option("--sig1",default=1e6,type=float)
     parser.add_option("--sig2",default=7.0,type=float)    
 
     opts, args = parser.parse_args()
 
     return opts
+
+def read_catalog(catalog_file):
+
+    amaj, amin, phi = None, None, None
+    default_err = 5.0
+
+    if ".dat" in catalog_file:
+        lines = [line.rstrip('\n') for line in open(catalog_file)]
+        names, ras, decs, errs = [], [], [], []
+        periods, classifications = [], []
+        if ("fermi" in catalog_file):
+            amaj, amin, phi = [], [], []
+        for line in lines:
+            lineSplit = list(filter(None,line.split(" ")))
+            if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file):
+                ra_hex, dec_hex = convert_to_hex(float(lineSplit[0])*24/360.0,delimiter=''), convert_to_hex(float(lineSplit[1]),delimiter='')
+                if dec_hex[0] == "-":
+                    objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+                else:
+                    objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+                names.append(objname)
+                ras.append(float(lineSplit[0]))
+                decs.append(float(lineSplit[1]))
+            elif ("CRTS" in catalog_file):
+                names.append(lineSplit[0])
+                ras.append(float(lineSplit[1]))
+                decs.append(float(lineSplit[2]))
+                errs.append(default_err)
+                periods.append(float(lineSplit[3]))
+                classifications.append(lineSplit[4])
+            elif ("vlss" in catalog_file):
+                names.append(lineSplit[0])
+                ras.append(float(lineSplit[1]))
+                decs.append(float(lineSplit[2]))
+                err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
+                errs.append(err)
+            elif ("fermi" in catalog_file):
+                names.append(lineSplit[0])
+                ras.append(float(lineSplit[1]))
+                decs.append(float(lineSplit[2]))
+                err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
+                errs.append(err)
+                amaj.append(float(lineSplit[3]))
+                amin.append(float(lineSplit[4]))
+                phi.append(float(lineSplit[5]))
+            elif ("swift" in catalog_file) or ("xmm" in catalog_file):
+                names.append(lineSplit[0])
+                ras.append(float(lineSplit[1]))
+                decs.append(float(lineSplit[2]))
+                err = float(lineSplit[3])
+                errs.append(err)
+            else:
+                names.append(lineSplit[0])
+                ras.append(float(lineSplit[1]))
+                decs.append(float(lineSplit[2]))
+                errs.append(default_err)
+        names = np.array(names)
+        ras, decs, errs = np.array(ras), np.array(decs), np.array(errs)
+        if ("fermi" in catalog_file):
+            amaj, amin, phi = np.array(amaj), np.array(amin), np.array(phi)
+    elif ".hdf5" in catalog_file:
+        with h5py.File(catalog_file, 'r') as f:
+            ras, decs = f['ra'][:], f['dec'][:]
+        errs = default_err*np.ones(ras.shape)
+
+        names = []
+        for ra, dec in zip(ras, decs):
+            ra_hex, dec_hex = convert_to_hex(ra*24/360.0,delimiter=''), convert_to_hex(dec,delimiter='')
+            if dec_hex[0] == "-":
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+            else:
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+            names.append(objname)
+        names = np.array(names)
+
+    columns = ["name", "ra", "dec", "period", "classification"]
+    tab = Table([names, ras, decs, periods, classifications],
+                names=columns)
+
+    return tab
 
 def load_catalog(catalog,doFermi=False,doSimbad=False):
 
@@ -148,19 +231,22 @@ if not os.path.isfile(cat1file):
     cat1.write(cat1file, format='fits')
 else:
     cat1 = Table.read(cat1file, format='fits')
-
-if not os.path.isfile(cat2file):
-    cat2 = load_catalog(catalog2,doFermi=opts.doFermi,doSimbad=opts.doSimbad)
-    cat2.write(cat2file, format='fits')
-else:
-    cat2 = Table.read(cat2file, format='fits')
-
 idx1 = np.where(cat1["sig"] >= opts.sig1)[0]
-idx2 = np.where(cat2["sig"] >= opts.sig2)[0]
 print('Keeping %.5f %% of objects in catalog 1' % (100*len(idx1)/len(cat1)))
-print('Keeping %.5f %% of objects in catalog 2' % (100*len(idx2)/len(cat2)))
-
 catalog1 = SkyCoord(ra=cat1["ra"]*u.degree, dec=cat1["dec"]*u.degree, frame='icrs')
+
+if opts.doCrossMatch:
+    cat2 = read_catalog(opts.catalog_file)
+else:
+    if not os.path.isfile(cat2file):
+        cat2 = load_catalog(catalog2,doFermi=opts.doFermi,doSimbad=opts.doSimbad)
+        cat2.write(cat2file, format='fits')
+    else:
+        cat2 = Table.read(cat2file, format='fits')
+
+    idx2 = np.where(cat2["sig"] >= opts.sig2)[0]
+    print('Keeping %.5f %% of objects in catalog 2' % (100*len(idx2)/len(cat2)))
+
 catalog2 = SkyCoord(ra=cat2["ra"]*u.degree, dec=cat2["dec"]*u.degree, frame='icrs')
 idx,sep,_ = catalog1.match_to_catalog_sky(catalog2)
 
@@ -174,8 +260,14 @@ for i,ii,s in zip(np.arange(len(sep)),idx,sep):
     catnum = cat1["catnum"][i]
     objid = cat1["objid"][i]
     ra, dec = cat1["ra"][i], cat1["dec"][i]
-    sig1, sig2 = cat1["sig"][i], cat2["sig"][ii]
-    sigsort1, sigsort2 = cat1["sigsort"][i], cat2["sigsort"][ii]
+
+    if opts.doCrossMatch:
+        sig1, sigsort1 = cat1["sig"][i], cat1["sigsort"][i]
+        sig2, sigsort2 = np.inf, np.inf
+        classification = cat2["classification"][ii]
+    else:
+        sig1, sig2 = cat1["sig"][i], cat2["sig"][ii]
+        sigsort1, sigsort2 = cat1["sigsort"][i], cat2["sigsort"][ii]
     period1, period2 = cat1["period"][i],cat2["period"][ii]
 
     if sig1 < opts.sig1: continue
@@ -183,12 +275,22 @@ for i,ii,s in zip(np.arange(len(sep)),idx,sep):
 
     xs.append(1.0/period1)
     ys.append(1.0/period2)
-    ratio = np.min([sigsort1/sigsort2,sigsort2/sigsort1])
+    if opts.doCrossMatch:
+        ratio = 1.0
+    else:
+        ratio = np.min([sigsort1/sigsort2,sigsort2/sigsort1])
     zs.append(ratio)
 
-    fid.write('%d %d %.5f %.5f %.5f %.5f %.5e %.5e\n' % (catnum, objid, ra, dec,
-                                                         period1, period2,
-                                                         sig1, sig2))
+    if opts.doCrossMatch:
+        fid.write('%d %d %.5f %.5f %.5f %.5f %.5e %s\n' % (catnum, objid,
+                                                             ra, dec,
+                                                             period1, period2,
+                                                             sig1, classification))
+    else:
+        fid.write('%d %d %.5f %.5f %.5f %.5f %.5e %.5e\n' % (catnum, objid,
+                                                             ra, dec,
+                                                             period1, period2,
+                                                             sig1, sig2))
 fid.close() 
 
 if opts.doPlots:
