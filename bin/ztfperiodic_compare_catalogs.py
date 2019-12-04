@@ -46,6 +46,8 @@ def parse_commandline():
     parser.add_option("--sig1",default=1e6,type=float)
     parser.add_option("--sig2",default=7.0,type=float)    
 
+    parser.add_option("--crossmatch_distance",default=1.0,type=float)
+
     opts, args = parser.parse_args()
 
     return opts
@@ -154,6 +156,9 @@ def load_catalog(catalog,doFermi=False,doSimbad=False):
              "stats35"]
     cnt = 0
     for ii, filename in enumerate(filenames):
+        if np.mod(ii,100) == 0:
+            print('Loading file %d/%d' % (ii, len(filenames)))
+
         filenameSplit = filename.split("/")
         catnum = filenameSplit[-1].replace(".dat","").split("_")[-1]
  
@@ -255,7 +260,7 @@ xs, ys, zs = [], [], []
 filename = os.path.join(outputDir,'catalog.dat')
 fid = open(filename,'w')
 for i,ii,s in zip(np.arange(len(sep)),idx,sep):
-    if s.arcsec > 1: continue
+    if s.arcsec > opts.crossmatch_distance: continue
   
     catnum = cat1["catnum"][i]
     objid = cat1["objid"][i]
