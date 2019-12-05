@@ -2,6 +2,7 @@ import os
 from astropy import time
 import astropy.units as u
 from astropy.table import Table, unique
+from astropy.coordinates import SkyCoord
 import numpy as np
 import pyvo.dal
 import requests
@@ -45,10 +46,21 @@ def ztf_obs(field_id, start_time=None, end_time=None):
 field_ids = np.arange(245,880)
 filename = '../input/nobs.dat'
 
+tesspath = '../input/%s.tess' % 'ZTF'
+fields = np.recfromtxt(tesspath, usecols=range(3),
+                       names=['field_id', 'ra', 'dec'])
+
 if not os.path.isfile(filename):
     outfile = open('../input/nobs.dat','w')
     for field_id in field_ids:
         obstable = ztf_obs(field_id)
+        idx = np.where(fields['field_id'] == field_id)[0]
+        ra, dec = fields['ra'][idx], fields['dec'][idx]
+
+        coord = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
+        gal = coord.galactic
+        b = gal.b.deg
+
         idx1 = np.where(obstable["ipac_gid"] == 1)[0]
         idx2 = np.where(obstable["ipac_gid"] == 2)[0]
         idx3 = np.where(obstable["ipac_gid"] == 3)[0]
@@ -64,7 +76,7 @@ if not os.path.isfile(filename):
         jd, fid = jd[idx], fid[idx]
         idxg = np.where(fid == 1)[0]
         idxr = np.where(fid == 2)[0]
-        print('%d %d %d %d %d %d'%(field_id, len(idx1), len(idx2), len(idx3), len(idxg), len(idxr)), file=outfile, flush=True)
+        print('%d %.5f %.5f %.5f %d %d %d %d %d'%(field_id, ra, dec, b, len(idx1), len(idx2), len(idx3), len(idxg), len(idxr)), file=outfile, flush=True)
     outfile.close()
 
 data_out = np.loadtxt(filename)

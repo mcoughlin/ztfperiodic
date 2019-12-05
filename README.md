@@ -43,3 +43,8 @@ nvidia-docker run -it python-ztfperiodic
 
 For debugging:
 docker run -it python-ztfperiodic    
+
+## Trouble Shooting
+
+- cuda</br>
+If you see `GPUassert: all CUDA-capable devices are busy or unavailable gcex/src/manager.cu 57`, type `nvidia-smi` and check `Volatile GPU-Util`. Try `export CUDA_VISIBLE_DEVICES=1`.
