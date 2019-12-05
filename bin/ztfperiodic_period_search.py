@@ -96,7 +96,7 @@ def parse_commandline():
     parser.add_option("--Ncatalog",default=1,type=int)
     parser.add_option("--Ncatindex",default=0,type=int)
 
-    parser.add_option("--stardist",default=100.0,type=float)
+    parser.add_option("--stardist",default=13.0,type=float)
     parser.add_option("--sigthresh",default=None,type=float)
 
     parser.add_option("-u","--user")
@@ -104,6 +104,7 @@ def parse_commandline():
 
     parser.add_option("-p","--program_ids",default="2,3")
     parser.add_option("--min_epochs",default=50,type=int)
+    parser.add_option("--default_err",default=None,type=float)
 
     parser.add_option("--doRsyncFiles",  action="store_true", default=False)
     parser.add_option("--rsync_directory",default="mcoughlin@schoty.caltech.edu:/gdata/Data/ztfperiodic_results")
@@ -119,7 +120,21 @@ def brightstardist(filename,ra,dec):
          ras, decs = f['ra'][:], f['dec'][:]
      c = SkyCoord(ra=ras*u.degree, dec=decs*u.degree,frame='icrs')
      idx,sep,_ = catalog.match_to_catalog_sky(c)
-     return sep.arcsec
+
+     seps = []
+     for i,ii,s in zip(np.arange(len(sep)),idx,sep):
+         if s.arcsec > 30.0:
+             seps.append(s.arcsec)
+         else:
+             radiff = np.abs(3600*(ra[i]-ras[ii]))
+             decdiff = np.abs(3600*(dec[i]-decs[ii]))
+             if (radiff <= 2.0) and (decdiff <= 30.0):
+                 seps.append(10.0)
+             else:
+                 seps.append(s.arcsec)
+     seps = np.array(seps)
+
+     return seps
 
 
 def slicestardist(lightcurves, coordinates, filters, ids, absmags, bp_rps, names):
@@ -128,15 +143,16 @@ def slicestardist(lightcurves, coordinates, filters, ids, absmags, bp_rps, names
     for coordinate in coordinates:
         ras.append(coordinate[0])
         decs.append(coordinate[1])
-    ras, decs = np.array(decs), np.array(decs)
+    ras, decs = np.array(ras), np.array(decs)
 
     filename = "%s/bsc5.hdf5" % inputDir
     sep = brightstardist(filename,ras,decs)
     idx1 = np.where(sep >= opts.stardist)[0]
+    sep = brightstardist(filename,ras,decs)
     filename = "%s/Gaia.hdf5" % inputDir
     sep = brightstardist(filename,ras,decs)
     idx2 = np.where(sep >= opts.stardist)[0]
-    idx = np.union1d(idx1,idx2).astype(int)
+    idx = np.intersect1d(idx1,idx2).astype(int)
 
     return [lightcurves[i] for i in idx], [coordinates[i] for i in idx], [filters[i] for i in idx], [ids[i] for i in idx], [absmags[i] for i in idx], [bp_rps[i] for i in idx], [names[i] for i in idx]
 
@@ -275,10 +291,13 @@ if opts.lightcurve_source == "Kowalski":
     elif opts.source_type == "catalog":
 
         amaj, amin, phi = None, None, None
-        if doCombineFilt:
-            default_err = 3.0
+        if not opts.default_err is None:
+            default_err = opts.default_err
         else:
-            default_err = 5.0
+            if doCombineFilt:
+                default_err = 3.0
+            else:
+                default_err = 5.0
 
         if ".dat" in catalog_file:
             lines = [line.rstrip('\n') for line in open(catalog_file)]
@@ -288,6 +307,16 @@ if opts.lightcurve_source == "Kowalski":
             for line in lines:
                 lineSplit = list(filter(None,line.split(" ")))
                 if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file):
+                    ra_hex, dec_hex = convert_to_hex(float(lineSplit[0])*24/360.0,delimiter=''), convert_to_hex(float(lineSplit[1]),delimiter='')
+                    if dec_hex[0] == "-":
+                        objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+                    else:
+                        objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+                    names.append(objname)
+                    ras.append(float(lineSplit[0]))
+                    decs.append(float(lineSplit[1]))
+                    errs.append(default_err)
+                elif "gaia_large_rv.dat" in catalog_file:
                     ra_hex, dec_hex = convert_to_hex(float(lineSplit[0])*24/360.0,delimiter=''), convert_to_hex(float(lineSplit[1]),delimiter='')
                     if dec_hex[0] == "-":
                         objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
@@ -608,7 +637,7 @@ if opts.doSpectra:
 
 if opts.doLightcurveStats:
     str_stats = np.empty((0,2))
-    data_stats = np.empty((0,43))
+    data_stats = np.empty((0,42))
 else:
     str_stats = np.empty((0,2))
     data_stats = np.empty((0,6))
@@ -633,19 +662,19 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                                           stats[cnt][6], stats[cnt][7],
                                           stats[cnt][8], stats[cnt][9],
                                           stats[cnt][10], stats[cnt][11],
-                                          stats[cnt][11], stats[cnt][12],
-                                          stats[cnt][13], stats[cnt][14],
-                                          stats[cnt][15], stats[cnt][16],
-                                          stats[cnt][17], stats[cnt][18],
-                                          stats[cnt][19], stats[cnt][20],
-                                          stats[cnt][21], stats[cnt][22],
-                                          stats[cnt][23], stats[cnt][24],
-                                          stats[cnt][25], stats[cnt][26],
-                                          stats[cnt][27], stats[cnt][28],
-                                          stats[cnt][29], stats[cnt][30],
-                                          stats[cnt][31], stats[cnt][32],
-                                          stats[cnt][33], stats[cnt][34],
-                                          stats[cnt][35]]]), axis=0)
+                                          stats[cnt][12], stats[cnt][13],
+                                          stats[cnt][14], stats[cnt][15],
+                                          stats[cnt][16], stats[cnt][17],
+                                          stats[cnt][18], stats[cnt][19],
+                                          stats[cnt][20], stats[cnt][21],
+                                          stats[cnt][22], stats[cnt][23],
+                                          stats[cnt][24], stats[cnt][25],
+                                          stats[cnt][26], stats[cnt][27],
+                                          stats[cnt][28], stats[cnt][29],
+                                          stats[cnt][30], stats[cnt][31],
+                                          stats[cnt][32], stats[cnt][33],
+                                          stats[cnt][34], stats[cnt][35]]]),
+                               axis=0)
     else:
         str_stats = np.append(str_stats,
                               np.array([[np.string_(name),
@@ -656,7 +685,7 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                                           pdot]]), axis=0)
 
     if opts.doVariability:
-        significance = stats[cnt][5]        
+        significance = stats[cnt][9]        
 
     if opts.doSpectra:
         data_out[name] = {}
@@ -671,6 +700,7 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         if opts.doLightcurveStats:
             data_out[name]["stats"] = stats[cnt]
 
+    print(significance)
     if opts.doPlots and (significance>sigthresh):
         if opts.doHCOnly and np.isclose(period, 1.0/fmin, rtol=1e-2):
             print("Vetoing... period is 1/fmax")

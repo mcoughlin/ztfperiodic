@@ -734,7 +734,23 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
         #r = kow.query(query=qu)
 
         datas = r["result_data"]["query_result"]
-        for data in datas:
+
+        if doHCOnly:
+            tt = np.empty((0,1))
+            for data in datas:
+                hjd = []
+                data = data["data"]
+                for dic in data:
+                    if not dic["programid"] in program_ids: continue
+                    if (dic["programid"]==1) and (dic["hjd"] > tmax): continue
+                    if not dic["catflags"] == 0: continue
+
+                    hjd.append(dic["hjd"])
+                hjd = np.array(hjd)
+                tt = np.unique(np.append(tt,hjd))
+            magmat = np.nan*np.ones((len(tt),len(datas))) # (nepoch x nsources)
+
+        for ii, data in enumerate(datas):
             hjd, mag, magerr, ra, dec, fid = [], [], [], [], [], []
             objid = data["_id"]
             filt = data["filter"]
@@ -765,6 +781,11 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
             fid = fid[idx]
             ra, dec = ra[idx], dec[idx]
 
+            idx = np.argsort(hjd)
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            fid = fid[idx]
+            ra, dec = ra[idx], dec[idx]
+
             if doRemoveHC:
                 dt = np.diff(hjd)
                 idx = np.setdiff1d(np.arange(len(hjd)),
@@ -780,41 +801,85 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                 fid = fid[idx]
                 ra, dec = ra[idx], dec[idx]
 
-                dt = np.diff(hjd)
-                print(dt)
-                idx = np.where(dt < 1e-3)[0]
-                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
-                fid = fid[idx]
-                ra, dec = ra[idx], dec[idx]
-
             if len(hjd) < min_epochs: continue
 
-            lightcurve=(hjd,mag,magerr)
-            lightcurves.append(lightcurve)
+            if doHCOnly:
+                f = interp.interp1d(hjd, mag, fill_value=np.nan, bounds_error=False)
+                yinterp = f(tt)
+                magmat[:, ii] = yinterp - np.nanmedian(yinterp)
 
-            coordinate=(np.median(ra),np.median(dec))
-            coordinates.append(coordinate)
-
-            filters.append(np.unique(fid).tolist())
-            ids.append(objid)
-
-            absmags.append([np.nan, np.nan, np.nan])
-            bp_rps.append(np.nan)
-
-            ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
-            if dec_hex[0] == "-":
-                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+                lightcurves_tmp, filters_tmp = split_lightcurve(hjd, mag,
+                                                                magerr, fid,
+                                                                min_epochs)
+                if len(lightcurves_tmp) == 0:
+                    continue
+                nlightcurves = len(lightcurves_tmp)
+                for lightcurve, filt in zip(lightcurves_tmp, filters_tmp):
+                    lightcurves.append(lightcurve)
+                    filters.append(filt)
             else:
-                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
-            names.append(objname)
+                lightcurve=(hjd,mag,magerr)
+                lightcurves.append(lightcurve)
+                filters.append(np.unique(fid).tolist())
+                nlightcurves = 1
+
+            for jj in range(nlightcurves): 
+                coordinate=(np.median(ra),np.median(dec))
+                coordinates.append(coordinate)
+                ids.append(objid)
+                absmags.append([np.nan, np.nan, np.nan])
+                bp_rps.append(np.nan)
+
+                ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
+                if dec_hex[0] == "-":
+                    objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+                else:
+                    objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+                names.append(objname)
 
             newbaseline = max(hjd)-min(hjd)
             if newbaseline>baseline:
                 baseline=newbaseline
             cnt = cnt + 1
 
+    if doHCOnly:
+        magmat_median = np.nanmedian(magmat, axis=1)
+        f = interp.interp1d(tt, magmat_median, fill_value='extrapolate')
+        lightcurves2 = []
+        for ii in range(len(lightcurves)):
+            magmat_median_array = f(lightcurves[ii][0])
+            magmat_median_array[np.isnan(magmat_median_array)] = 0.0
+            lightcurve2 = (lightcurves[ii][0],
+                           lightcurves[ii][1] - magmat_median_array,
+                           lightcurves[ii][2])
+            lightcurves2.append(lightcurve2)
+        lightcurves = lightcurves2
+
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
 
+def split_lightcurve(hjd, mag, magerr, fid, min_epochs):
+
+    dt = np.diff(hjd)
+    idy = np.where(dt > 1e-2)[0]
+    ddy = np.diff(idy)
+    idz = np.where(ddy >= min_epochs)[0]
+
+    lightcurves_tmp, filters_tmp = [], [] 
+    if len(idy) > 0:
+        for idpeak in idz:
+            idx = np.arange(idy[idpeak]+1, idy[idpeak+1]-1)
+            if len(idx) >= min_epochs: continue
+
+            lightcurve=(hjd[idx],mag[idx],magerr[idx])
+            lightcurves_tmp.append(lightcurve)
+            filters_tmp.append(np.unique(fid[idx]).tolist())
+    elif (len(idy) == 1) and idy[0] > min_epochs:
+        idx = np.arange(idy[0]-1)
+        lightcurve=(hjd[idx],mag[idx],magerr[idx])
+        lightcurves_tmp.append(lightcurve)
+        filters_tmp.append(np.unique(fid[idx]).tolist())
+
+    return lightcurves_tmp, filters_tmp 
 
 def get_lightcurve(dataDir, ra, dec, filt, user, pwd):
     """
