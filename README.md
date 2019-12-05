@@ -14,7 +14,7 @@ Download: `git clone https://github.com/mikekatz04/gce`</br>
 Installation: `python setup.py install` (you need a CUDA-capable machine.)<br>
 
 - Analysis Of Variance (AOV) </br>
-Code originally from [this website](http://users.camk.edu.pl/alex/soft/aovgui.tgz); Algorithm paper: [Schwarzenberg-Czerny (1996)](https://ui.adsabs.harvard.edu/abs/1996ApJ...460L.107S/abstract).</br>
+Code originally from [this website](http://users.camk.edu.pl/alex/soft/aovgui.tgz); Algorithm paper: [Schwarzenberg-Czerny (1996)](https://ui.adsabs.harvard.edu/abs/1996ApJ...460L.107S/abstract), and see [Schwarzenberg-Czerny (1998)](https://ui.adsabs.harvard.edu/abs/1998BaltA...7...43S/abstract) for a easy explanation!</br>
 First, run `source build.sh` in the **ztfperiodic/pyaov/** directory, then copy the `aov.cpython-36m-darwin.so` file to **lib/python3.7/site-packages/** or equivalent.
 
 - Lomb-Scargle (LS)
