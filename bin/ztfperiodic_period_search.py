@@ -109,6 +109,8 @@ def parse_commandline():
     parser.add_option("--doRsyncFiles",  action="store_true", default=False)
     parser.add_option("--rsync_directory",default="mcoughlin@schoty.caltech.edu:/gdata/Data/ztfperiodic_results")
 
+    parser.add_option("--doObjIDFilenames",  action="store_true", default=False)
+
     opts, args = parser.parse_args()
 
     return opts
@@ -700,35 +702,41 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
         if opts.doLightcurveStats:
             data_out[name]["stats"] = stats[cnt]
 
-    print(significance)
     if opts.doPlots and (significance>sigthresh):
         if opts.doHCOnly and np.isclose(period, 1.0/fmin, rtol=1e-2):
             print("Vetoing... period is 1/fmax")
             continue
 
         RA, Dec = coordinate
-        figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec,
-                                                  period, "".join(filt_str))
-
-        if opts.doNotPeriodFind:
-            thisfolder = 'noperiod'
+        if opts.doObjIDFilenames:
+            figfile = "%d.png" % objid
         else:
-            idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
-            thisfolder = folders[idx.astype(int)]
-            if thisfolder == None:
-                continue
+            figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec,
+                                                      period, "".join(filt_str))
+
+            if opts.doNotPeriodFind:
+                thisfolder = 'noperiod'
+            else:
+                idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
+                thisfolder = folders[idx.astype(int)]
+                if thisfolder == None:
+                    continue
 
         if opts.doGPU and (algorithm == "PDM"):
             copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
         else:
             copy = np.ma.copy(lightcurve).T
 
-        nepoch = np.array(len(copy[:,0]))
-        idx2 = np.where((nepoch>=epoch_ranges[:-1]) & (nepoch<=epoch_ranges[1:]))[0][0]
-        if epoch_folders[idx2.astype(int)] == None:
-            continue
+        if opts.doObjIDFilenames:
+            objid_str = str(objid)
+            folder = os.path.join(basefolder, objid_str[2], objid_str[3])
+        else:
+            nepoch = np.array(len(copy[:,0]))
+            idx2 = np.where((nepoch>=epoch_ranges[:-1]) & (nepoch<=epoch_ranges[1:]))[0][0]
+            if epoch_folders[idx2.astype(int)] == None:
+                continue
 
-        folder = os.path.join(basefolder,thisfolder,epoch_folders[idx2.astype(int)])
+            folder = os.path.join(basefolder,thisfolder,epoch_folders[idx2.astype(int)])
         if not os.path.isdir(folder):
             os.makedirs(folder)
         pngfile = os.path.join(folder,figfile)
