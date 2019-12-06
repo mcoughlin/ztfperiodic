@@ -104,7 +104,8 @@ if opts.doQuadrantScale:
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
         fields, ccds, quadrants = np.arange(1,880), np.arange(1,17), np.arange(1,5)
-        fields = [683,853,487,718,372,842,359,778,699,296]
+        #fields = [683,853,487,718,372,842,359,778,699,296]
+        fields = [487]
         job_number = 0
         quadrantfile = os.path.join(qsubDir,'qsub.dat')
         fid = open(quadrantfile,'w')
@@ -139,7 +140,7 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 
 fid = open(os.path.join(qsubDir,'qsub.sub'),'w')
 fid.write('#!/bin/bash\n')
-fid.write('#PBS -l walltime=1:00:00,nodes=1:ppn=8:gpus=1,pmem=13.0mb -q k40\n')
+fid.write('#PBS -l walltime=1:00:00,nodes=1:ppn=24:gpus=1,pmem=5920mb -q k40\n')
 fid.write('#PBS -m abe\n')
 fid.write('#PBS -M cough052@umn.edu\n')
 fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
