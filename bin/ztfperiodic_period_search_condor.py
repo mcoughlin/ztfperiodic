@@ -44,6 +44,7 @@ def parse_commandline():
     parser.add_option("-s","--source_type",default="quadrant")
     parser.add_option("--catalog_file",default="../input/xray.dat")
     parser.add_option("--Ncatalog",default=13.0,type=int)
+    parser.add_option("--Nmax",default=10000.0,type=int)
 
     parser.add_option("--doVariability",  action="store_true", default=False)
     parser.add_option("--doCutNObs",  action="store_true", default=False)
@@ -137,14 +138,25 @@ if opts.lightcurve_source == "Kowalski":
         fields = [683,853,487,718,372,842,359,778,699,296]
         fields = [841,852,682,717,488,423,424,563,562,297,700,777]
         fields = [600]
+        fields = [718]
         for field in fields:
             for ccd in ccds:
                 for quadrant in quadrants:
                     if opts.doQuadrantScale:
-                        qu = {"query_type":"general_search","query":"db['ZTF_sources_20190718'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
-                        r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)        
-                        if not "result_data" in r: continue 
+                        qu = {"query_type":"count_documents",
+                              "query": {
+                                  "catalog": 'ZTF_sources_20191101',
+                                  "filter": {'field': {'$eq': int(field)},
+                                             'ccd': {'$eq': int(ccd)},
+                                             'quad': {'$eq': int(quadrant)}
+                                             }
+                                       }
+                             }
+                        r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
+                        if not "result_data" in r: continue
                         nlightcurves = r['result_data']['query_result']
+
+                        Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
 
                     for ii in range(Ncatalog):
                         if opts.doDocker:

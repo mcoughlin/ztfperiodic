@@ -40,7 +40,7 @@ def filter_completed(quad_out, catalogDir):
     tbd = []
     for ii, row in enumerate(quad_out):
         field, ccd, quadrant = row[1], row[2], row[3]
-        Ncatindex = row[4]
+        Ncatindex, Ncatalog = row[4], row[5]
         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
         if not os.path.isfile(catalogFile):
             tbd.append(ii)
@@ -70,6 +70,7 @@ catalogDir = os.path.join(outputDir,'catalog',algorithm)
 quad_out_original = np.loadtxt(quadrantfile)
 quad_out = filter_completed(quad_out_original, catalogDir)       
 njobs, ncols = quad_out.shape
+print('%d jobs remaining...' % njobs)
 
 if opts.doSubmit:
     while njobs > 0:
@@ -77,10 +78,11 @@ if opts.doSubmit:
         idx = np.where(quad_out_original[:,0] == quad_out[quadrant_index,0])[0]
         row = quad_out_original[idx,:][0]
         field, ccd, quadrant = row[1], row[2], row[3]
-        Ncatindex = row[4]
+        Ncatindex, Ncatalog = row[4], row[5]
 
         jobstr = jobline.replace("$PBS_ARRAYID","%d"%row[0])
         os.system(jobstr)
 
         quad_out = filter_completed(quad_out, catalogDir)
         njobs, ncols = quad_out.shape
+        print('%d jobs remaining...' % njobs)

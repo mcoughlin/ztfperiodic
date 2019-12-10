@@ -46,6 +46,7 @@ def parse_commandline():
     parser.add_option("-s","--source_type",default="quadrant")
     parser.add_option("--catalog_file",default="../input/xray.dat")
     parser.add_option("--Ncatalog",default=13.0,type=int)
+    parser.add_option("--Nmax",default=10000.0,type=int)
 
     parser.add_option("--qid",default=None,type=int)
     parser.add_option("--fid",default=None,type=int)
@@ -53,8 +54,6 @@ def parse_commandline():
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
     parser.add_option("-e","--email")
-
-    parser.add_option("--doPrisms",  action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
@@ -103,64 +102,40 @@ qsubDir = os.path.join(outputDir,'qsub')
 if not os.path.isdir(qsubDir):
     os.makedirs(qsubDir)
 
-if opts.doPrisms:
-    from prisms_jobs import job, jobdb, config
-    dbpath = os.path.join(qsubDir, 'jobs.db')
-    jobdb.JobDB(dbpath=dbpath)
-
-    settings = config.default_settings(dir=qsubDir)
-    config.write_config(dir=qsubDir, settings=settings)
-
-    fid = open(os.path.join(qsubDir, 'PRISMS_JOBS_DIR.sh'),'w')
-    fid.write('export PRISMS_JOBS_DIR=%s\n' % qsubDir)
-    fid.close()
- 
 if opts.doQuadrantScale:
     kow = Kowalski(username=opts.user, password=opts.pwd)
 
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
         fields, ccds, quadrants = np.arange(1,880), np.arange(1,17), np.arange(1,5)
-        ccds, quadrants = [1], [1]
+        #ccds, quadrants = [1], [1]
 
         #fields = [683,853,487,718,372,842,359,778,699,296]
-        fields = [487]
+        fields = [718]
         job_number = 0
         quadrantfile = os.path.join(qsubDir,'qsub.dat')
         fid = open(quadrantfile,'w')
         for field in fields:
             for ccd in ccds:
                 for quadrant in quadrants:
-                    for ii in range(opts.Ncatalog):
-                        fid.write('%d %d %d %d %d\n' % (job_number, field, ccd, quadrant, ii))
+                    if opts.doQuadrantScale:
+                        qu = {"query_type":"count_documents",
+                              "query": {
+                                  "catalog": 'ZTF_sources_20191101',
+                                  "filter": {'field': {'$eq': int(field)},
+                                             'ccd': {'$eq': int(ccd)},
+                                             'quad': {'$eq': int(quadrant)}
+                                             }
+                                       } 
+                             }                                            
+                        r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
+                        if not "result_data" in r: continue
+                        nlightcurves = r['result_data']['query_result']
+
+                        Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
+                    for ii in range(Ncatalog):
+                        fid.write('%d %d %d %d %d %d\n' % (job_number, field, ccd, quadrant, ii, Ncatalog))
     
-                        if opts.doPrisms:
-                            name = "myjob-%d" % job_number
-                            account, email = opts.email, opts.email
-                            nodes, ppn = 1, 24
-                            walltime="1:00:00"
-                            pmem, queue ="5290mb", "k40"
-                            message="abe"
-                            priority=0
-                            gpus = 1
-                            auto=False
-
-                            command = '%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type quadrant --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,opts.Ncatalog,opts.algorithm,extra_flags)
-                            
-                            j = job.Job(name=name,
-                                        account=account,
-                                        nodes=nodes,
-                                        ppn=ppn,
-                                        walltime=walltime,
-                                        pmem=pmem,
-                                        queue=queue,
-                                        message=message,
-                                        email=email,
-                                        command=command,
-                                        auto=auto,
-                                        gpus=gpus)
-                            j.submit(add=True, dbpath=dbpath)
-
                         job_number = job_number + 1
         fid.close()
 elif opts.lightcurve_source == "matchfiles":
@@ -198,3 +173,14 @@ elif opts.lightcurve_source == "matchfiles":
     fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d -l matchfiles --doRemoveTerrestrial --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,quadrantfile,opts.Ncatalog,opts.algorithm,extra_flags))
 fid.close()
 
+fid = open(os.path.join(qsubDir,'qsub_submission.sub'),'w')
+fid.write('#!/bin/bash\n')
+fid.write('#PBS -l walltime=1:00:00,nodes=1:ppn=24:gpus=1,pmem=5290mb -q k40\n')
+fid.write('#PBS -m abe\n')
+fid.write('#PBS -M cough052@umn.edu\n')
+fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
+fid.write('cd $PBS_O_WORKDIR\n')
+if opts.lightcurve_source == "Kowalski":
+    if opts.source_type == "quadrant":
+        fid.write('%s/ztfperiodic_job_submission.py --outputDir %s -a %s --doSubmit\n' % (dir_path, outputDir, opts.algorithm))
+fid.close()
