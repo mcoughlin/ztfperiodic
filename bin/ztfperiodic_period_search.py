@@ -109,6 +109,10 @@ def parse_commandline():
     parser.add_option("--doRsyncFiles",  action="store_true", default=False)
     parser.add_option("--rsync_directory",default="mcoughlin@schoty.caltech.edu:/gdata/Data/ztfperiodic_results")
 
+    parser.add_option("--doSigmaClipping",  action="store_true", default=False)
+    parser.add_option("--sigmathresh",default=3.0,type=float)
+    parser.add_option("--doOutbursting",  action="store_true", default=False)
+
     parser.add_option("--doObjIDFilenames",  action="store_true", default=False)
 
     opts, args = parser.parse_args()
@@ -195,6 +199,9 @@ doUsePDot = opts.doUsePDot
 doExtinction = opts.doExtinction
 Ncatalog = opts.Ncatalog
 Ncatindex = opts.Ncatindex
+doSigmaClipping = opts.doSigmaClipping
+sigmathresh = opts.sigmathresh
+doOutbursting = opts.doOutbursting
 
 if opts.doQuadrantFile:
     if opts.lightcurve_source == "Kowalski":
@@ -284,7 +291,9 @@ if opts.lightcurve_source == "Kowalski":
             get_kowalski_bulk(field, ccd, quadrant, kow, 
                               program_ids=program_ids, min_epochs=min_epochs,
                               num_batches=Ncatalog, nb=Ncatindex,
-                              doRemoveHC=doRemoveHC, doHCOnly=doHCOnly)
+                              doRemoveHC=doRemoveHC, doHCOnly=doHCOnly,
+                              doSigmaClipping=doSigmaClipping,
+                              sigmathresh=sigmathresh)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\
                 slicestardist(lightcurves, coordinates, filters,
@@ -433,7 +442,10 @@ if opts.lightcurve_source == "Kowalski":
                                   amaj=amaj, amin=amin, phi=phi,
                                   doCombineFilt=doCombineFilt,
                                   doRemoveHC=doRemoveHC,
-                                  doExtinction=doExtinction)
+                                  doExtinction=doExtinction,
+                                  doSigmaClipping=doSigmaClipping,
+                                  sigmathresh=sigmathresh,
+                                  doOutbursting=doOutbursting)
 
     else:
         print("Source type unknown...")
