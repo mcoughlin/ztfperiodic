@@ -200,7 +200,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
     end = time.time()
-    dt = end - start
+    loadtime = end - start
 
     if not "result_data" in r:
         print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec)) 
@@ -260,7 +260,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
         else:
             lightcurves[objid]["name"] = name
 
-    print('Loaded %d lightcurves in %.5f seconds' % (len(data), dt))
+    print('Loaded %d lightcurves in %.5f seconds' % (len(data), loadtime))
 
     objids = []
     ras, decs, fids = [], [], []
@@ -381,7 +381,10 @@ def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
                       max_error = 2.0, errs = None, names = None,
                       amaj=None, amin=None, phi=None,
                       doCombineFilt=False,
-                      doRemoveHC=False, doExtinction=False):
+                      doRemoveHC=False, doExtinction=False,
+                      doSigmaClipping=False,
+                      sigmathresh=5.0,
+                      doOutbursting=False):
 
     baseline=0
     cnt=0
@@ -473,6 +476,16 @@ def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
                 hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
                 raobj, decobj = raobj[idx], decobj[idx]
                 fid = fid[idx]
+
+            if doSigmaClipping or doOutbursting:
+                iqr = np.diff(np.percentile(mag,q=[25,75]))[0] 
+                idx = np.where(mag >= np.median(mag)-sigmathresh*iqr)[0]
+                if doOutbursting and (len(idx) == len(mag)):
+                    continue
+                if doSigmaClipping: 
+                    hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                    raobj, decobj = raobj[idx], decobj[idx]
+                    fid = fid[idx]
 
             if len(hjd) < min_epochs: continue
 
@@ -698,12 +711,18 @@ def combine_lcs(ls):
 def get_kowalski_bulk(field, ccd, quadrant, kow,
                       program_ids = [2,3], min_epochs = 1, max_error = 2.0,
                       num_batches=1, nb=0,
-                      doRemoveHC=False, doHCOnly=False):
+                      doRemoveHC=False, doHCOnly=False,
+                      doSigmaClipping=False,
+                      sigmathresh=5.0):
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
     qu = {"query_type":"general_search","query":"db['ZTF_sources_20191101'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
+
+    start = time.time()
     r = database_query(kow, qu, nquery = 10)
+    end = time.time()
+    loadtime = end - start
 
     if not "result_data" in r:
         print("Query for field: %d, CCD: %d, quadrant %d failed... returning."%(field, ccd, quadrant))
@@ -854,6 +873,8 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                            lightcurves[ii][2])
             lightcurves2.append(lightcurve2)
         lightcurves = lightcurves2
+
+    print('Loaded %d lightcurves in %.5f seconds' % (len(lightcurves), loadtime))
 
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
 
