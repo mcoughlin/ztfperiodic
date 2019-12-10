@@ -139,7 +139,7 @@ if opts.lightcurve_source == "Kowalski":
                             account, email = opts.email, opts.email
                             nodes, ppn = 1, 24
                             walltime="1:00:00"
-                            pmem, queue ="5920mb", "k40"
+                            pmem, queue ="5290mb", "k40"
                             message="abe"
                             priority=0
                             gpus = 1
