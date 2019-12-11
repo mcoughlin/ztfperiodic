@@ -159,7 +159,7 @@ elif opts.lightcurve_source == "matchfiles":
 
 fid = open(os.path.join(qsubDir,'qsub.sub'),'w')
 fid.write('#!/bin/bash\n')
-fid.write('#PBS -l walltime=1:00:00,nodes=1:ppn=24:gpus=1,pmem=5290mb -q k40\n')
+fid.write('#PBS -l walltime=23:59:59,nodes=1:ppn=24:gpus=1,pmem=5290mb -q k40\n')
 fid.write('#PBS -m abe\n')
 fid.write('#PBS -M cough052@umn.edu\n')
 fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
@@ -175,7 +175,7 @@ fid.close()
 
 fid = open(os.path.join(qsubDir,'qsub_submission.sub'),'w')
 fid.write('#!/bin/bash\n')
-fid.write('#PBS -l walltime=1:00:00,nodes=1:ppn=24:gpus=1,pmem=5290mb -q k40\n')
+fid.write('#PBS -l walltime=23:59:59,nodes=1:ppn=24:gpus=1,pmem=5290mb -q k40\n')
 fid.write('#PBS -m abe\n')
 fid.write('#PBS -M cough052@umn.edu\n')
 fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
