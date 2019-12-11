@@ -182,5 +182,5 @@ fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
 fid.write('cd $PBS_O_WORKDIR\n')
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('%s/ztfperiodic_job_submission.py --outputDir %s -a %s --doSubmit\n' % (dir_path, outputDir, opts.algorithm))
+        fid.write('%s/ztfperiodic_job_submission.py --outputDir %s --doSubmit\n' % (dir_path, outputDir))
 fid.close()
