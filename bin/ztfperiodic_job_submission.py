@@ -23,10 +23,7 @@ def parse_commandline():
     parser = optparse.OptionParser()
 
     parser.add_option("-p","--python",default="python")
-
     parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output")
-    parser.add_option("-a","--algorithm",default="CE")
-    parser.add_option("-l","--max_jobs",default=1000,type=int)
 
     parser.add_option("--doSubmit",  action="store_true", default=False)
 
@@ -52,17 +49,17 @@ opts = parse_commandline()
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
-algorithm = opts.algorithm
 outputDir = opts.outputDir
-max_jobs = opts.max_jobs
 
 qsubDir = os.path.join(outputDir,'qsub')
 if not os.path.isdir(qsubDir):
     os.makedirs(qsubDir)
-catalogDir = os.path.join(outputDir,'catalog',algorithm)
+
 qsubfile = os.path.join(qsubDir,'qsub.sub')
 lines = [line.rstrip('\n') for line in open(qsubfile)]
 jobline = lines[-1]
+joblineSplit = list(filter(None,jobline.split("algorithm")[-1].split(" ")))
+algorithm = joblineSplit[0]
 
 quadrantfile = os.path.join(qsubDir,'qsub.dat')
 
