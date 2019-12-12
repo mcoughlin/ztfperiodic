@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
 
-def plot_gaia_subplot(gaia, ax, tboutputDir):
+def plot_gaia_subplot(gaia, ax, tboutputDir, doTitle=False):
     if not len(gaia)==1:
         return None
     
@@ -60,6 +60,7 @@ def plot_gaia_subplot(gaia, ax, tboutputDir):
             ax.plot(bp_rp, absmag, 'o', c='r', zorder=1, markersize=5)
             ax.plot([bp_rp, bp_rp], [absmag_lower, absmag_upper], 'r-')
         
-        ax.set_title("d = %d [pc], gof = %.1f"%(d_pc, gofAL), fontsize = fs)
+        if doTitle:
+            ax.set_title("d = %d [pc], gof = %.1f"%(d_pc, gofAL), fontsize = fs)
         
        

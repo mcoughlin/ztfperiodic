@@ -135,11 +135,12 @@ if opts.lightcurve_source == "Kowalski":
 
     if opts.source_type == "quadrant":
         fields, ccds, quadrants = np.arange(1,880), np.arange(1,17), np.arange(1,5)
-        fields = [683,853,487,718,372,842,359,778,699,296]
-        fields = [841,852,682,717,488,423,424,563,562,297,700,777]
-        fields = [600]
-        fields = [718]
+        #fields = [683,853,487,718,372,842,359,778,699,296]
+        #fields = [841,852,682,717,488,423,424,563,562,297,700,777]
+        #fields = [600]
+        #fields = [718]
         for field in fields:
+            print('Running field %d' % field)
             for ccd in ccds:
                 for quadrant in quadrants:
                     if opts.doQuadrantScale:
