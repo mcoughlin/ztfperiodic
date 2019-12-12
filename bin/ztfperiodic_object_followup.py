@@ -89,6 +89,7 @@ def parse_commandline():
     parser.add_option("--pickle_file", default="../data/lsst/ellc_OpSim1520_0000.pickle")
 
     parser.add_option("--doRemoveHC", action="store_true", default=False)
+    parser.add_option("--doFindPeriodError", action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
@@ -589,3 +590,47 @@ if opts.doPeriodSearch:
         fid.write('%s %.10f %.10f ' % (algorithm, period, significance))
         fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stat[0], stat[1], stat[2], stat[3], stat[4], stat[5], stat[6], stat[7], stat[8], stat[9], stat[10], stat[11], stat[12], stat[13], stat[14], stat[15], stat[16], stat[17], stat[18], stat[19], stat[20], stat[21], stat[22], stat[23], stat[24], stat[25], stat[26], stat[27], stat[28], stat[29], stat[30], stat[31], stat[32], stat[33], stat[34], stat[35]))
     fid.close()
+
+    if opts.doFindPeriodError:
+        from gcex.gce import ConditionalEntropy
+
+        batch_size = 1
+        pdot = np.array([0.0])
+
+        phase_bins=20
+        mag_bins=10
+        ce = ConditionalEntropy(phase_bins=phase_bins, mag_bins=mag_bins)
+
+        lightcurves_stack = []
+        for lightcurve in lightcurves:
+            idx = np.argsort(lightcurve[0])
+            tmin = np.min(lightcurve[0])
+            lightcurve = (lightcurve[0][idx]-tmin,
+                          lightcurve[1][idx],
+                          lightcurve[2][idx])
+
+            lightcurve_stack = np.vstack((lightcurve[0],
+                                          lightcurve[1])).T
+            lightcurves_stack.append(lightcurve_stack)
+
+        samples_per_peak = 100
+
+        df = 1./(samples_per_peak * baseline)
+        nf = int(np.ceil((fmax - fmin) / df))
+        freqs = np.arange(1./period - 1000*df, 1./period + 1000*df, df)
+
+        results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdot, show_progress=False)
+        periods = 1./freqs
+        periods = periods*86400.0
+
+        for jj, (lightcurve, entropies2) in enumerate(zip(lightcurves,results)):
+            for kk, entropies in enumerate(entropies2):
+                significances = np.abs(np.mean(entropies)-entropies)/np.std(entropies)
+                period = periods[np.argmin(entropies)]
+                idx_peak = np.argmax(significances)
+                idx_2 = np.where(significances <= np.max(significances)/2.0)[0]
+                idx_low = np.max(idx_2[idx_2<idx_peak])
+                idx_high = np.min(idx_2[idx_2>idx_peak])
+
+                ppeak, plow, phigh = periods[idx_peak], periods[idx_low], periods[idx_high]
+                print('$P(T_{0})$ & $%.2f^{+%.2f}_{-%.2f}\\,\\rm s$  \\\\' % (ppeak, phigh-ppeak, ppeak-plow))
