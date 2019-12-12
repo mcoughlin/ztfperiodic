@@ -632,5 +632,5 @@ if opts.doPeriodSearch:
                 idx_low = np.max(idx_2[idx_2<idx_peak])
                 idx_high = np.min(idx_2[idx_2>idx_peak])
 
-                ppeak, plow, phigh = periods[idx_peak], periods[idx_low], periods[idx_high]
+                ppeak, plow, phigh = periods[idx_peak], periods[idx_high], periods[idx_low]
                 print('$P(T_{0})$ & $%.2f^{+%.2f}_{-%.2f}\\,\\rm s$  \\\\' % (ppeak, phigh-ppeak, ppeak-plow))
