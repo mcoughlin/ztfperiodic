@@ -42,9 +42,9 @@ def parse_commandline():
     parser.add_option("--doCrossMatch",  action="store_true", default=False)
     parser.add_option("--doVariability",  action="store_true", default=False)
 
-    parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output_quadrants/catalog/compare")
-    parser.add_option("--catalog1",default="/home/mcoughlin/ZTF/output_quadrants/catalog/LS")
-    parser.add_option("--catalog2",default="/home/mcoughlin/ZTF/output_quadrants/catalog/CE")
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/compare")
+    parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/LS")
+    parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/CE")
    
     parser.add_option("--catalog_file",default="../catalogs/CRTS.dat")    
 
@@ -60,12 +60,12 @@ def parse_commandline():
 def read_catalog(catalog_file):
 
     amaj, amin, phi = None, None, None
-    default_err = 5.0
+    default_err, default_mag = 5.0, np.nan
 
     if ".dat" in catalog_file:
         lines = [line.rstrip('\n') for line in open(catalog_file)]
         names, ras, decs, errs = [], [], [], []
-        periods, classifications = [], []
+        periods, classifications, mags = [], [], []
         if ("fermi" in catalog_file):
             amaj, amin, phi = [], [], []
         for line in lines:
@@ -86,6 +86,7 @@ def read_catalog(catalog_file):
                 errs.append(default_err)
                 periods.append(float(lineSplit[3]))
                 classifications.append(lineSplit[4])
+                mags.append(default_mag)
             elif ("vlss" in catalog_file):
                 names.append(lineSplit[0])
                 ras.append(float(lineSplit[1]))
@@ -357,7 +358,10 @@ for i,ii,s in zip(np.arange(len(sep)),idx,sep):
                                                              sig1, sig2))
 fid.close() 
 
-data_out = np.loadtxt(filename)
+if opts.doCrossMatch:
+    data_out = np.genfromtxt(filename)
+else:
+    data_out = np.loadtxt(filename)
 
 if opts.doPlots:
 

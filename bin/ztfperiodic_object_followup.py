@@ -85,6 +85,7 @@ def parse_commandline():
     parser.add_option("-n", "--nstack", default=1, type=int)
     parser.add_option("--objid", type=int)
     parser.add_option("--hjdmax", type=float)
+    parser.add_option("--T0", type=float)
 
     parser.add_option("--pickle_file", default="../data/lsst/ellc_OpSim1520_0000.pickle")
 
@@ -244,6 +245,11 @@ if opts.lightcurve_source == "Kowalski":
         ra, dec = ra[idx], dec[idx]
         fid = fid[idx]
 
+    if not opts.T0 is None:
+        T0 = opts.T0 - 120.0/86400.0
+    else:
+        T0 = hjd[0]
+
     print('RA: %.5f, Dec: %.5f' % (np.median(ra), np.median(dec)))
     filt_str = " ".join([str(x) for x in list(np.unique(fid))])
     print("Filters:  %s" % filt_str)
@@ -260,6 +266,11 @@ elif opts.lightcurve_source == "matchfiles":
     flux = df.psfflux.values
     fluxerr=df.psffluxerr.values
     hjd = df.hjd.values
+
+    if not opts.T0 is None:
+        T0 = opts.T0
+    else:
+        T0 = hjd[0]
 
     if len(df) == 0:
         print("No data available...")
@@ -285,6 +296,11 @@ elif opts.lightcurve_source == "pickle":
     fid = np.ones(hjd.shape)
 
     hjd = hjd - np.min(hjd)
+
+    if not opts.T0 is None:
+        T0 = opts.T0
+    else:
+        T0 = hjd[0]
 
     print(np.min(hjd), np.max(hjd))
 
@@ -553,9 +569,9 @@ if opts.doPlots:
                 if not lc["fid"][0] == fid: continue
                 idx = np.where(lc["fid"][0] == fids)[0]
                 if bands_count[idx] == 0:
-                    plt.errorbar(np.mod(lc["hjd"]-hjd[0], 2.0*phase)/(2.0*phase), lc["mag"],yerr=lc["magerr"],fmt='%s%s' % (color,symbol), label=bands[fid])
+                    plt.errorbar(np.mod(lc["hjd"]-T0, 2.0*phase)/(2.0*phase), lc["mag"],yerr=lc["magerr"],fmt='%s%s' % (color,symbol), label=bands[fid])
                 else:
-                    plt.errorbar(np.mod(lc["hjd"]-hjd[0], 2.0*phase)/(2.0*phase), lc["mag"],yerr=lc["magerr"],fmt='%s%s' % (color,symbol))
+                    plt.errorbar(np.mod(lc["hjd"]-T0, 2.0*phase)/(2.0*phase), lc["mag"],yerr=lc["magerr"],fmt='%s%s' % (color,symbol))
                 bands_count[idx] = bands_count[idx] + 1
         plt.xlabel('Phase')
         plt.ylabel('Magnitude [ab]')

@@ -293,25 +293,25 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 copy[:,1] = (copy[:,1]  - np.min(copy[:,1])) \
                    / (np.max(copy[:,1]) - np.min(copy[:,1]))
 
-                freqs, aovs = [], []
+                freqs, aovs = np.empty((0,1)), np.empty((0,1))
                 for ii, fr0 in enumerate(freqs_to_keep[jj]):
                     aov, frtmp, _ = amhw(copy[:,0], copy[:,1], copy[:,2],
                                          fr0=fr0-10*df,
                                          fstop=fr0+10*df,
                                          fstep=df/10.0,
                                          nh2=4)
-                    significance = np.abs(np.mean(aov)-np.max(aov))/np.std(aov)
-                    idx = np.argmax(aov)
-                    aovs.append(significance)
-                    freqs.append(frtmp[idx])
+                    aovs = np.append(aovs,aov)
+                    freqs = np.append(freqs,frtmp)
 
-                freqs, aovs = np.array(freqs), np.array(aovs)
+                significance = np.abs(np.mean(aovs)-np.max(aovs))/np.std(aovs)
                 periods = 1./freqs
                 significance = np.max(aovs)
                 period = periods[np.argmax(aovs)]
 
                 periods_best.append(period)
                 significances.append(significance)
+
+                print(freqs, aovs)
 
         elif algorithm == "FFT":
             from cuvarbase.lombscargle import fap_baluev
