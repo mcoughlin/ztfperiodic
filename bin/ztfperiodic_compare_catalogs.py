@@ -271,6 +271,9 @@ if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
 
 name1, name2 = list(filter(None,catalog1.split("/")))[-1], list(filter(None,catalog2.split("/")))[-1]
+if opts.doCrossMatch:
+    name2 = list(filter(None,opts.catalog_file.split("/")))[-1].replace(".dat","").replace(".hdf5","")
+
 cat1file = os.path.join(outputDir,'catalog_%s.fits' % name1)
 cat2file = os.path.join(outputDir,'catalog_%s.fits' % name2)
 
@@ -341,7 +344,7 @@ for i,ii,s in zip(np.arange(len(sep)),idx,sep):
     zs.append(ratio)
 
     if opts.doCrossMatch:
-        fid.write('%d %d %.5f %.5f %.5f %.5f %.5e %.5f %.5f %.5f %.5f %s\n' % (
+        fid.write('%d %d %.5f %.5f %.10f %.10f %.5e %.5f %.5f %.5f %.5f %s\n' % (
                                                              catnum, objid,
                                                              ra1, dec1,
                                                              period1, period2,
@@ -366,6 +369,23 @@ else:
 if opts.doPlots:
 
     if opts.doCrossMatch:
+        pdffile = os.path.join(outputDir,'periods.pdf')
+        cmap = cm.autumn
+
+        fig = plt.figure(figsize=(10,10))
+        ax=fig.add_subplot(1,1,1)
+        sc = plt.scatter(data_out[:,4],data_out[:,5],c=data_out[:,6],vmin=0.0,vmax=100.0,cmap=cmap,s=20,alpha=0.5)
+        vals = np.linspace(np.min(data_out[:,4]), np.max(data_out[:,4]), 100)
+        plt.plot(vals, vals, 'k--')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        cbar = plt.colorbar(sc)
+        cbar.set_label('Significance')
+        plt.xlabel('%s Frequency [1/days]' % name1)
+        plt.ylabel('%s Frequency [1/days]' % name2)
+        fig.savefig(pdffile)
+        plt.close()
+
         pdffile = os.path.join(outputDir,'radec.pdf')
         fig = plt.figure(figsize=(10,10))
         ax=fig.add_subplot(1,1,1)
