@@ -193,7 +193,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             pdots, periods_best, significances = pdots.flatten(), periods_best.flatten(), significances.flatten()
 
         elif algorithm == "GCE_LS_AOV":
-            nfreqs_to_keep = 5
+            nfreqs_to_keep = 100
             df = freqs[1]-freqs[0]
 
             from cuvarbase.lombscargle import LombScargleAsyncProcess, fap_baluev
@@ -295,10 +295,11 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
 
                 freqs, aovs = np.empty((0,1)), np.empty((0,1))
                 for ii, fr0 in enumerate(freqs_to_keep[jj]):
-                    aov, frtmp, _ = amhw(copy[:,0], copy[:,1], copy[:,2],
-                                         fr0=fr0-10*df,
-                                         fstop=fr0+10*df,
-                                         fstep=df/10.0,
+                    err = copy[:,2]
+                    aov, frtmp, _ = amhw(copy[:,0], copy[:,1], err,
+                                         fr0=fr0-100*df,
+                                         fstop=fr0+100*df,
+                                         fstep=df/3.0,
                                          nh2=4)
                     aovs = np.append(aovs,aov)
                     freqs = np.append(freqs,frtmp)
