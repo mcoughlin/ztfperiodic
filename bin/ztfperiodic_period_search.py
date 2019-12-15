@@ -96,7 +96,7 @@ def parse_commandline():
     parser.add_option("--Ncatalog",default=1,type=int)
     parser.add_option("--Ncatindex",default=0,type=int)
 
-    parser.add_option("--stardist",default=100.0,type=float)
+    parser.add_option("--stardist",default=13.0,type=float)
     parser.add_option("--sigthresh",default=None,type=float)
 
     parser.add_option("-u","--user")
@@ -104,9 +104,16 @@ def parse_commandline():
 
     parser.add_option("-p","--program_ids",default="2,3")
     parser.add_option("--min_epochs",default=50,type=int)
+    parser.add_option("--default_err",default=None,type=float)
 
     parser.add_option("--doRsyncFiles",  action="store_true", default=False)
     parser.add_option("--rsync_directory",default="mcoughlin@schoty.caltech.edu:/gdata/Data/ztfperiodic_results")
+
+    parser.add_option("--doSigmaClipping",  action="store_true", default=False)
+    parser.add_option("--sigmathresh",default=3.0,type=float)
+    parser.add_option("--doOutbursting",  action="store_true", default=False)
+
+    parser.add_option("--doObjIDFilenames",  action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
@@ -119,7 +126,21 @@ def brightstardist(filename,ra,dec):
          ras, decs = f['ra'][:], f['dec'][:]
      c = SkyCoord(ra=ras*u.degree, dec=decs*u.degree,frame='icrs')
      idx,sep,_ = catalog.match_to_catalog_sky(c)
-     return sep.arcsec
+
+     seps = []
+     for i,ii,s in zip(np.arange(len(sep)),idx,sep):
+         if s.arcsec > 30.0:
+             seps.append(s.arcsec)
+         else:
+             radiff = np.abs(3600*(ra[i]-ras[ii]))
+             decdiff = np.abs(3600*(dec[i]-decs[ii]))
+             if (radiff <= 2.0) and (decdiff <= 30.0):
+                 seps.append(10.0)
+             else:
+                 seps.append(s.arcsec)
+     seps = np.array(seps)
+
+     return seps
 
 
 def slicestardist(lightcurves, coordinates, filters, ids, absmags, bp_rps, names):
@@ -128,15 +149,16 @@ def slicestardist(lightcurves, coordinates, filters, ids, absmags, bp_rps, names
     for coordinate in coordinates:
         ras.append(coordinate[0])
         decs.append(coordinate[1])
-    ras, decs = np.array(decs), np.array(decs)
+    ras, decs = np.array(ras), np.array(decs)
 
     filename = "%s/bsc5.hdf5" % inputDir
     sep = brightstardist(filename,ras,decs)
     idx1 = np.where(sep >= opts.stardist)[0]
+    sep = brightstardist(filename,ras,decs)
     filename = "%s/Gaia.hdf5" % inputDir
     sep = brightstardist(filename,ras,decs)
     idx2 = np.where(sep >= opts.stardist)[0]
-    idx = np.union1d(idx1,idx2).astype(int)
+    idx = np.intersect1d(idx1,idx2).astype(int)
 
     return [lightcurves[i] for i in idx], [coordinates[i] for i in idx], [filters[i] for i in idx], [ids[i] for i in idx], [absmags[i] for i in idx], [bp_rps[i] for i in idx], [names[i] for i in idx]
 
@@ -177,6 +199,9 @@ doUsePDot = opts.doUsePDot
 doExtinction = opts.doExtinction
 Ncatalog = opts.Ncatalog
 Ncatindex = opts.Ncatindex
+doSigmaClipping = opts.doSigmaClipping
+sigmathresh = opts.sigmathresh
+doOutbursting = opts.doOutbursting
 
 if opts.doQuadrantFile:
     if opts.lightcurve_source == "Kowalski":
@@ -184,7 +209,7 @@ if opts.doQuadrantFile:
         idx = np.where(quad_out[:,0] == opts.quadrant_index)[0]
         row = quad_out[idx,:][0]
         field, ccd, quadrant = row[1], row[2], row[3]
-        Ncatindex = row[4]
+        Ncatindex, Ncatalog = row[4], row[5]
     elif opts.lightcurve_source == "matchfiles":
         lines = [line.rstrip('\n') for line in open(quadrant_file)]
         for line in lines:
@@ -266,7 +291,9 @@ if opts.lightcurve_source == "Kowalski":
             get_kowalski_bulk(field, ccd, quadrant, kow, 
                               program_ids=program_ids, min_epochs=min_epochs,
                               num_batches=Ncatalog, nb=Ncatindex,
-                              doRemoveHC=doRemoveHC, doHCOnly=doHCOnly)
+                              doRemoveHC=doRemoveHC, doHCOnly=doHCOnly,
+                              doSigmaClipping=doSigmaClipping,
+                              sigmathresh=sigmathresh)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\
                 slicestardist(lightcurves, coordinates, filters,
@@ -275,10 +302,13 @@ if opts.lightcurve_source == "Kowalski":
     elif opts.source_type == "catalog":
 
         amaj, amin, phi = None, None, None
-        if doCombineFilt:
-            default_err = 3.0
+        if not opts.default_err is None:
+            default_err = opts.default_err
         else:
-            default_err = 5.0
+            if doCombineFilt:
+                default_err = 3.0
+            else:
+                default_err = 5.0
 
         if ".dat" in catalog_file:
             lines = [line.rstrip('\n') for line in open(catalog_file)]
@@ -288,6 +318,16 @@ if opts.lightcurve_source == "Kowalski":
             for line in lines:
                 lineSplit = list(filter(None,line.split(" ")))
                 if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file):
+                    ra_hex, dec_hex = convert_to_hex(float(lineSplit[0])*24/360.0,delimiter=''), convert_to_hex(float(lineSplit[1]),delimiter='')
+                    if dec_hex[0] == "-":
+                        objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+                    else:
+                        objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+                    names.append(objname)
+                    ras.append(float(lineSplit[0]))
+                    decs.append(float(lineSplit[1]))
+                    errs.append(default_err)
+                elif "gaia_large_rv.dat" in catalog_file:
                     ra_hex, dec_hex = convert_to_hex(float(lineSplit[0])*24/360.0,delimiter=''), convert_to_hex(float(lineSplit[1]),delimiter='')
                     if dec_hex[0] == "-":
                         objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
@@ -402,7 +442,10 @@ if opts.lightcurve_source == "Kowalski":
                                   amaj=amaj, amin=amin, phi=phi,
                                   doCombineFilt=doCombineFilt,
                                   doRemoveHC=doRemoveHC,
-                                  doExtinction=doExtinction)
+                                  doExtinction=doExtinction,
+                                  doSigmaClipping=doSigmaClipping,
+                                  sigmathresh=sigmathresh,
+                                  doOutbursting=doOutbursting)
 
     else:
         print("Source type unknown...")
@@ -585,6 +628,8 @@ else:
             sigthresh = 0
         elif algorithm == "GCE":
             sigthresh = 7
+        elif algorithm == "GCE_LS_AOV":
+            sigthresh = 5
         else:
             sigthresh = 7
 
@@ -608,7 +653,7 @@ if opts.doSpectra:
 
 if opts.doLightcurveStats:
     str_stats = np.empty((0,2))
-    data_stats = np.empty((0,43))
+    data_stats = np.empty((0,42))
 else:
     str_stats = np.empty((0,2))
     data_stats = np.empty((0,6))
@@ -633,19 +678,19 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                                           stats[cnt][6], stats[cnt][7],
                                           stats[cnt][8], stats[cnt][9],
                                           stats[cnt][10], stats[cnt][11],
-                                          stats[cnt][11], stats[cnt][12],
-                                          stats[cnt][13], stats[cnt][14],
-                                          stats[cnt][15], stats[cnt][16],
-                                          stats[cnt][17], stats[cnt][18],
-                                          stats[cnt][19], stats[cnt][20],
-                                          stats[cnt][21], stats[cnt][22],
-                                          stats[cnt][23], stats[cnt][24],
-                                          stats[cnt][25], stats[cnt][26],
-                                          stats[cnt][27], stats[cnt][28],
-                                          stats[cnt][29], stats[cnt][30],
-                                          stats[cnt][31], stats[cnt][32],
-                                          stats[cnt][33], stats[cnt][34],
-                                          stats[cnt][35]]]), axis=0)
+                                          stats[cnt][12], stats[cnt][13],
+                                          stats[cnt][14], stats[cnt][15],
+                                          stats[cnt][16], stats[cnt][17],
+                                          stats[cnt][18], stats[cnt][19],
+                                          stats[cnt][20], stats[cnt][21],
+                                          stats[cnt][22], stats[cnt][23],
+                                          stats[cnt][24], stats[cnt][25],
+                                          stats[cnt][26], stats[cnt][27],
+                                          stats[cnt][28], stats[cnt][29],
+                                          stats[cnt][30], stats[cnt][31],
+                                          stats[cnt][32], stats[cnt][33],
+                                          stats[cnt][34], stats[cnt][35]]]),
+                               axis=0)
     else:
         str_stats = np.append(str_stats,
                               np.array([[np.string_(name),
@@ -656,7 +701,7 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                                           pdot]]), axis=0)
 
     if opts.doVariability:
-        significance = stats[cnt][5]        
+        significance = stats[cnt][9]        
 
     if opts.doSpectra:
         data_out[name] = {}
@@ -677,28 +722,35 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
             continue
 
         RA, Dec = coordinate
-        figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec,
-                                                  period, "".join(filt_str))
-
-        if opts.doNotPeriodFind:
-            thisfolder = 'noperiod'
+        if opts.doObjIDFilenames:
+            figfile = "%d.png" % objid
         else:
-            idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
-            thisfolder = folders[idx.astype(int)]
-            if thisfolder == None:
-                continue
+            figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec,
+                                                      period, "".join(filt_str))
+
+            if opts.doNotPeriodFind:
+                thisfolder = 'noperiod'
+            else:
+                idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
+                thisfolder = folders[idx.astype(int)]
+                if thisfolder == None:
+                    continue
 
         if opts.doGPU and (algorithm == "PDM"):
             copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
         else:
             copy = np.ma.copy(lightcurve).T
 
-        nepoch = np.array(len(copy[:,0]))
-        idx2 = np.where((nepoch>=epoch_ranges[:-1]) & (nepoch<=epoch_ranges[1:]))[0][0]
-        if epoch_folders[idx2.astype(int)] == None:
-            continue
+        if opts.doObjIDFilenames:
+            objid_str = str(objid)
+            folder = os.path.join(basefolder, objid_str[2], objid_str[3])
+        else:
+            nepoch = np.array(len(copy[:,0]))
+            idx2 = np.where((nepoch>=epoch_ranges[:-1]) & (nepoch<=epoch_ranges[1:]))[0][0]
+            if epoch_folders[idx2.astype(int)] == None:
+                continue
 
-        folder = os.path.join(basefolder,thisfolder,epoch_folders[idx2.astype(int)])
+            folder = os.path.join(basefolder,thisfolder,epoch_folders[idx2.astype(int)])
         if not os.path.isdir(folder):
             os.makedirs(folder)
         pngfile = os.path.join(folder,figfile)

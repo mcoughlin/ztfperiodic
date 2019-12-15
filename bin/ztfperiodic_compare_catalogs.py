@@ -5,6 +5,7 @@ import glob
 import optparse
 import copy
 import time
+import h5py
 
 import numpy as np
 
@@ -14,6 +15,7 @@ font = {'size'   : 22}
 matplotlib.rc('font', **font)
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from matplotlib.colors import LogNorm
 from matplotlib.colors import Normalize
 
 import astropy
@@ -27,6 +29,8 @@ from astroquery.simbad import Simbad
 Simbad.ROW_LIMIT = -1
 Simbad.TIMEOUT = 300000
 
+from ztfperiodic.utils import convert_to_hex
+
 def parse_commandline():
     """
     Parse the options given on the command-line.
@@ -36,10 +40,11 @@ def parse_commandline():
     parser.add_option("--doFermi",  action="store_true", default=False)
     parser.add_option("--doSimbad",  action="store_true", default=False)
     parser.add_option("--doCrossMatch",  action="store_true", default=False)
+    parser.add_option("--doVariability",  action="store_true", default=False)
 
-    parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output_quadrants/catalog/compare")
-    parser.add_option("--catalog1",default="/home/mcoughlin/ZTF/output_quadrants/catalog/LS")
-    parser.add_option("--catalog2",default="/home/mcoughlin/ZTF/output_quadrants/catalog/CE")
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/compare")
+    parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/LS")
+    parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/CE")
    
     parser.add_option("--catalog_file",default="../catalogs/CRTS.dat")    
 
@@ -55,12 +60,12 @@ def parse_commandline():
 def read_catalog(catalog_file):
 
     amaj, amin, phi = None, None, None
-    default_err = 5.0
+    default_err, default_mag = 5.0, np.nan
 
     if ".dat" in catalog_file:
         lines = [line.rstrip('\n') for line in open(catalog_file)]
         names, ras, decs, errs = [], [], [], []
-        periods, classifications = [], []
+        periods, classifications, mags = [], [], []
         if ("fermi" in catalog_file):
             amaj, amin, phi = [], [], []
         for line in lines:
@@ -81,6 +86,7 @@ def read_catalog(catalog_file):
                 errs.append(default_err)
                 periods.append(float(lineSplit[3]))
                 classifications.append(lineSplit[4])
+                mags.append(default_mag)
             elif ("vlss" in catalog_file):
                 names.append(lineSplit[0])
                 ras.append(float(lineSplit[1]))
@@ -114,7 +120,15 @@ def read_catalog(catalog_file):
     elif ".hdf5" in catalog_file:
         with h5py.File(catalog_file, 'r') as f:
             ras, decs = f['ra'][:], f['dec'][:]
+        catalog_file_mag = catalog_file.replace(".hdf5",
+                                                "_mag.hdf5")
+        if os.path.isfile(catalog_file_mag):
+            with h5py.File(catalog_file_mag, 'r') as f:
+                mags = f['mag'][:]
+
         errs = default_err*np.ones(ras.shape)
+        periods = np.zeros(ras.shape)
+        classifications = np.zeros(ras.shape)
 
         names = []
         for ra, dec in zip(ras, decs):
@@ -126,8 +140,10 @@ def read_catalog(catalog_file):
             names.append(objname)
         names = np.array(names)
 
-    columns = ["name", "ra", "dec", "period", "classification"]
-    tab = Table([names, ras, decs, periods, classifications],
+    columns = ["name", "ra", "dec", "period", "classification",
+               "mag"]
+    tab = Table([names, ras, decs, periods, classifications,
+                 mags],
                 names=columns)
 
     return tab
@@ -141,9 +157,12 @@ def load_catalog(catalog,doFermi=False,doSimbad=False):
     customSimbad.add_votable_fields("otype(S)")
 
     if doFermi:
-        filenames = sorted(glob.glob(os.path.join(catalog,"*/*.dat")))[::-1]
+        filenames = sorted(glob.glob(os.path.join(catalog,"*/*.dat")))[::-1] + \
+                    sorted(glob.glob(os.path.join(catalog,"*/*.h5")))[::-1]
     else:
-        filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1]
+        filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1] + \
+                    sorted(glob.glob(os.path.join(catalog,"*.h5")))[::-1]
+                     
     #filenames = filenames[:100]
     names = ["name", "objid", "ra", "dec", "period", "sig", "pdot", "filt",
              "stats0", "stats1", "stats2", "stats3", "stats4",
@@ -154,15 +173,39 @@ def load_catalog(catalog,doFermi=False,doSimbad=False):
              "stats25", "stats26", "stats27", "stats28", "stats29",
              "stats30", "stats31", "stats32", "stats33", "stats34",
              "stats35"]
+
+    h5names = ["objid", "ra", "dec", "period", "sig", "pdot",
+               "stats0", "stats1", "stats2", "stats3", "stats4",
+               "stats5", "stats6", "stats7", "stats8", "stats9",
+               "stats10", "stats11", "stats12", "stats13", "stats14",
+               "stats15", "stats16", "stats17", "stats18", "stats19",
+               "stats20", "stats21", "stats22", "stats23", "stats24",
+               "stats25", "stats26", "stats27", "stats28", "stats29",
+               "stats30", "stats31", "stats32", "stats33", "stats34",
+               "stats35"]
+
     cnt = 0
+    filenames = filenames[:500]
     for ii, filename in enumerate(filenames):
         if np.mod(ii,100) == 0:
             print('Loading file %d/%d' % (ii, len(filenames)))
 
         filenameSplit = filename.split("/")
-        catnum = filenameSplit[-1].replace(".dat","").split("_")[-1]
- 
-        data_tmp = ascii.read(filename,names=names)
+        catnum = filenameSplit[-1].replace(".dat","").replace(".h5","").split("_")[-1]
+
+        if "h5" in filename:
+            try:
+                with h5py.File(filename, 'r') as f:
+                    name = f['names'].value
+                    filters = f['filters'].value
+                    stats = f['stats'].value 
+            except:
+                continue
+            data_tmp = Table(rows=stats, names=h5names)
+            data_tmp['name'] = name
+            data_tmp['filt'] = filters 
+        else:
+            data_tmp = ascii.read(filename,names=names)
         if len(data_tmp) == 0: continue
 
         data_tmp['name'] = data_tmp['name'].astype(str)
@@ -241,10 +284,15 @@ print('Keeping %.5f %% of objects in catalog 1' % (100*len(idx1)/len(cat1)))
 catalog1 = SkyCoord(ra=cat1["ra"]*u.degree, dec=cat1["dec"]*u.degree, frame='icrs')
 
 if opts.doCrossMatch:
-    cat2 = read_catalog(opts.catalog_file)
+    if not os.path.isfile(cat2file):
+        cat2 = read_catalog(opts.catalog_file)
+        cat2.write(cat2file, format='fits')
+    else:
+        cat2 = Table.read(cat2file, format='fits')
 else:
     if not os.path.isfile(cat2file):
-        cat2 = load_catalog(catalog2,doFermi=opts.doFermi,doSimbad=opts.doSimbad)
+        cat2 = load_catalog(catalog2,doFermi=opts.doFermi,
+                            doSimbad=opts.doSimbad)
         cat2.write(cat2file, format='fits')
     else:
         cat2 = Table.read(cat2file, format='fits')
@@ -264,12 +312,18 @@ for i,ii,s in zip(np.arange(len(sep)),idx,sep):
   
     catnum = cat1["catnum"][i]
     objid = cat1["objid"][i]
-    ra, dec = cat1["ra"][i], cat1["dec"][i]
+    ra1, dec1 = cat1["ra"][i], cat1["dec"][i]
+    ra2, dec2 = cat2["ra"][ii], cat2["dec"][ii]
+    radiff = (ra1 - ra2)*3600.0
+    decdiff = (dec1 - dec2)*3600.0
 
     if opts.doCrossMatch:
         sig1, sigsort1 = cat1["sig"][i], cat1["sigsort"][i]
+        if opts.doVariability:
+            sig1 = cat1["stats9"][i]
         sig2, sigsort2 = np.inf, np.inf
         classification = cat2["classification"][ii]
+        magnitude = cat2["mag"][ii]
     else:
         sig1, sig2 = cat1["sig"][i], cat2["sig"][ii]
         sigsort1, sigsort2 = cat1["sigsort"][i], cat2["sigsort"][ii]
@@ -287,32 +341,88 @@ for i,ii,s in zip(np.arange(len(sep)),idx,sep):
     zs.append(ratio)
 
     if opts.doCrossMatch:
-        fid.write('%d %d %.5f %.5f %.5f %.5f %.5e %s\n' % (catnum, objid,
-                                                             ra, dec,
+        fid.write('%d %d %.5f %.5f %.5f %.5f %.5e %.5f %.5f %.5f %.5f %s\n' % (
+                                                             catnum, objid,
+                                                             ra1, dec1,
                                                              period1, period2,
-                                                             sig1, classification))
+                                                             sig1,
+                                                             magnitude,
+                                                             s.arcsec,
+                                                             radiff,
+                                                             decdiff,
+                                                             classification))
     else:
         fid.write('%d %d %.5f %.5f %.5f %.5f %.5e %.5e\n' % (catnum, objid,
-                                                             ra, dec,
+                                                             ra1, dec1,
                                                              period1, period2,
                                                              sig1, sig2))
 fid.close() 
 
+if opts.doCrossMatch:
+    data_out = np.genfromtxt(filename)
+else:
+    data_out = np.loadtxt(filename)
+
 if opts.doPlots:
-    pdffile = os.path.join(outputDir,'periods.pdf')
-    cmap = cm.autumn
 
-    fig = plt.figure(figsize=(10,10))
-    ax=fig.add_subplot(1,1,1)
-    sc = plt.scatter(xs,ys,c=zs,vmin=0.0,vmax=1.0,cmap=cmap,s=20,alpha=0.5)
-    vals = np.linspace(np.min(xs), np.max(xs), 100)
-    plt.plot(vals, vals, 'k--')
-    ax.set_xscale('log')
-    ax.set_yscale('log')
-    cbar = plt.colorbar(sc)
-    cbar.set_label('min(%s/%s,%s/%s) significance' % (name1, name2, name2, name1))
-    plt.xlabel('%s Frequency [1/days]' % name1)
-    plt.ylabel('%s Frequency [1/days]' % name2)
-    fig.savefig(pdffile)
-    plt.close()
+    if opts.doCrossMatch:
+        pdffile = os.path.join(outputDir,'radec.pdf')
+        fig = plt.figure(figsize=(10,10))
+        ax=fig.add_subplot(1,1,1)
+        idx = np.where(data_out[:,6]>=0.5)[0]
+        hist2 = plt.scatter(data_out[idx,9], data_out[idx,10],
+                            c=data_out[idx,6], s=20,
+                            alpha = 0.2)
+        ii = np.linspace(0,2*np.pi,100)
+        radius = 10.0
+        plt.plot(radius*np.cos(ii), radius*np.sin(ii), 'k--')
+        radius = 13.0
+        plt.plot(radius*np.cos(ii), radius*np.sin(ii), 'g--')
+        height, width = 60.0, 4.0
+        plt.plot([-height/2.0,height/2.0],[-width/2.0,-width/2.0], 'g--')
+        plt.plot([height/2.0,height/2.0],[-width/2.0,width/2.0], 'g--')
+        plt.plot([height/2.0,-height/2.0],[width/2.0,width/2.0], 'g--')
+        plt.plot([-height/2.0,-height/2.0],[width/2.0,-width/2.0], 'g--')
+        plt.xlabel('RA [arcsec]')
+        plt.ylabel('Declination [arcsec]')
+        fig.savefig(pdffile)
+        plt.close()
 
+        pdffile = os.path.join(outputDir,'magnitude.pdf')
+        fig = plt.figure(figsize=(10,10))
+        ax=fig.add_subplot(1,1,1)
+        hist2 = plt.hist2d(data_out[:,6], data_out[:,7], bins=100,
+                           zorder=0,norm=LogNorm())
+        plt.xlabel('IQR')
+        plt.ylabel('Magnitude')
+        fig.savefig(pdffile)
+        plt.close()
+
+        pdffile = os.path.join(outputDir,'distance.pdf')
+        fig = plt.figure(figsize=(10,10))
+        ax=fig.add_subplot(1,1,1)
+        hist2 = plt.hist2d(data_out[:,6], data_out[:,8], bins=100,
+                           zorder=0,norm=LogNorm())
+        plt.xlabel('IQR')
+        plt.ylabel('Distance [arcsec]')
+        fig.savefig(pdffile)
+        plt.close()
+
+    else:
+        pdffile = os.path.join(outputDir,'periods.pdf')
+        cmap = cm.autumn
+    
+        fig = plt.figure(figsize=(10,10))
+        ax=fig.add_subplot(1,1,1)
+        sc = plt.scatter(xs,ys,c=zs,vmin=0.0,vmax=1.0,cmap=cmap,s=20,alpha=0.5)
+        vals = np.linspace(np.min(xs), np.max(xs), 100)
+        plt.plot(vals, vals, 'k--')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+        cbar = plt.colorbar(sc)
+        cbar.set_label('min(%s/%s,%s/%s) significance' % (name1, name2, name2, name1))
+        plt.xlabel('%s Frequency [1/days]' % name1)
+        plt.ylabel('%s Frequency [1/days]' % name2)
+        fig.savefig(pdffile)
+        plt.close()
+    
