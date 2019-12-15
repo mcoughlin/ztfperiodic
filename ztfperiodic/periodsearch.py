@@ -311,8 +311,6 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 periods_best.append(period)
                 significances.append(significance)
 
-                print(freqs, aovs)
-
         elif algorithm == "FFT":
             from cuvarbase.lombscargle import fap_baluev
             from reikna import cluda
