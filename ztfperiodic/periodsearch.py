@@ -301,8 +301,10 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                                          fstop=fr0+100*df,
                                          fstep=df/3.0,
                                          nh2=4)
-                    aovs = np.append(aovs,aov)
-                    freqs = np.append(freqs,frtmp)
+                    idx = np.where(frtmp > 0)[0]
+
+                    aovs = np.append(aovs,aov[idx])
+                    freqs = np.append(freqs,frtmp[idx])
 
                 significance = np.abs(np.mean(aovs)-np.max(aovs))/np.std(aovs)
                 periods = 1./freqs
