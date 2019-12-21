@@ -289,7 +289,7 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=None, radius_1=None, radi
         p_sec = P0*24*3600 # convert units from days to sec  
         mchirp = ((m1*m2)**(3/5))/((m1+m2)**(1/5))
         Pdot = -(96*np.pi/(5*c**5))*((G*np.pi*mchirp*msun*(2/p_sec))**(5/3))
-        
+    
     flux_nopdot = ellc(t_obs=t_obs, radius_1=radius_1, radius_2=radius_2, sbratio=sbratio,
          incl=incl,period=period,q=q,a=a,
          light_3=light_3,t_zero=t_zero,f_c=f_c, f_s=f_s,
@@ -309,11 +309,12 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=None, radius_1=None, radi
          shape_1=shape_1, shape_2=shape_2,
          spots_1=spots_1, spots_2=spots_2, 
          exact_grav=exact_grav, verbose=verbose) 
-    
+
+    phases = pdot_phasefold(t_obs,P=P0,Pdot=Pdot,t0=0)    
 
     for ii in range(len(t_obs)):
         P_new = P0 + Pdot*t_obs[ii]
-        flux = ellc(t_obs=t_obs, radius_1=radius_1, radius_2=radius_2, sbratio=sbratio,
+        flux = ellc(t_obs=phases*P_new, radius_1=radius_1, radius_2=radius_2, sbratio=sbratio,
          incl=incl,period=P_new,q=q,a=a,
          light_3=light_3,t_zero=t_zero,f_c=f_c, f_s=f_s,
          ldc_1=ldc_1, ldc_2=ldc_2,
@@ -337,8 +338,6 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=None, radius_1=None, radi
         phot = np.interp(tmod,t_obs,flux,period=P_new)
         fluxes.append(phot)
         
-    phases = pdot_phasefold(tmods,P=P0,Pdot=Pdot,t0=0)
-
     fig = plt.figure()
     
     script = os.path.realpath(__file__)
