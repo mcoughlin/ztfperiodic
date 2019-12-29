@@ -46,7 +46,7 @@ def parse_commandline():
     parser.add_option("-s","--source_type",default="quadrant")
     parser.add_option("--catalog_file",default="../input/xray.dat")
     parser.add_option("--Ncatalog",default=13.0,type=int)
-    parser.add_option("--Nmax",default=10000.0,type=int)
+    parser.add_option("--Nmax",default=1000.0,type=int)
 
     parser.add_option("--qid",default=None,type=int)
     parser.add_option("--fid",default=None,type=int)

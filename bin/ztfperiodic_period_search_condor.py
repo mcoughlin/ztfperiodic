@@ -44,7 +44,7 @@ def parse_commandline():
     parser.add_option("-s","--source_type",default="quadrant")
     parser.add_option("--catalog_file",default="../input/xray.dat")
     parser.add_option("--Ncatalog",default=13.0,type=int)
-    parser.add_option("--Nmax",default=10000.0,type=int)
+    parser.add_option("--Nmax",default=1000.0,type=int)
 
     parser.add_option("--doVariability",  action="store_true", default=False)
     parser.add_option("--doCutNObs",  action="store_true", default=False)
@@ -136,7 +136,7 @@ if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
         fields, ccds, quadrants = np.arange(1,880), np.arange(1,17), np.arange(1,5)
         #fields = [683,853,487,718,372,842,359,778,699,296]
-        #fields = [841,852,682,717,488,423,424,563,562,297,700,777]
+        fields = [841,852,682,717,488,423,424,563,562,297,700,777]
         #fields = [600]
         #fields = [718]
         for field in fields:

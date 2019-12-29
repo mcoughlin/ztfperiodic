@@ -629,7 +629,7 @@ else:
         elif algorithm == "GCE":
             sigthresh = 7
         elif algorithm == "GCE_LS_AOV":
-            sigthresh = 5
+            sigthresh = 10
         else:
             sigthresh = 7
 
