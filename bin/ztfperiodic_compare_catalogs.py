@@ -185,7 +185,7 @@ def load_catalog(catalog,doFermi=False,doSimbad=False):
                "stats35"]
 
     cnt = 0
-    filenames = filenames[:500]
+    #filenames = filenames[:500]
     for ii, filename in enumerate(filenames):
         if np.mod(ii,100) == 0:
             print('Loading file %d/%d' % (ii, len(filenames)))
