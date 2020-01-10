@@ -46,7 +46,7 @@ def parse_commandline():
     parser.add_option("-s","--source_type",default="quadrant")
     parser.add_option("--catalog_file",default="../input/xray.dat")
     parser.add_option("--Ncatalog",default=13.0,type=int)
-    parser.add_option("--Nmax",default=1000.0,type=int)
+    parser.add_option("--Nmax",default=10000.0,type=int)
 
     parser.add_option("--qid",default=None,type=int)
     parser.add_option("--fid",default=None,type=int)
@@ -97,6 +97,9 @@ matchfileDir = opts.matchfileDir
 outputDir = opts.outputDir
 batch_size = opts.batch_size
 Ncatalog = opts.Ncatalog
+algorithm = opts.algorithm
+
+catalogDir = os.path.join(outputDir,'catalog',algorithm)
 
 qsubDir = os.path.join(outputDir,'qsub')
 if not os.path.isdir(qsubDir):
@@ -110,8 +113,9 @@ if opts.lightcurve_source == "Kowalski":
         fields, ccds, quadrants = np.arange(1,880), np.arange(1,17), np.arange(1,5)
         #ccds, quadrants = [1], [1]
 
-        #fields = [683,853,487,718,372,842,359,778,699,296]
-        fields = [718]
+        fields = [683,853,487,718,372,842,359,778,699,296]
+        fields = [841,852,682,717,488,423,424,563,562,297,700,777]
+        #fields = [718]
         job_number = 0
         quadrantfile = os.path.join(qsubDir,'qsub.dat')
         fid = open(quadrantfile,'w')
@@ -133,7 +137,14 @@ if opts.lightcurve_source == "Kowalski":
                         nlightcurves = r['result_data']['query_result']
 
                         Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
+
+                    
                     for ii in range(Ncatalog):
+                        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant, ii))
+                        if os.path.isfile(catalogFile):
+                            print('%s already exists... continuing.' % catalogFile)
+                            continue
+
                         fid.write('%d %d %d %d %d %d\n' % (job_number, field, ccd, quadrant, ii, Ncatalog))
     
                         job_number = job_number + 1
@@ -166,11 +177,11 @@ fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
 fid.write('cd $PBS_O_WORKDIR\n')
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type quadrant --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,opts.Ncatalog,opts.algorithm,extra_flags))
+        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type quadrant --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,opts.Ncatalog,algorithm,extra_flags))
     elif opts.source_type == "catalog":
-        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --Ncatindex $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,opts.algorithm,extra_flags))
+        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,algorithm,extra_flags))
 elif opts.lightcurve_source == "matchfiles":
-    fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d -l matchfiles --doRemoveTerrestrial --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,quadrantfile,opts.Ncatalog,opts.algorithm,extra_flags))
+    fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d -l matchfiles --doRemoveTerrestrial --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,quadrantfile,opts.Ncatalog,algorithm,extra_flags))
 fid.close()
 
 fid = open(os.path.join(qsubDir,'qsub_submission.sub'),'w')
