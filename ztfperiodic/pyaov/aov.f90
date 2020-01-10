@@ -579,7 +579,7 @@ Subroutine aovmhw(t,f,er,frs,th,nfr,nh2,fr0,nobs,ncov,frmax)
   End Do
   Call peak(nfr,th,frmax,fm,dx)
   frmax=fr0+(frmax-1._TIME)*frs
-  Print '(a,1pe12.3,a,g23.12)','Peak of ',fm,' at frequency ',frmax
+  !Print '(a,1pe12.3,a,g23.12)','Peak of ',fm,' at frequency ',frmax
 End Subroutine aovmhw
 
 Subroutine powspw(t,f,er,frs,th,nfr, nh2,fr0,nobs,ncov,frmax)
