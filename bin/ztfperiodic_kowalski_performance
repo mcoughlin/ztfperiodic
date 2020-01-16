@@ -1,5 +1,5 @@
 
-import os, sys
+import os, sys, pickle
 import glob
 import optparse
 
@@ -13,6 +13,7 @@ matplotlib.rcParams.update({'font.size': 16})
 matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
+from matplotlib.colors import LogNorm
 
 def parse_commandline():
     """
@@ -33,29 +34,42 @@ outputDir = os.path.join(opts.condorDir,"performance")
 if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
 
-logsDir = os.path.join(opts.condorDir,"logs")
+pcklFile = os.path.join(outputDir,"data.pkl")
+logsDir = os.path.join(opts.condorDir,"logs1")
 
-logfiles = glob.glob(os.path.join(logsDir,"out*"))
-analysis_times, kowalski_times, objects = [], [], []
-data_out = np.empty((0,4))
-logfiles = logfiles[:1000]
-for ii, logfile in enumerate(logfiles):
-    if np.mod(ii,100) == 0:
-        print('Loading %d/%d' % (ii, len(logfiles)))
+if not os.path.isfile(pcklFile):
+    logfiles = glob.glob(os.path.join(logsDir,"out*"))
+    analysis_times, kowalski_times, objects = [], [], []
+    data_out = np.empty((0,4))
+    #logfiles = logfiles[:1000]
+    for ii, logfile in enumerate(logfiles):
+        if np.mod(ii,100) == 0:
+            print('Loading %d/%d' % (ii, len(logfiles)))
+    
+        try:
+            lines = [line.rstrip('\n') for line in open(logfile)]
+        except:
+            continue
+     
+        data = np.array([np.nan, np.nan, np.nan, np.nan])
+        for line in lines:
+            lineSplit = list(filter(None,line.split(" ")))
+            if "Number of lightcurves" in line:
+                data[0] = int(lineSplit[-1])
+            elif "Lightcurve analysis" in line:
+                data[1] = float(lineSplit[-2])        
+            elif "Loaded" in line:
+                data[2] = int(lineSplit[1])
+                data[3] = float(lineSplit[-2])
+    
+        data_out = np.append(data_out,np.atleast_2d(data), axis=0)
 
-    lines = [line.rstrip('\n') for line in open(logfile)]
-    data = np.array([np.nan, np.nan, np.nan, np.nan])
-    for line in lines:
-        lineSplit = list(filter(None,line.split(" ")))
-        if "Number of lightcurves" in line:
-            data[0] = int(lineSplit[-1])
-        elif "Lightcurve analysis" in line:
-            data[1] = float(lineSplit[-2])        
-        elif "Loaded" in line:
-            data[2] = int(lineSplit[1])
-            data[3] = int(lineSplit[-2])
+    f = open(pcklFile, 'wb')
+    pickle.dump((data_out), f)
+    f.close()
 
-    data_out = np.append(data_out,np.atleast_2d(data), axis=0)
+with open(pcklFile, 'rb') as handle:
+    data_out = pickle.load(handle)
 
 plotName = os.path.join(outputDir, "period_finding.pdf")
 plt.figure(figsize=(8,6))
@@ -63,14 +77,31 @@ ax = plt.gca()
 plt.scatter(data_out[:,0], data_out[:,1], s=20, color='b')
 plt.xlabel('Analysis Time [s]')
 plt.ylabel('Number of objects')
+plt.xlim([1,10000])
+plt.ylim([1,10000])
 ax.set_xscale('log')
 ax.set_yscale('log')
 plt.savefig(plotName)
 plt.close()
-print(stop)
 
-filename = os.path.join(outputDir, "kowalski.dat")
-fid = open(filename, 'w')
-for t, o, f in zip(times, objects, fermiid):
-    fid.write('%.5f %d %d\n' % (t,o,f))
-fid.close()
+xedges = np.logspace(0,3,50)
+yedges = np.logspace(-1.5,1,50)
+
+H, xedges, yedges = np.histogram2d(data_out[:,2], data_out[:,3], bins=(xedges, yedges))
+H = H.T  # Let each row list bins with common y range.
+X, Y = np.meshgrid(xedges, yedges)
+H[H==0] = 1e-5
+
+plotName = os.path.join(outputDir, "kowalski.pdf")
+plt.figure(figsize=(8,6))
+ax = plt.gca()
+c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm())
+plt.ylabel('Load Time [s]')
+plt.xlabel('Number of objects')
+cbar = plt.colorbar(c)
+cbar.set_label('Counts')
+ax.set_xscale('log')
+ax.set_yscale('log')
+plt.savefig(plotName)
+plt.close()
+
