@@ -283,13 +283,13 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=None, radius_1=None, radi
     if radius_2 is None:
         r2 = 0.0126*m2**(-1/3)*((1-(m2/1.44)**(4/3))**(1/2))
         radius_2 = r2/a # relative radius
-    
+  
     # calculate pdot
     if Pdot is None:
         p_sec = P0*24*3600 # convert units from days to sec  
         mchirp = ((m1*m2)**(3/5))/((m1+m2)**(1/5))
         Pdot = -(96*np.pi/(5*c**5))*((G*np.pi*mchirp*msun*(2/p_sec))**(5/3))
-    
+   
     flux_nopdot = ellc(t_obs=t_obs, radius_1=radius_1, radius_2=radius_2, sbratio=sbratio,
          incl=incl,period=period,q=q,a=a,
          light_3=light_3,t_zero=t_zero,f_c=f_c, f_s=f_s,
@@ -337,7 +337,12 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=None, radius_1=None, radi
         tmods.append(tmod)
         phot = np.interp(tmod,t_obs,flux,period=P_new)
         fluxes.append(phot)
-        
+       
+    #plt.figure()
+    #plt.plot(tmods, fluxes, 'kx')
+    #plt.savefig('test.png')
+    #plt.close()
+ 
     fig = plt.figure()
     
     script = os.path.realpath(__file__)

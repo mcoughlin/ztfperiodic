@@ -112,6 +112,27 @@ scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"input")
 gaia = gaia_query(opts.ra, opts.declination, 5/3600.0)
 
+if gaia:
+    Plx = gaia['Plx'].data.data[0] # mas
+    e_Plx = gaia['e_Plx'].data.data[0] # mas
+    RA = gaia['RA_ICRS'].data.data[0]    
+    e_RA = gaia['e_RA_ICRS'].data.data[0]/(1000.0*3600.0)
+    DE = gaia['DE_ICRS'].data.data[0]
+    e_DE = gaia['e_DE_ICRS'].data.data[0]/(1000.0*3600.0)
+
+    print('$\\rm RA$ & $%.8f \pm %.8f$\,deg   \\\\' % (RA, e_RA))
+    print('$\\rm Dec$ & $%.8f \pm %.8f$\,deg   \\\\' % (DE, e_DE))
+
+    # distance in pc
+    if Plx > 0 :
+        d_pc = 1 / (Plx*1e-3)
+        d_pc_upper = 1 / ((Plx-e_Plx)*1e-3)
+        d_pc_lower = 1 / ((Plx+e_Plx)*1e-3)
+
+        print('$\\rm Parallax$ & $%.1f \pm %.1f$   \\\\' % (Plx, e_Plx))
+        print('$\\rm D$ & $%.0f^{+%.0f}_{-%.0f}\,pc$   \\\\' % (d_pc, d_pc_upper-d_pc, d_pc-d_pc_lower))
+
+print(stop)
 
 if not opts.objid is None:
     path_out_dir='%s/%.5f_%.5f/%d'%(outputDir, opts.ra, 
@@ -246,7 +267,7 @@ if opts.lightcurve_source == "Kowalski":
         fid = fid[idx]
 
     if not opts.T0 is None:
-        T0 = opts.T0 - 120.0/86400.0
+        T0 = opts.T0 - 90.0/86400.0
     else:
         T0 = hjd[0]
 

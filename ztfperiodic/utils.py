@@ -49,6 +49,7 @@ def gaia_query(ra_deg, dec_deg, rad_deg, maxmag=25,
     
     """
     vquery = Vizier(columns=['Source', 'RA_ICRS', 'DE_ICRS',
+                             'e_RA_ICRS', 'e_DE_ICRS',
                              'phot_g_mean_mag','phot_r_mean_mag',
                              'e_Gmag',
                              'Plx', 'e_Plx', 

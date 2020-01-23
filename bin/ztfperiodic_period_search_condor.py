@@ -103,6 +103,9 @@ extra_flags = " ".join(extra_flags)
 matchfileDir = opts.matchfileDir
 outputDir = opts.outputDir
 batch_size = opts.batch_size
+algorithm = opts.algorithm
+
+catalogDir = os.path.join(outputDir,'catalog',algorithm)
 
 condorDir = os.path.join(outputDir,'condor')
 if not os.path.isdir(condorDir):
@@ -135,8 +138,9 @@ if opts.lightcurve_source == "Kowalski":
 
     if opts.source_type == "quadrant":
         fields, ccds, quadrants = np.arange(1,880), np.arange(1,17), np.arange(1,5)
-        #fields = [683,853,487,718,372,842,359,778,699,296]
-        fields = [841,852,682,717,488,423,424,563,562,297,700,777]
+        fields1 = [683,853,487,718,372,842,359,778,699,296]
+        fields2 = [841,852,682,717,488,423,424,563,562,297,700,777]
+        fields = fields1 + fields2
         #fields = [600]
         #fields = [718]
         for field in fields:
@@ -160,6 +164,11 @@ if opts.lightcurve_source == "Kowalski":
                         Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
 
                     for ii in range(Ncatalog):
+                        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant, ii))
+                        if os.path.isfile(catalogFile):
+                            print('%s already exists... continuing.' % catalogFile)
+                            continue
+
                         if opts.doDocker:
                             fid1.write('nvidia-docker run --runtime=nvidia python-ztfperiodic %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type quadrant --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doPlots --doRemoveBrightStars --doLightcurveStats %s\n'%(cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, extra_flags))
                         else:
