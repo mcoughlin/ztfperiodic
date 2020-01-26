@@ -57,7 +57,7 @@ def read_catalog(catalog_file):
     if ".dat" in catalog_file:
         lines = [line.rstrip('\n') for line in open(catalog_file)]
         names, ras, decs, errs = [], [], [], []
-        if ("fermi" in catalog_file):
+        if ("fermi" in catalog_file) or ("chandra" in catalog_file):
             amaj, amin, phi = [], [], []
         for line in lines:
             lineSplit = list(filter(None,line.split(" ")))
@@ -86,6 +86,15 @@ def read_catalog(catalog_file):
                 amaj.append(float(lineSplit[3]))
                 amin.append(float(lineSplit[4]))
                 phi.append(float(lineSplit[5]))
+            elif ("chandra" in catalog_file):
+                names.append(lineSplit[0])
+                ras.append(float(lineSplit[1]))
+                decs.append(float(lineSplit[2]))
+                err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)
+                errs.append(err)
+                amaj.append(float(lineSplit[3]))
+                amin.append(float(lineSplit[4]))
+                phi.append(float(lineSplit[5]))
             elif ("swift" in catalog_file) or ("xmm" in catalog_file):
                 names.append(lineSplit[0])
                 ras.append(float(lineSplit[1]))
@@ -99,7 +108,7 @@ def read_catalog(catalog_file):
                 errs.append(default_err)
         names = np.array(names)
         ras, decs, errs = np.array(ras), np.array(decs), np.array(errs)
-        if ("fermi" in catalog_file):
+        if ("fermi" in catalog_file) or ("chandra" in catalog_file):
             amaj, amin, phi = np.array(amaj), np.array(amin), np.array(phi)
     elif ".hdf5" in catalog_file:
         with h5py.File(catalog_file, 'r') as f:
