@@ -105,3 +105,23 @@ ax.set_yscale('log')
 plt.savefig(plotName)
 plt.close()
 
+xedges = np.logspace(0,3.5,50)
+yedges = np.logspace(0,4.5,50)
+
+H, xedges, yedges = np.histogram2d(data_out[:,0], data_out[:,1], bins=(xedges, yedges))
+H = H.T  # Let each row list bins with common y range.
+X, Y = np.meshgrid(xedges, yedges)
+H[H==0] = 1e-5
+
+plotName = os.path.join(outputDir, "period_finding.pdf")
+plt.figure(figsize=(8,6))
+ax = plt.gca()
+c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm())
+plt.xlabel('Analysis Time [s]')
+plt.ylabel('Number of objects')
+cbar = plt.colorbar(c)
+cbar.set_label('Counts')
+ax.set_xscale('log')
+ax.set_yscale('log')
+plt.savefig(plotName)
+plt.close()
