@@ -32,6 +32,7 @@ from ztfperiodic.period import CE
 from ztfperiodic.lcstats import calc_stats
 from ztfperiodic.utils import get_kowalski_bulk
 from ztfperiodic.utils import get_kowalski_list
+from ztfperiodic.utils import get_kowalski_objids
 from ztfperiodic.utils import get_simulated_list
 from ztfperiodic.utils import get_matchfile
 from ztfperiodic.utils import find_matchfile
@@ -447,6 +448,36 @@ if opts.lightcurve_source == "Kowalski":
                                   sigmathresh=sigmathresh,
                                   doOutbursting=doOutbursting)
 
+    elif opts.source_type == "objid":
+
+        if ".dat" in catalog_file:
+            objids = np.loadtxt(catalog_file)
+        else:
+            print("Sorry I don't know this file extension...")
+            exit(0)
+
+        objids_split = np.array_split(objids,Ncatalog)
+        objids = objids_split[Ncatindex]
+
+        catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+        catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(catalog_file_split,
+                                                           Ncatindex))
+
+        if opts.doSpectra:
+            spectraFile = os.path.join(spectraDir,"%s_%d.pkl"%(catalog_file_split,
+                                                               Ncatindex))
+
+
+        lightcurves, coordinates, filters, ids,\
+        absmags, bp_rps, names, baseline =\
+            get_kowalski_objids(objids, kow,
+                                program_ids=program_ids,
+                                min_epochs=min_epochs,
+                                doRemoveHC=doRemoveHC,
+                                doExtinction=doExtinction,
+                                doSigmaClipping=doSigmaClipping,
+                                sigmathresh=sigmathresh,
+                                doOutbursting=doOutbursting)
     else:
         print("Source type unknown...")
         exit(0)

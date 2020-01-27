@@ -378,6 +378,110 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
   
     return lightcurves
 
+def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
+                        doRemoveHC=False, doExtinction=False, max_error = 2.0,
+                        doSigmaClipping=False,
+                        sigmathresh=5.0,
+                        doOutbursting=False):
+
+    baseline=0
+    cnt=0
+    names = []
+    lightcurves, coordinates, filters, ids = [], [], [], []
+    absmags, bp_rps = [], []
+
+    start = time.time()
+
+    tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
+
+    for objid in objids:
+        qu = {"query_type":"general_search","query":"db['ZTF_sources_20191101'].find({'_id':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1})"%(objid)}
+        r = database_query(kow, qu, nquery = 10)
+
+        if not "result_data" in r:
+            print("Query for objid %d failed... continuing."%(objid))
+            continue
+
+        datas = r["result_data"]["query_result"]
+
+        for ii, data in enumerate(datas):
+            hjd, mag, magerr, ra, dec, fid = [], [], [], [], [], []
+            objid = data["_id"]
+            filt = data["filter"]
+            data = data["data"]
+            for dic in data:
+                if not dic["programid"] in program_ids: continue
+                if (dic["programid"]==1) and (dic["hjd"] > tmax): continue
+                if not dic["catflags"] == 0: continue
+
+                hjd.append(dic["hjd"])
+                mag.append(dic["mag"])
+                magerr.append(dic["magerr"])
+                ra.append(dic["ra"])
+                dec.append(dic["dec"])
+                fid.append(filt)
+
+            hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
+            ra, dec = np.array(ra), np.array(dec)
+
+            fid = np.array(fid)
+            idx = np.where(~np.isnan(mag) & ~np.isnan(magerr))[0]
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            fid = fid[idx]
+            ra, dec = ra[idx], dec[idx]
+
+            idx = np.where(magerr<=max_error)[0]
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            fid = fid[idx]
+            ra, dec = ra[idx], dec[idx]
+
+            idx = np.argsort(hjd)
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            fid = fid[idx]
+            ra, dec = ra[idx], dec[idx]
+
+            if doRemoveHC:
+                dt = np.diff(hjd)
+                idx = np.setdiff1d(np.arange(len(hjd)),
+                                   np.where(dt < 30.0*60.0/86400.0)[0])
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                fid = fid[idx]
+                ra, dec = ra[idx], dec[idx]
+
+            if len(hjd) < min_epochs: continue
+
+            lightcurve=(hjd,mag,magerr)
+            lightcurves.append(lightcurve)
+            filters.append(np.unique(fid).tolist())
+            nlightcurves = 1
+
+            for jj in range(nlightcurves):
+                coordinate=(np.median(ra),np.median(dec))
+                coordinates.append(coordinate)
+                ids.append(objid)
+                absmags.append([np.nan, np.nan, np.nan])
+                bp_rps.append(np.nan)
+
+                ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
+                if dec_hex[0] == "-":
+                    objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+                else:
+                    objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+                names.append(objname)
+
+            newbaseline = max(hjd)-min(hjd)
+            if newbaseline>baseline:
+                baseline=newbaseline
+            cnt = cnt + 1
+
+    end = time.time()
+    loadtime = end - start
+
+    print('Loaded %d lightcurves in %.5f seconds' % (len(lightcurves), loadtime))
+
+    return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
+
+
 def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
                       max_error = 2.0, errs = None, names = None,
                       amaj=None, amin=None, phi=None,
@@ -1178,7 +1282,7 @@ def BJDConvert(mjd, RA, Dec):
     t = Time(times,format='mjd',scale='utc')
     t2=t.tdb
     c = SkyCoord(RA,Dec, unit="deg")
-    Palomar=EarthLocation.of_site('Palomar')
+    Palomar=EarthLocation.of_site('palomar')
     delta=t2.light_travel_time(c,kind='barycentric',location=Palomar)
     BJD_TDB=t2+delta    
     return BJD_TDB

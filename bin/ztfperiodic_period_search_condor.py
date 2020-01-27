@@ -139,6 +139,7 @@ if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
         fields, ccds, quadrants = np.arange(1,880), np.arange(1,17), np.arange(1,5)
         fields1 = [683,853,487,718,372,842,359,778,699,296]
+        fields1 = [487,718]
         fields2 = [841,852,682,717,488,423,424,563,562,297,700,777]
         fields = fields1 + fields2
         #fields = [600]
@@ -247,7 +248,7 @@ else:
 fid.write('accounting_group = ligo.dev.o2.burst.allsky.stamp\n');
 fid.write('notification = never\n');
 fid.write('getenv = true\n');
-fid.write('log = /local/mcoughlin/folding.log\n')
+fid.write('log = /local/michael.coughlin/folding.log\n')
 fid.write('+MaxHours = 24\n');
 fid.write('universe = vanilla\n');
 fid.write('queue 1\n');
