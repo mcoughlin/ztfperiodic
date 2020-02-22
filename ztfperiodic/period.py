@@ -84,7 +84,7 @@ def CE(period, data, xbins=10, ybins=5):
 
     #r = rephase(data, period)
     #r = np.ma.array(data, copy=True)
-    data[:, 0] = np.mod(data[:, 0], period)
+    data[:, 0] = np.mod(data[:, 0], period) / period
     #bins, xedges, yedges = np.histogram2d(r[:,0], r[:,1], bins=[xbins, ybins], range=[[0,1], [0,1]])
     bins = fast_histogram.histogram2d(data[:,0], data[:,1], range=[[0, 1], [0, 1]], bins=[xbins, ybins])
 
@@ -148,11 +148,8 @@ def CE_cupy(period, data, xbins=10, ybins=5):
     col=0
     
     r = cp.array(data)
-    r[:, 0] = cp.mod(r[:, col], period)
+    r[:, 0] = cp.mod(r[:, col], period) / period
 
-    print(r)
-    print(stop)
-   
     bins, xedges, yedges = np.histogram2d(r[:,0], r[:,1], [xbins, ybins], [[0,1], [0,1]])
     size = r.shape[0]
 
