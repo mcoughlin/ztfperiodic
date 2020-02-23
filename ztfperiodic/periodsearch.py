@@ -15,7 +15,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                  freqs_to_remove=None,
                  phase_bins=20, mag_bins=10):
 
-    if doRemoveTerrestrial and (freqs_to_remove is not None) and not (algorithm=="LS" or algorithm=="GCE_LS_AOV"):
+    if doRemoveTerrestrial and (freqs_to_remove is not None) and not (algorithm=="LS" or algorithm=="GCE_LS_AOV" or algorithm=="GCE_LS"):
         for pair in freqs_to_remove:
             idx = np.where((freqs < pair[0]) | (freqs > pair[1]))[0]
             freqs = freqs[idx]
@@ -314,6 +314,90 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
 
                 periods_best.append(period)
                 significances.append(significance)
+
+        elif algorithm == "GCE_LS":
+            from cuvarbase.lombscargle import LombScargleAsyncProcess, fap_baluev
+            from gcex.gce import ConditionalEntropy
+            from ztfperiodic.pyaov.pyaov import aovw, amhw
+
+            ce = ConditionalEntropy(phase_bins=phase_bins, mag_bins=mag_bins)
+
+            pdot = np.array([0.0])
+            if doSingleTimeSegment:
+                tt = np.empty((0,1))
+                for lightcurve in lightcurves:
+                    tt = np.unique(np.append(tt, lightcurve[0]))
+
+            maxn = -np.inf
+            lightcurves_stack = []
+            for lightcurve in lightcurves:
+                if doSingleTimeSegment:
+                    xy, x_ind, y_ind = np.intersect1d(tt, lightcurve[0],
+                                                      return_indices=True)
+                    mag_array = 999*np.ones(tt.shape)
+                    magerr_array = 999*np.ones(tt.shape)
+                    mag_array[x_ind] = lightcurve[1][y_ind]
+                    magerr_array[x_ind] = lightcurve[2][y_ind]
+                    lightcurve = (tt, mag_array, magerr_array)
+                else:
+                    tmin = np.min(lightcurve[0])
+                    idx = np.argsort(lightcurve[0])
+                    lightcurve = (lightcurve[0][idx]-tmin,
+                                  lightcurve[1][idx],
+                                  lightcurve[2][idx])
+
+                lightcurve_stack = np.vstack((lightcurve[0],
+                                              lightcurve[1])).T
+                lightcurves_stack.append(lightcurve_stack)
+
+                if len(idx) > maxn:
+                    maxn = len(idx)
+
+            print("Number of lightcurves: %d" % len(lightcurves_stack))
+            print("Max length of lightcurves: %d" % maxn)
+            print("Batch size: %d" % batch_size)
+            print("Number of frequency bins: %d" % len(freqs))
+            print("Number of phase bins: %d" % phase_bins)
+            print("Number of magnitude bins: %d" % mag_bins)
+
+            results2 = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdot, show_progress=False)
+
+            nfft_sigma, spp = 10, 10
+
+            ls_proc = LombScargleAsyncProcess(use_double=True,
+                                                  sigma=nfft_sigma)
+            results1 = ls_proc.batched_run_const_nfreq(lightcurves,
+                                                       batch_size=batch_size,
+                                                       use_fft=True,
+                                                       samples_per_peak=spp,
+                                                       returnBestFreq=False,
+                                                       freqs = freqs)
+
+            for jj, (data, out, entropies2) in enumerate(zip(lightcurves, results1, results2)):
+                entropies = entropies2[0]
+                freqs1, powers = out
+                if doRemoveTerrestrial and (freqs_to_remove is not None):
+                    for pair in freqs_to_remove:
+                        idx = np.where((freqs1 < pair[0]) | (freqs1 > pair[1]))[0]
+                        freqs1 = freqs1[idx]
+                        powers = powers[idx]
+                        entropies = entropies[idx]
+
+                #copy = np.ma.copy(data).T
+                #fap = fap_baluev(copy[:,0], copy[:,2], powers, np.max(freqs))
+                #significance1 = 1./fap
+                significance1 = np.abs(powers-np.mean(powers))/np.std(powers)
+                significance2 = np.abs(np.mean(entropies)-entropies)/np.std(entropies)
+                significance = significance1*significance2
+                #significance = significance2
+                idx = np.argmax(significance)
+
+                period = 1./freqs[idx]
+                significance = significance[idx]
+
+                periods_best.append(period)
+                significances.append(significance)
+            ls_proc.finish()
 
         elif algorithm == "FFT":
             from cuvarbase.lombscargle import fap_baluev

@@ -109,7 +109,7 @@ program_ids = list(map(int,opts.program_ids.split(",")))
 min_epochs = opts.min_epochs
 
 scriptpath = os.path.realpath(__file__)
-starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"input")
+starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
 gaia = gaia_query(opts.ra, opts.declination, 5/3600.0)
 
 if gaia:
@@ -131,8 +131,6 @@ if gaia:
 
         print('$\\rm Parallax$ & $%.1f \pm %.1f$   \\\\' % (Plx, e_Plx))
         print('$\\rm D$ & $%.0f^{+%.0f}_{-%.0f}\,pc$   \\\\' % (d_pc, d_pc_upper-d_pc, d_pc-d_pc_lower))
-
-print(stop)
 
 if not opts.objid is None:
     path_out_dir='%s/%.5f_%.5f/%d'%(outputDir, opts.ra, 
@@ -338,7 +336,7 @@ if opts.doPlots:
     plotName = os.path.join(path_out_dir,'gaia.pdf')
     plt.figure(figsize=(7,7))
     ax = plt.subplot(111)
-    plot_gaia_subplot(gaia, ax, starCatalogDir, doTitle=False)
+    plot_gaia_subplot(gaia, ax, inputDir, doTitle=False)
     plt.savefig(plotName, bbox_inches='tight')
     plt.close()
 
@@ -351,7 +349,10 @@ lightcurve=(hjd,mag,magerr)
 lightcurves.append(lightcurve)
 
 data_out = period_search_ls(hjd, mag, magerr, data_out={}, remove_harmonics = True)
-period = data_out["period"]
+if opts.doPhase:
+    period = opts.phase
+else:
+    period = data_out["period"]
 
 # fit the lightcurve with fourier components, using BIC to decide the optimal number of pars
 LCfit = fdecomp.fit_best(np.c_[hjd,mag,magerr], period, 5, plotname=False)
@@ -449,7 +450,7 @@ if opts.doPlots:
     ax1.set_xlabel("phase")
     ax1.invert_yaxis()
     
-    plot_gaia_subplot(gaia, ax2, starCatalogDir, doTitle=True)
+    plot_gaia_subplot(gaia, ax2, inputDir, doTitle=True)
     
     nspec = len(spectral_data.keys())
     if nspec > 1:

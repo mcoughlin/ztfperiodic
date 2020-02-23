@@ -71,19 +71,6 @@ if not os.path.isfile(pcklFile):
 with open(pcklFile, 'rb') as handle:
     data_out = pickle.load(handle)
 
-plotName = os.path.join(outputDir, "period_finding.pdf")
-plt.figure(figsize=(8,6))
-ax = plt.gca()
-plt.scatter(data_out[:,0], data_out[:,1], s=20, color='b')
-plt.xlabel('Analysis Time [s]')
-plt.ylabel('Number of objects')
-plt.xlim([1,10000])
-plt.ylim([1,10000])
-ax.set_xscale('log')
-ax.set_yscale('log')
-plt.savefig(plotName)
-plt.close()
-
 xedges = np.logspace(0,3,50)
 yedges = np.logspace(-1.5,1,50)
 
@@ -105,7 +92,7 @@ ax.set_yscale('log')
 plt.savefig(plotName)
 plt.close()
 
-xedges = np.logspace(0,3.5,50)
+xedges = np.logspace(0,3.0,50)
 yedges = np.logspace(0,4.5,50)
 
 H, xedges, yedges = np.histogram2d(data_out[:,0], data_out[:,1], bins=(xedges, yedges))

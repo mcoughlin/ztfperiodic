@@ -115,6 +115,7 @@ def parse_commandline():
     parser.add_option("--doOutbursting",  action="store_true", default=False)
 
     parser.add_option("--doObjIDFilenames",  action="store_true", default=False)
+    parser.add_option("--doCheckLightcurves",  action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
@@ -203,6 +204,7 @@ Ncatindex = opts.Ncatindex
 doSigmaClipping = opts.doSigmaClipping
 sigmathresh = opts.sigmathresh
 doOutbursting = opts.doOutbursting
+doCheckLightcurves = opts.doCheckLightcurves
 
 if opts.doQuadrantFile:
     if opts.lightcurve_source == "Kowalski":
@@ -557,6 +559,10 @@ if len(lightcurves) == 0:
     if opts.doSpectra:
         touch(spectraFile)
     print('No lightcurves available... exiting.')
+    exit(0)
+
+if opts.doCheckLightcurves:
+    print('Just checking that there are lightcurves to analyze... exiting.')
     exit(0)
 
 if baseline<10:
