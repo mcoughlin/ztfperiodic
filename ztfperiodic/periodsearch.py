@@ -249,16 +249,17 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
 
             for jj, (lightcurve, entropies2) in enumerate(zip(lightcurves,results)):
                 for kk, entropies in enumerate(entropies2):
+                    freqs_tmp = np.copy(freqs)
                     if doRemoveTerrestrial and (freqs_to_remove is not None):
                         for pair in freqs_to_remove:
-                            idx = np.where((freqs < pair[0]) | (freqs > pair[1]))[0]
-                            freqs = freqs[idx]
+                            idx = np.where((freqs_tmp < pair[0]) | (freqs_tmp > pair[1]))[0]
+                            freqs_tmp = freqs_tmp[idx]
                             entropies = entropies[idx]
                     significance = np.abs(np.mean(entropies)-entropies)/np.std(entropies)
                     idx = np.argsort(significance)[::-1]
 
                     freqs_to_keep[jj] = np.append(freqs_to_keep[jj],
-                                                  freqs[idx[:nfreqs_to_keep]])
+                                                  freqs_tmp[idx[:nfreqs_to_keep]])
 
             nfft_sigma, spp = 10, 10
 
