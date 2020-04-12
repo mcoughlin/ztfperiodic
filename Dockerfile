@@ -16,6 +16,7 @@ RUN apt-get update && apt-get -y install \
     python3-astropy \
     python3-astroquery \
     python3-dateutil \
+    python3-f2py \
     python3-future \
     python3-healpy \
     python3-h5py \
@@ -23,10 +24,10 @@ RUN apt-get update && apt-get -y install \
     python3-numpy \
     python3-pandas \
     python3-pip \
+    python3-pyvo \
     python3-scipy \
     python3-seaborn \
     python3-tqdm \
-    python3-pyvo \
     rsync && \
     rm -rf /var/lib/apt/lists/*
 
@@ -45,6 +46,7 @@ RUN rm /requirements.txt
 
 COPY . /src
 RUN pip3 install --no-cache-dir /src
+RUN cd /src/ztfperiodic/pyaov && f2py3 -m aov -c aovconst.f90 aovsub.f90 aov.f90 && cp aov.cpython-36m-x86_64-linux-gnu.so /usr/lib/python3/dist-packages/
 
 RUN useradd -mr ztfperiodic
 USER ztfperiodic:ztfperiodic

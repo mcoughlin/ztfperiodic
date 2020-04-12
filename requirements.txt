@@ -1,13 +1,13 @@
 astropy >= 3.1
 astropy-healpix>=0.3
-astroquery
+astroquery>=0.4.0
+astroplan
 Cython
-ephem
 gatspy
 healpy
 h5py
 matplotlib
-numpy
+numpy>=1.16.0
 pandas
-scipy
+scipy>=1.1.0
 tables
