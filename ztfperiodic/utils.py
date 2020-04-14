@@ -283,8 +283,15 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
                 lightcurves[objid]["parallax"] = np.nan
             else:     
                 dat2 = data2[ii]
-                parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
-                g_mag, bp_mag, rp_mag = dat2["phot_g_mean_mag"], dat2["phot_bp_mean_mag"], dat2["phot_rp_mean_mag"]
+                if not "parallax" in dat2:
+                    parallax, parallaxerr = None, None
+                else:
+                    parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
+                if not "phot_g_mean_mag" in dat2:
+                    g_mag, bp_mag, rp_mag = None, None, None
+                else:
+                    g_mag, bp_mag, rp_mag = dat2["phot_g_mean_mag"], dat2["phot_bp_mean_mag"], dat2["phot_rp_mean_mag"]
+
                 if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None)):
                     lightcurves[objid]["absmag"] = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
                     lightcurves[objid]["bp_rp"] = bp_mag-rp_mag
