@@ -214,6 +214,10 @@ fid.close()
 
 fid = open(os.path.join(slurmDir,'slurm_submission.sub'),'w')
 fid.write('#!/bin/bash\n')
+fid.write('#SBATCH --job-name=$SLURM_JOBID.job\n')
+fid.write('#SBATCH --output=logs/$SLURM_JOBID.out\n')
+fid.write('#SBATCH --error=logs/$SLURM_JOBID.err\n')
+fid.write('#SBATCH -p gpu-shared\n')
 if opts.queue_type == "p100":
     fid.write('#SBATCH --gres=gpu:p100:1 --mem=8GB\n')
 elif opts.queue_type == "k80":
@@ -221,7 +225,6 @@ elif opts.queue_type == "k80":
 else:
     print('queue_type must be p100 or k80')
     exit(0)
-fid.write('#SBATCH -m --no-requeue\n')
 fid.write('#SBATCH --time=2:00:00\n')
 fid.write('#SBATCH --mail-type=ALL\n')
 fid.write('#SBATCH --mail-user=cough052@umn.edu\n')
