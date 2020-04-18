@@ -338,10 +338,10 @@ def amhw(time, amplitude, error, fstop, fstep, nh2=3, fr0=0.):
 
     # maybe something else can go wrong?
     try:
-        th,frmax = _aov.aov.aovmhw(time, amplitude, error, fstep, (fstop-fr0)/fstep+1,fr0=fr0,nh2=nh2)
+        th,frmax = _aov.aov.aovmhw(time, amplitude, error, fstep, int((fstop-fr0)/fstep+1),fr0=fr0,nh2=nh2)
         
         # make an array that contains the frequencies too
-        freqs = np.linspace(fr0, fstop, (fstop-fr0)/fstep+1)
+        freqs = np.linspace(fr0, fstop, int((fstop-fr0)/fstep+1))
         return th, freqs,frmax
 
     except Exception as e:
