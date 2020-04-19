@@ -24,6 +24,7 @@ def parse_commandline():
 
     parser.add_option("-p","--python",default="python")
     parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output")
+    parser.add_option("-f","--filetype",default="slurm")
 
     parser.add_option("--doSubmit",  action="store_true", default=False)
 
@@ -50,24 +51,27 @@ opts = parse_commandline()
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
 outputDir = opts.outputDir
+filetype = opts.filetype
 
-qsubDir = os.path.join(outputDir,'qsub')
+qsubDir = os.path.join(outputDir,filetype)
 if not os.path.isdir(qsubDir):
     os.makedirs(qsubDir)
+qsubfile = os.path.join(qsubDir,'%s.sub' % filetype)
 
-qsubfile = os.path.join(qsubDir,'qsub.sub')
 lines = [line.rstrip('\n') for line in open(qsubfile)]
 jobline = lines[-1]
 joblineSplit = list(filter(None,jobline.split("algorithm")[-1].split(" ")))
 algorithm = joblineSplit[0]
 
-quadrantfile = os.path.join(qsubDir,'qsub.dat')
+quadrantfile = os.path.join(qsubDir,'%s.dat' % filetype)
 
 catalogDir = os.path.join(outputDir,'catalog',algorithm)
 quad_out_original = np.loadtxt(quadrantfile)
 quad_out = filter_completed(quad_out_original, catalogDir)       
 njobs, ncols = quad_out.shape
 print('%d jobs remaining...' % njobs)
+
+counter = 0
 
 if opts.doSubmit:
     while njobs > 0:
@@ -77,9 +81,16 @@ if opts.doSubmit:
         field, ccd, quadrant = row[1], row[2], row[3]
         Ncatindex, Ncatalog = row[4], row[5]
 
-        jobstr = jobline.replace("$PBS_ARRAYID","%d"%row[0])
-        os.system(jobstr)
+        print(field, ccd, quadrant, Ncatindex, Ncatalog)
+        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
+        if not os.path.isfile(catalogFile):
+            jobstr = jobline.replace("$PBS_ARRAYID","%d"%row[0])
+            os.system(jobstr)
 
-        quad_out = filter_completed(quad_out, catalogDir)
-        njobs, ncols = quad_out.shape
-        print('%d jobs remaining...' % njobs)
+        counter = counter + 1
+        print(counter)
+
+        if np.mod(counter,500) == 0:
+            quad_out = filter_completed(quad_out, catalogDir)
+            njobs, ncols = quad_out.shape
+            print('%d jobs remaining...' % njobs)
