@@ -126,7 +126,7 @@ if opts.lightcurve_source == "Kowalski":
 
         fields_complete = fields1 + fields2 + fields3 + fields4
         fields = np.arange(1600,1700)
-        fields = np.arange(800,810)
+        fields = np.arange(800,900)
         fields = np.setdiff1d(fields,fields_complete)
 
         job_number = 0
@@ -205,31 +205,38 @@ fid.write('module purge\n')
 fid.write('source %s/setup.sh\n' % dir_path)
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type quadrant --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --quadrant_index $SLURM_JOBID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,opts.Ncatalog,algorithm,extra_flags))
+        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type quadrant --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,opts.Ncatalog,algorithm,extra_flags))
     elif opts.source_type == "catalog":
-        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex $SLURM_JOBID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,algorithm,extra_flags))
+        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,algorithm,extra_flags))
 elif opts.lightcurve_source == "matchfiles":
-    fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d -l matchfiles --doRemoveTerrestrial --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --quadrant_index $SLURM_JOBID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,quadrantfile,opts.Ncatalog,algorithm,extra_flags))
+    fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d -l matchfiles --doRemoveTerrestrial --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,quadrantfile,opts.Ncatalog,algorithm,extra_flags))
 fid.close()
 
 fid = open(os.path.join(slurmDir,'slurm_submission.sub'),'w')
 fid.write('#!/bin/bash\n')
-fid.write('#SBATCH --job-name=$SLURM_JOBID.job\n')
-fid.write('#SBATCH --output=logs/$SLURM_JOBID.out\n')
-fid.write('#SBATCH --error=logs/$SLURM_JOBID.err\n')
-fid.write('#SBATCH -p gpu-shared\n')
-if opts.queue_type == "p100":
-    fid.write('#SBATCH --gres=gpu:p100:1 --mem=8GB\n')
-elif opts.queue_type == "k80":
-    fid.write('#SBATCH --gres=gpu:k80:1 --mem=8GB\n')
+fid.write('#SBATCH --job-name=ztfperiodic.job\n')
+fid.write('#SBATCH --output=logs/ztfperiodic_%A_%a.out\n')
+fid.write('#SBATCH --error=logs/ztfperiodic_%A_%a.err\n')
+if "cori" in os.environ["HOSTNAME"]:
+    fid.write('#SBATCH -C gpu -N 1\n')
+    fid.write('#SBATCH -G 1 --mem=8GB\n')
+    fid.write('#SBATCH -A m3619\n')
 else:
-    print('queue_type must be p100 or k80')
-    exit(0)
+    fid.write('#SBATCH -p gpu-shared\n')
+    fid.write('#SBATCH -A umn130\n')
+    if opts.queue_type == "p100":
+        fid.write('#SBATCH --gres=gpu:p100:1 --mem=8GB\n')
+    elif opts.queue_type == "k80":
+        fid.write('#SBATCH --gres=gpu:k80:1 --mem=8GB\n')
+    else:
+        print('queue_type must be p100 or k80')
+        exit(0)
 fid.write('#SBATCH --time=2:00:00\n')
 fid.write('#SBATCH --mail-type=ALL\n')
 fid.write('#SBATCH --mail-user=cough052@umn.edu\n')
-fid.write('#SBATCH -A umn130\n')
 fid.write('module purge\n')
+if "cori" in os.environ["HOSTNAME"]:
+    fid.write('module load esslurm\n')
 fid.write('source %s/setup.sh\n' % dir_path)
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
