@@ -9,7 +9,7 @@ import numpy as np
 
 import matplotlib
 matplotlib.use('Agg')
-matplotlib.rcParams.update({'font.size': 16})
+matplotlib.rcParams.update({'font.size': 20})
 matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
@@ -35,12 +35,12 @@ if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
 
 pcklFile = os.path.join(outputDir,"data.pkl")
-logsDir = os.path.join(opts.condorDir,"logs1")
+logsDir = os.path.join(opts.condorDir,"logs")
 
 if not os.path.isfile(pcklFile):
-    logfiles = glob.glob(os.path.join(logsDir,"out*"))
+    logfiles = glob.glob(os.path.join(logsDir,"*out*"))
     analysis_times, kowalski_times, objects = [], [], []
-    data_out = np.empty((0,4))
+    data_out = np.empty((0,5))
     #logfiles = logfiles[:1000]
     for ii, logfile in enumerate(logfiles):
         if np.mod(ii,100) == 0:
@@ -51,7 +51,7 @@ if not os.path.isfile(pcklFile):
         except:
             continue
      
-        data = np.array([np.nan, np.nan, np.nan, np.nan])
+        data = np.array([np.nan, np.nan, np.nan, np.nan, ii])
         for line in lines:
             lineSplit = list(filter(None,line.split(" ")))
             if "Number of lightcurves" in line:
@@ -61,9 +61,10 @@ if not os.path.isfile(pcklFile):
             elif "Loaded" in line:
                 data[2] = int(lineSplit[1])
                 data[3] = float(lineSplit[-2])
-    
-        data_out = np.append(data_out,np.atleast_2d(data), axis=0)
-
+   
+                data_out = np.append(data_out,np.atleast_2d(data), axis=0)
+                data = np.array([np.nan, np.nan, np.nan, np.nan, ii])
+ 
     f = open(pcklFile, 'wb')
     pickle.dump((data_out), f)
     f.close()
@@ -71,8 +72,8 @@ if not os.path.isfile(pcklFile):
 with open(pcklFile, 'rb') as handle:
     data_out = pickle.load(handle)
 
-xedges = np.logspace(0,3,50)
-yedges = np.logspace(-1.5,1,50)
+xedges = np.logspace(2,3,50)
+yedges = np.logspace(-2,0,50)
 
 H, xedges, yedges = np.histogram2d(data_out[:,2], data_out[:,3], bins=(xedges, yedges))
 H = H.T  # Let each row list bins with common y range.
@@ -92,8 +93,8 @@ ax.set_yscale('log')
 plt.savefig(plotName)
 plt.close()
 
-xedges = np.logspace(0,3.0,50)
-yedges = np.logspace(0,4.5,50)
+xedges = np.logspace(2,3.0,50)
+yedges = np.logspace(2,3.5,50)
 
 H, xedges, yedges = np.histogram2d(data_out[:,0], data_out[:,1], bins=(xedges, yedges))
 H = H.T  # Let each row list bins with common y range.
@@ -111,4 +112,43 @@ cbar.set_label('Counts')
 ax.set_xscale('log')
 ax.set_yscale('log')
 plt.savefig(plotName)
+plt.close()
+
+ngpus = int(np.max(data_out[:,4]))
+nlcurves = np.zeros((ngpus,1))
+for ii in range(ngpus):
+    idx = np.where(data_out[:,4] == ii)[0]
+    nlcurves[ii] = np.nansum(data_out[idx,0])
+
+color1 = 'cornflowerblue'
+color2 = 'coral'
+
+nsamples = 500
+
+fig = plt.figure(figsize=(14,8))
+ax = plt.gca()
+for ii in range(ngpus):
+    vals = np.zeros((nsamples,1))
+    cnt = ii + 1
+    for jj in range(nsamples):    
+        idx = np.random.permutation(np.arange(ngpus))
+        idx = idx[:cnt]
+        vals[jj] = np.sum(nlcurves[idx])
+
+    parts = plt.violinplot(vals,[cnt],widths=0.25)
+    for partname in ('cbars','cmins','cmaxes'):
+        vp = parts[partname]
+        vp.set_edgecolor(color1)
+        vp.set_linewidth(1)
+    for pc in parts['bodies']:
+        pc.set_facecolor(color1)
+        pc.set_edgecolor(color1)
+
+#plt.xticks([2**0,2**1,2**2,2**3])
+plt.grid()
+plt.xlabel(r'Number of GPUs')
+plt.ylabel('Lightcurves Analyzed')
+
+plotName = os.path.join(outputDir,'scaling.pdf')
+plt.savefig(plotName, bbox_inches='tight')
 plt.close()

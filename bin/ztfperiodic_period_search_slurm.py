@@ -185,9 +185,9 @@ elif opts.lightcurve_source == "matchfiles":
 
 fid = open(os.path.join(slurmDir,'slurm.sub'),'w')
 fid.write('#!/bin/bash\n')
-fid.write('#SBATCH --job-name=$SLURM_JOBID.job\n')
-fid.write('#SBATCH --output=logs/$SLURM_JOBID.out\n')
-fid.write('#SBATCH --error=logs/$SLURM_JOBID.err\n')
+fid.write('#SBATCH --job-name=ztfperiodic.job\n')
+fid.write('#SBATCH --output=logs/ztfperiodic_%A_%a.out\n')
+fid.write('#SBATCH --error=logs/ztfperiodic_%A_%a.err\n')
 fid.write('#SBATCH -p gpu-shared\n')
 if opts.queue_type == "p100":
     fid.write('#SBATCH --gres=gpu:p100:1 --mem=8GB\n')
@@ -202,7 +202,7 @@ fid.write('#SBATCH --mail-user=cough052@umn.edu\n')
 fid.write('#SBATCH -A umn130\n')
 
 fid.write('module purge\n')
-fid.write('source /home/mcoughli/ZTF/ztfperiodic/setup.sh\n')
+fid.write('source %s/setup.sh\n' % dir_path)
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
         fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type quadrant --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --quadrant_index $SLURM_JOBID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,opts.Ncatalog,algorithm,extra_flags))
@@ -230,7 +230,7 @@ fid.write('#SBATCH --mail-type=ALL\n')
 fid.write('#SBATCH --mail-user=cough052@umn.edu\n')
 fid.write('#SBATCH -A umn130\n')
 fid.write('module purge\n')
-fid.write('source /home/mcoughli/ZTF/ztfperiodic/setup.sh\n')
+fid.write('source %s/setup.sh\n' % dir_path)
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
         fid.write('%s/ztfperiodic_job_submission.py --outputDir %s --doSubmit\n' % (dir_path, outputDir))
