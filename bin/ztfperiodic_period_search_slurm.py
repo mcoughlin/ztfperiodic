@@ -200,8 +200,6 @@ fid.write('#SBATCH --time=2:00:00\n')
 fid.write('#SBATCH --mail-type=ALL\n')
 fid.write('#SBATCH --mail-user=cough052@umn.edu\n')
 fid.write('#SBATCH -A umn130\n')
-
-fid.write('module purge\n')
 fid.write('source %s/../setup.sh\n' % dir_path)
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
@@ -237,6 +235,9 @@ fid.write('#SBATCH --mail-user=cough052@umn.edu\n')
 fid.write('module purge\n')
 if "cori" in os.environ["HOSTNAME"]:
     fid.write('module load esslurm\n')
+    fid.write('module unload PrgEnv-intel\n')
+    fid.write('module load PrgEnv-gnu\n')
+    fid.write('module load cuda/10.1.243\n')
 fid.write('source %s/../setup.sh\n' % dir_path)
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
