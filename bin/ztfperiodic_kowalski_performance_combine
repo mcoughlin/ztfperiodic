@@ -1,0 +1,96 @@
+
+import os, sys, pickle
+import glob
+import optparse
+
+import tables
+import pandas as pd
+import numpy as np
+
+import matplotlib
+matplotlib.use('Agg')
+matplotlib.rcParams.update({'font.size': 20})
+matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import cm
+from matplotlib.colors import LogNorm
+
+def parse_commandline():
+    """
+    Parse the options given on the command-line.
+    """
+    parser = optparse.OptionParser()
+
+    parser.add_option("-s","--scalingDir",default="../scaling")
+    parser.add_option("-o","--outputDir",default="../output/kowalski")
+
+    opts, args = parser.parse_args()
+
+    return opts
+
+# Parse command line
+opts = parse_commandline()
+
+outputDir = opts.outputDir
+if not os.path.isdir(outputDir):
+    os.makedirs(outputDir)
+
+scalingFiles = glob.glob(os.path.join(opts.scalingDir, '*.npz'))
+nlcurves, data_out = {}, {}
+for scalingFile in scalingFiles:
+    name = scalingFile.split("/")[-1].split(".")[0]
+    data = np.load(scalingFile)
+
+    nlcurves[name] = data['nlcurves']
+    data_out[name] = data['data_out']
+
+color1 = 'cornflowerblue'
+color2 = 'coral'
+color3 = 'palegreen'
+color4 = 'pink'
+color5 = 'cyan'
+
+color_names = [color1, color2, color3, color4, color5]
+
+nsamples = 500
+ngpus = 8
+
+fig = plt.figure(figsize=(14,8))
+ax = plt.gca()
+for kk, name in enumerate(nlcurves.keys()):
+    color = color_names[kk]
+    cnt = 0 
+    for ii in range(ngpus):
+        vals = np.zeros((nsamples,1))
+        cnt = ii + 1
+        for jj in range(nsamples):    
+            idx = np.random.permutation(np.arange(ngpus))
+            idx = idx[:cnt]
+            vals[jj] = np.sum(nlcurves[name][idx])
+
+        perc50 = np.percentile(vals,50)
+        if cnt == 1:
+            plt.plot([cnt-0.5, cnt+0.5], [perc50,perc50], '--',color=color,
+                     label=name)
+        else:
+            plt.plot([cnt-0.5, cnt+0.5], [perc50,perc50], '--',color=color)
+
+        parts = plt.violinplot(vals,[cnt],widths=0.50)
+        for partname in ('cbars','cmins','cmaxes'):
+            vp = parts[partname]
+            vp.set_edgecolor(color)
+            vp.set_linewidth(1)
+        for pc in parts['bodies']:
+            pc.set_facecolor(color)
+            pc.set_edgecolor(color)
+
+plt.legend()
+
+#plt.xticks([2**0,2**1,2**2,2**3])
+plt.grid()
+plt.xlabel(r'Number of GPUs')
+plt.ylabel('Lightcurves Analyzed per second')
+
+plotName = os.path.join(outputDir,'scaling.pdf')
+plt.savefig(plotName, bbox_inches='tight')
+plt.close()
