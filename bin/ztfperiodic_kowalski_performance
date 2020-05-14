@@ -118,7 +118,10 @@ ngpus = int(np.max(data_out[:,4]))
 nlcurves = np.zeros((ngpus,1))
 for ii in range(ngpus):
     idx = np.where(data_out[:,4] == ii)[0]
-    nlcurves[ii] = np.nansum(data_out[idx,0])
+    nlcurves[ii] = np.nansum(data_out[idx,0]) / np.nansum(data_out[idx,1])
+
+filename = os.path.join(outputDir,'scaling.npz')
+np.savez(filename, nlcurves=nlcurves, data_out=data_out)
 
 color1 = 'cornflowerblue'
 color2 = 'coral'
@@ -147,7 +150,7 @@ for ii in range(ngpus):
 #plt.xticks([2**0,2**1,2**2,2**3])
 plt.grid()
 plt.xlabel(r'Number of GPUs')
-plt.ylabel('Lightcurves Analyzed')
+plt.ylabel('Lightcurves Analyzed per second')
 
 plotName = os.path.join(outputDir,'scaling.pdf')
 plt.savefig(plotName, bbox_inches='tight')
