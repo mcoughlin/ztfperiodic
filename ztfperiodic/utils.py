@@ -506,7 +506,9 @@ def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
                       doRemoveHC=False, doExtinction=False,
                       doSigmaClipping=False,
                       sigmathresh=5.0,
-                      doOutbursting=False):
+                      doOutbursting=False,
+                      doCrossMatch=False,
+                      crossmatch_radius=3.0):
 
     baseline=0
     cnt=0
@@ -548,6 +550,9 @@ def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
 
         if doCombineFilt:
             ls = combine_lcs(ls)
+
+        if doCrossMatch:
+            ls = crossmatch_lcs(ls, crossmatch_radius=crossmatch_radius)
 
         for ii, lkey in enumerate(ls.keys()):
             l = ls[lkey]
@@ -830,12 +835,68 @@ def combine_lcs(ls):
 
     return {lkey: data}
 
+def crossmatch_lcs(ls, crossmatch_radius=3.0):
+
+    # determine ras and decs
+    ras, decs = [], []
+    for ii, lkey in enumerate(ls.keys()):
+        l = ls[lkey]
+        ras.append(np.mean(l["ra"]))
+        decs.append(np.mean(l["dec"]))
+    keys, ras, decs = np.array(ls.keys()), np.array(ras), np.array(decs)
+
+    groups = []
+    while len(ras) > 0:
+        ra, dec = ras[0], decs[0]
+
+        coords = SkyCoord(ra=ras*u.degree, dec=decs*u.degree, frame='icrs')
+        coord = SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='icrs')
+        sep = coord.separation(coords).arcsec
+       
+        idx = np.where(sep <= crossmatch_radius)[0]
+        groups.append(keys[idx])
+        idy = np.where(sep > crossmatch_radius)[0]
+        keys, ras, decs = keys[idy], ras[idy], decs[idy]
+
+    data = {}
+    for keys in groups:
+        for ii, lkey in enumerate(keys):
+            l = ls[lkey]
+            if ii == 0:
+                name = l["name"]
+                raobj, decobj = l["ra"], l["dec"]
+                hjd, mag, magerr = l["hjd"], l["mag"]-np.median(l["mag"]), l["magerr"]
+                fid = l["fid"]
+                absmag, bp_rp, parallax = l["absmag"], l["bp_rp"], l["parallax"]
+            else:
+                raobj = np.hstack((raobj,l["ra"]))
+                decobj = np.hstack((decobj,l["dec"]))
+                hjd = np.hstack((hjd,l["hjd"]))
+                mag = np.hstack((mag,l["mag"]-np.median(l["mag"])))
+                magerr = np.hstack((magerr,l["magerr"]))
+                fid = np.hstack((fid,l["fid"]))
+
+        data[lkey] = {}
+        data[lkey]["ra"] = raobj
+        data[lkey]["dec"] = decobj
+        data[lkey]["hjd"] = hjd
+        data[lkey]["mag"] = mag
+        data[lkey]["magerr"] = magerr
+        data[lkey]["fid"] = fid
+        data[lkey]["absmag"] = absmag
+        data[lkey]["bp_rp"] = bp_rp
+        data[lkey]["parallax"] = parallax
+        data[lkey]["name"] = name
+
+    return data
+
 def get_kowalski_bulk(field, ccd, quadrant, kow,
                       program_ids = [2,3], min_epochs = 1, max_error = 2.0,
                       num_batches=1, nb=0,
                       doRemoveHC=False, doHCOnly=False,
                       doSigmaClipping=False,
-                      sigmathresh=5.0):
+                      sigmathresh=5.0,
+                      doAlias=False):
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
@@ -849,6 +910,16 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
     if not "result_data" in r:
         print("Query for field: %d, CCD: %d, quadrant %d failed... returning."%(field, ccd, quadrant))
         return [], [], [], []
+
+    if doAlias:
+        magerrdir = "/home/michael.coughlin/ZTF/ztfperiodic/input"
+        gmagerr = os.path.join(magerrdir,'gmagerr.txt')
+        rmagerr = os.path.join(magerrdir,'Rmagerr.txt')
+
+        gerr = pd.read_csv(gmagerr,sep=' ',names=['Mag','Err'])
+        rerr = pd.read_csv(rmagerr,sep=' ',names=['Mag','Err'])
+        gmags, gerrs = gerr['Mag'], gerr['Err']
+        rmags, rerrs = rerr['Mag'], rerr['Err']
 
     nlightcurves = r['result_data']['query_result']
     batch_size = np.ceil(nlightcurves/num_batches).astype(int)
@@ -926,6 +997,12 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
             fid = fid[idx]
             ra, dec = ra[idx], dec[idx]
+
+            if doAlias:
+                basemag = np.random.uniform(low=15.0, high=21.0)
+                errors = np.interp(basemag,gmags,gerrs)
+                mag = errors*np.random.randn(len(mag))+basemag+0.05*np.sin(2*np.pi*1.0*hjd)
+                magerr[:] = errors
 
             if doRemoveHC:
                 dt = np.diff(hjd)

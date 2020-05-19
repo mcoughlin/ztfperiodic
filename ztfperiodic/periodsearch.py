@@ -185,6 +185,11 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 for jj, (lightcurve, entropies2) in enumerate(zip(lightcurves,results)):
                     for kk, entropies in enumerate(entropies2):
                         significance = np.abs(np.mean(entropies)-np.min(entropies))/np.std(entropies)
+                        #plt.figure()
+                        #plt.plot(freqs, entropies, 'k--')
+                        #plt.savefig('sig.pdf')
+                        #plt.close()
+
                         period = periods[np.argmin(entropies)]
                         if significance > significances[jj]:
                             periods_best[jj] = period

@@ -51,6 +51,7 @@ def parse_commandline():
     parser.add_option("-n","--NObs",default=500,type=int)
 
     parser.add_option("--doUseMatchfileFile",  action="store_true", default=False)
+    parser.add_option("--doCrossMatch",  action="store_true", default=False)
 
     parser.add_option("--qid",default=None,type=int)
     parser.add_option("--fid",default=None,type=int)
@@ -98,6 +99,8 @@ if opts.doVariability:
     extra_flags.append("--doNotPeriodFind")
 if opts.doRsyncFiles:
     extra_flags.append("--doRsyncFiles")
+if opts.doCrossMatch:
+    extra_flags.append("--doCrossMatch")
 extra_flags = " ".join(extra_flags)
 
 matchfileDir = opts.matchfileDir
@@ -143,8 +146,9 @@ if opts.lightcurve_source == "Kowalski":
         fields3 = [851,848,797,761,721,508,352,355,364,379]
         fields4 = [1866,1834,1835,1804,1734,1655,1565]
 
-        fields_complete = fields1 + fields2 + fields3 + fields4
+        fields_complete = fields1 + fields2 # + fields3 + fields4
         fields = np.arange(300,400)
+        fields = np.arange(700,800)
         fields = np.setdiff1d(fields,fields_complete)
 
         for field in fields:

@@ -113,6 +113,8 @@ def parse_commandline():
     parser.add_option("--doSigmaClipping",  action="store_true", default=False)
     parser.add_option("--sigmathresh",default=3.0,type=float)
     parser.add_option("--doOutbursting",  action="store_true", default=False)
+    parser.add_option("--doCrossMatch",  action="store_true", default=False)
+    parser.add_option("--crossmatch_radius",default=3.0,type=float)
 
     parser.add_option("--doObjIDFilenames",  action="store_true", default=False)
     parser.add_option("--doCheckLightcurves",  action="store_true", default=False)
@@ -205,6 +207,8 @@ doSigmaClipping = opts.doSigmaClipping
 sigmathresh = opts.sigmathresh
 doOutbursting = opts.doOutbursting
 doCheckLightcurves = opts.doCheckLightcurves
+doCrossMatch = opts.doCrossMatch
+crossmatch_radius = opts.crossmatch_radius
 
 if opts.doQuadrantFile:
     if opts.lightcurve_source == "Kowalski":
@@ -448,7 +452,9 @@ if opts.lightcurve_source == "Kowalski":
                                   doExtinction=doExtinction,
                                   doSigmaClipping=doSigmaClipping,
                                   sigmathresh=sigmathresh,
-                                  doOutbursting=doOutbursting)
+                                  doOutbursting=doOutbursting,
+                                  doCrossMatch=doCrossMatch,
+                                  crossmatch_radius=crossmatch_radius)
 
     elif opts.source_type == "objid":
 
