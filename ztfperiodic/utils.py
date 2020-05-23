@@ -896,7 +896,9 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                       doRemoveHC=False, doHCOnly=False,
                       doSigmaClipping=False,
                       sigmathresh=5.0,
-                      doAlias=False):
+                      doAlias=False,
+                      doPercentile=False,
+                      percmin = 10.0, percmax = 90.0):
 
     tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
 
@@ -1020,6 +1022,13 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                 ra, dec = ra[idx], dec[idx]
 
             if len(hjd) < min_epochs: continue
+
+            if doPercentile:
+                magmin, magmax = np.percentile(mag, percmin), np.percentile(mag, percmax)
+                idx = np.where((mag >= magmin) & (mag <= magmax))[0]
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                fid = fid[idx]
+                ra, dec = ra[idx], dec[idx]
 
             if doHCOnly:
                 f = interp.interp1d(hjd, mag, fill_value=np.nan, bounds_error=False)

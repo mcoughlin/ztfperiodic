@@ -116,6 +116,10 @@ def parse_commandline():
     parser.add_option("--doCrossMatch",  action="store_true", default=False)
     parser.add_option("--crossmatch_radius",default=3.0,type=float)
 
+    parser.add_option("--doPercentile",  action="store_true", default=False)
+    parser.add_option("--percmin",default=10.0,type=float)
+    parser.add_option("--percmax",default=90.0,type=float)
+
     parser.add_option("--doObjIDFilenames",  action="store_true", default=False)
     parser.add_option("--doCheckLightcurves",  action="store_true", default=False)
 
@@ -209,6 +213,9 @@ doOutbursting = opts.doOutbursting
 doCheckLightcurves = opts.doCheckLightcurves
 doCrossMatch = opts.doCrossMatch
 crossmatch_radius = opts.crossmatch_radius
+doPercentile=opts.doPercentile
+percmin = opts.percmin
+percmax = opts.percmax
 
 if opts.doQuadrantFile:
     if opts.lightcurve_source == "Kowalski":
@@ -300,7 +307,9 @@ if opts.lightcurve_source == "Kowalski":
                               num_batches=Ncatalog, nb=Ncatindex,
                               doRemoveHC=doRemoveHC, doHCOnly=doHCOnly,
                               doSigmaClipping=doSigmaClipping,
-                              sigmathresh=sigmathresh)
+                              sigmathresh=sigmathresh,
+                              doPercentile=doPercentile,
+                              percmin = percmin, percmax = percmax)
         if opts.doRemoveBrightStars:
             lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\
                 slicestardist(lightcurves, coordinates, filters,
