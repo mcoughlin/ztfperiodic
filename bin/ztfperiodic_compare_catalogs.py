@@ -42,6 +42,9 @@ def parse_commandline():
     parser.add_option("--doCrossMatch",  action="store_true", default=False)
     parser.add_option("--doVariability",  action="store_true", default=False)
 
+    parser.add_option("--doField",  action="store_true", default=False)
+    parser.add_option("-f","--field",default=853,type=int)
+
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/compare")
     parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/LS")
     parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/CE")
@@ -148,7 +151,8 @@ def read_catalog(catalog_file):
 
     return tab
 
-def load_catalog(catalog,doFermi=False,doSimbad=False):
+def load_catalog(catalog,doFermi=False,doSimbad=False,
+                         doField=False,field=-1):
 
     customSimbad=Simbad() 
     customSimbad.add_votable_fields("otype(V)")
@@ -159,6 +163,9 @@ def load_catalog(catalog,doFermi=False,doSimbad=False):
     if doFermi:
         filenames = sorted(glob.glob(os.path.join(catalog,"*/*.dat")))[::-1] + \
                     sorted(glob.glob(os.path.join(catalog,"*/*.h5")))[::-1]
+    elif doField:
+        filenames = sorted(glob.glob(os.path.join(catalog,"%d_*.dat" % field)))[::-1] + \
+                    sorted(glob.glob(os.path.join(catalog,"%d_*.h5" % field)))[::-1]
     else:
         filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1] + \
                     sorted(glob.glob(os.path.join(catalog,"*.h5")))[::-1]
@@ -267,6 +274,9 @@ catalog1 = opts.catalog1
 catalog2 = opts.catalog2
 outputDir = opts.outputDir
 
+if opts.doField:
+    outputDir = os.path.join(outputDir,str(opts.field))
+
 if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
 
@@ -278,7 +288,8 @@ cat1file = os.path.join(outputDir,'catalog_%s.fits' % name1)
 cat2file = os.path.join(outputDir,'catalog_%s.fits' % name2)
 
 if not os.path.isfile(cat1file):
-    cat1 = load_catalog(catalog1,doFermi=opts.doFermi,doSimbad=opts.doSimbad)
+    cat1 = load_catalog(catalog1,doFermi=opts.doFermi,doSimbad=opts.doSimbad,
+                                 doField=opts.doField,field=opts.field)
     cat1.write(cat1file, format='fits')
 else:
     cat1 = Table.read(cat1file, format='fits')
@@ -295,7 +306,8 @@ if opts.doCrossMatch:
 else:
     if not os.path.isfile(cat2file):
         cat2 = load_catalog(catalog2,doFermi=opts.doFermi,
-                            doSimbad=opts.doSimbad)
+                            doSimbad=opts.doSimbad,
+                            doField=opts.doField,field=opts.field)
         cat2.write(cat2file, format='fits')
     else:
         cat2 = Table.read(cat2file, format='fits')
@@ -445,4 +457,72 @@ if opts.doPlots:
         plt.ylabel('%s Frequency [1/days]' % name2)
         fig.savefig(pdffile)
         plt.close()
-    
+   
+        pdffile = os.path.join(outputDir,'periods.pdf')
+        cmap = cm.autumn
+
+        plt.xlabel('%s Frequency [1/days]' % name1)
+        plt.ylabel('%s Frequency [1/days]' % name2)
+        fig.savefig(pdffile)
+        plt.close() 
+
+        xedges = np.logspace(np.log10(0.02),3.0,100)
+        yedges = np.linspace(4.0,40.0,50)
+
+        H, xedges, yedges = np.histogram2d(cat1["period"], cat1["sig"], bins=(xedges, yedges))
+        H = H.T  # Let each row list bins with common y range.
+        X, Y = np.meshgrid(xedges, yedges)
+        #H[H==0] = np.nan
+
+        cmap = matplotlib.cm.viridis
+        cmap.set_bad('white',0)
+
+        plotName = os.path.join(outputDir, "period_significance_1.pdf")
+        fig = plt.figure(figsize=(10,8))
+
+        gs = fig.add_gridspec(nrows=4, ncols=3, wspace=0.2, hspace=0.3)
+        ax1 = fig.add_subplot(gs[1:, :])
+        ax2 = fig.add_subplot(gs[0, 0])
+        ax3 = fig.add_subplot(gs[0, 1])
+        ax4 = fig.add_subplot(gs[0, 2])
+
+        plt.axes(ax1)
+        c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm(),
+                           cmap=cmap)
+        plt.xlabel('Period [days]')
+        plt.ylabel('Significance')
+        cbar = plt.colorbar(c)
+        cbar.set_label('Counts')
+        ax1.set_xscale('log')
+        #ax.set_yscale('log')
+        plt.xlim([0.02, 1000])
+        plt.ylim([4.0, 40])
+
+        bins = np.linspace(0.45,0.55,21)
+        hist, bin_edges = np.histogram(cat1["period"], bins=bins, density=False)
+        bins = (bin_edges[1:] + bin_edges[:-1])/2.0
+
+        plt.axes(ax2)
+        plt.plot(bins, hist, color = 'k', linestyle='-', drawstyle='steps')
+        plt.ylabel('Counts')
+        plt.yticks([], [])
+
+        bins = np.linspace(0.95,1.05,21)
+        hist, bin_edges = np.histogram(cat1["period"], bins=bins, density=False)
+        bins = (bin_edges[1:] + bin_edges[:-1])/2.0
+
+        plt.axes(ax3)
+        plt.plot(bins, hist, color = 'k', linestyle='-', drawstyle='steps')
+        plt.yticks([], [])
+
+        bins = np.linspace(26,30,21)
+        hist, bin_edges = np.histogram(cat1["period"], bins=bins, density=False)
+        bins = (bin_edges[1:] + bin_edges[:-1])/2.0
+
+        plt.axes(ax4)
+        plt.plot(bins, hist, color = 'k', linestyle='-', drawstyle='steps')
+        plt.yticks([], [])
+
+        plt.savefig(plotName, bbox_inches='tight')
+        plt.close()
+
