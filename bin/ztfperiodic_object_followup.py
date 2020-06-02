@@ -92,6 +92,10 @@ def parse_commandline():
     parser.add_option("--doRemoveHC", action="store_true", default=False)
     parser.add_option("--doFindPeriodError", action="store_true", default=False)
 
+    parser.add_option("--doLongPeriod",  action="store_true", default=False)
+
+    parser.add_option("--doRemoveTerrestrial",  action="store_true", default=False)
+
     opts, args = parser.parse_args()
 
     return opts
@@ -607,21 +611,32 @@ if opts.doPlots:
 if opts.doPeriodSearch:
     baseline = max(hjd)-min(hjd)
     if baseline<10:
-        fmin, fmax = 18, 1440
+        if opts.doLongPeriod:
+            fmin, fmax = 18, 48
+        else:
+            fmin, fmax = 18, 1440
     else:
-        fmin, fmax = 2/baseline, 480
-    
+        if opts.doLongPeriod:
+            fmin, fmax = 2/baseline, 48
+        else:
+            fmin, fmax = 2/baseline, 480
+ 
     samples_per_peak = 3
     
     df = 1./(samples_per_peak * baseline)
     nf = int(np.ceil((fmax - fmin) / df))
     freqs = fmin + df * np.arange(nf)
-    
+   
+    if opts.doRemoveTerrestrial:
+        freqs_to_remove = [[3e-2,4e-2], [47.99,48.01], [46.99,47.01], [45.99,46.01], [3.95,4.05], [2.95,3.05], [1.95,2.05], [0.95,1.05], [0.48, 0.52]]
+    else:
+        freqs_to_remove = None
+ 
     print('Cataloging lightcurves...')
     catalogFile = os.path.join(path_out_dir,'catalog.dat')
     fid = open(catalogFile,'w')
     for algorithm in algorithms:
-        periods_best, significances, pdots = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU)
+        periods_best, significances, pdots = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU, doRemoveTerrestrial=opts.doRemoveTerrestrial, freqs_to_remove=freqs_to_remove)
         period, significance = periods_best[0], significances[0]
         stat = calc_stats(hjd, mag, magerr, period)
     
