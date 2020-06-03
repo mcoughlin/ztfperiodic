@@ -96,6 +96,11 @@ def parse_commandline():
 
     parser.add_option("--doRemoveTerrestrial",  action="store_true", default=False)
 
+    parser.add_option("--doExternalLightcurve", action="store_true", default=False)
+    parser.add_option("--lightcurve_file", default="../data/asassn/light_curve_ebaf8149-7882-4a6b-876e-7d68299518f3.csv")
+
+    parser.add_option("--doFourierDecomposition", action="store_true", default=False)
+
     opts, args = parser.parse_args()
 
     return opts
@@ -239,6 +244,50 @@ if opts.lightcurve_source == "Kowalski":
     ra, dec = lightcurves_combined[key]["ra"], lightcurves_combined[key]["dec"]
     absmag, bp_rp = lightcurves_combined[key]["absmag"], lightcurves_combined[key]["bp_rp"]
 
+    if opts.doExternalLightcurve:
+        bands = {'g': 1, 'r': 2, 'i': 3, 'z': 4, 'J': 5, 'V': 6}
+
+        lines = [line.rstrip('\n') for line in open(opts.lightcurve_file)]
+        lines = lines[1:]
+
+        lightcurves_tmp = {}
+        for line in lines:
+            lineSplit = line.split(",")
+            try:
+                hjd_tmp, mag_tmp, magerr_tmp, filt = float(lineSplit[0]), float(lineSplit[5]), float(lineSplit[6]), lineSplit[9]
+            except:
+                continue
+            if mag_tmp > 99: continue
+
+            key = filt
+            if not key in lightcurves_tmp:
+                lightcurves_tmp[key] = {}
+                lightcurves_tmp[key]["hjd"] = []
+                lightcurves_tmp[key]["mag"] = []
+                lightcurves_tmp[key]["magerr"] = []
+                lightcurves_tmp[key]["fid"] = []
+                lightcurves_tmp[key]["ra"] = []
+                lightcurves_tmp[key]["dec"] = []
+
+            lightcurves_tmp[key]["hjd"].append(hjd_tmp)
+            lightcurves_tmp[key]["mag"].append(mag_tmp)
+            lightcurves_tmp[key]["magerr"].append(magerr_tmp)
+            lightcurves_tmp[key]["fid"].append(bands[filt])
+            lightcurves_tmp[key]["ra"].append(np.mean(ra))
+            lightcurves_tmp[key]["dec"].append(np.mean(dec))
+
+        for key1 in lightcurves_tmp:
+            for key2 in lightcurves_tmp[key1]:
+                lightcurves_tmp[key1][key2] = np.array(lightcurves_tmp[key1][key2])
+            lightcurves_tmp[key1]["mag"] = lightcurves_tmp[key1]["mag"] - np.median(lightcurves_tmp[key1]["mag"])
+
+            hjd = np.append(hjd, lightcurves_tmp[key1]["hjd"])
+            mag = np.append(mag, lightcurves_tmp[key1]["mag"])
+            magerr = np.append(magerr, lightcurves_tmp[key1]["magerr"])
+            fid = np.append(fid, lightcurves_tmp[key1]["fid"])
+            ra = np.append(ra, lightcurves_tmp[key1]["ra"])
+            dec = np.append(dec, lightcurves_tmp[key1]["dec"])
+
     idx = np.argsort(hjd)
     hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
     ra, dec = ra[idx], dec[idx]
@@ -358,8 +407,16 @@ if opts.doPhase:
 else:
     period = data_out["period"]
 
-# fit the lightcurve with fourier components, using BIC to decide the optimal number of pars
-LCfit = fdecomp.fit_best(np.c_[hjd,mag,magerr], period, 5, plotname=False)
+
+if opts.doFourierDecomposition:
+    for ii, key in enumerate(lightcurves_all.keys()):
+        lc = lightcurves_all[key]
+        LCfit = fdecomp.fit_best(np.c_[lc["hjd"],lc["mag"],lc["magerr"]],
+                                 period, maxNterms=5,
+                                 plotname=False, output='full')
+        f = make_f(p=period)
+        model = f(lc["hjd"], *LCfit[2:])
+        lightcurves_all[key]["fourier"] = model
 
 if opts.doPlots:
     photFile = os.path.join(path_out_dir,'phot.dat')
@@ -397,6 +454,10 @@ if opts.doPlots:
             if not lc["fid"][0] == myfid: continue
             print('Filter: %s, Number of observations: %d' % (bands[myfid], len(lc["mag"])))
             plt.errorbar(lc["hjd"]-hjd[0],lc["mag"],yerr=lc["magerr"],fmt='%s%s' % (color, symbol), label=bands[myfid])
+
+            if opts.doFourierDecomposition:
+                plt.plot(lc["hjd"]-hjd[0],lc["fourier"],'--',color=color)
+
     plt.xlabel('Time from %.5f [days]'%hjd[0])
     plt.ylabel('Magnitude [ab]')
     plt.legend()
