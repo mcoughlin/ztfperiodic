@@ -1,5 +1,6 @@
 
 from cython cimport cdivision, boundscheck
+from libc.stdlib cimport malloc, free
 
 @cdivision
 @boundscheck(False)
@@ -7,14 +8,15 @@ def compute(double freq, double[:] t, double[:] m, double avg, int npts, int r):
 
     cdef int i,idx
     cdef double aux,s1,s2,F
-    cdef float n_view[10000]
-    cdef float phase_view[10000]
-    cdef float sum1_view[10000]
-    cdef float sum2_view[10000]
 
-    for i in range(npts):
+    cdef double *n_view = <double *>malloc(r * sizeof(double))
+    cdef double *sum1_view = <double *>malloc(r * sizeof(double))
+    cdef double *sum2_view = <double *>malloc(r * sizeof(double))
+
+    cdef float phase_view[10000]
+
+    for i in range(r):
         n_view[i] = 0.0
-        phase_view[i] = 0.0
         sum1_view[i] = 0.0
         sum2_view[i] = 0.0
 
@@ -39,6 +41,10 @@ def compute(double freq, double[:] t, double[:] m, double avg, int npts, int r):
     F = s1/s2
     F *= npts-r
     F /= r-1
+
+    free(n_view)
+    free(sum1_view)
+    free(sum2_view)
 
     return F
 
