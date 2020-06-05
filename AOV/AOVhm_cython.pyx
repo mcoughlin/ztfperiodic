@@ -43,7 +43,7 @@ def compute(double freq, double[:] t, double[:] m, double magvariance, int nharm
         for j in range(npts):
             phi_dot_phi +=  phi_view[j] * conj(phi_view[j])
             alpha += z_view[j]*phi_view[j]
-            phi_dot_psi += psi_view[j] * conj(psi_view[j])
+            phi_dot_psi += psi_view[j] * conj(phi_view[j])
 
         aux = cabs(phi_dot_phi)
         if (aux < EPSILON):
