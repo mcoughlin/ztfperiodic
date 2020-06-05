@@ -2,6 +2,9 @@
 from cython cimport cdivision, boundscheck
 from libc.stdlib cimport malloc, free
 
+import numpy as np   # Normal NumPy import
+cimport numpy as cnp # Import for NumPY C-API
+
 @cdivision
 @boundscheck(False)
 def compute(double freq, double[:] t, double[:] m, double avg, int npts, int r):
@@ -48,3 +51,17 @@ def compute(double freq, double[:] t, double[:] m, double avg, int npts, int r):
 
     return F
 
+@cdivision
+@boundscheck(False)
+def aov(double[:] frequencies, double[:] t, double[:] m,
+        double avg, int npts, int r, int nfreq):
+
+    cdef cnp.ndarray[cnp.double_t, ndim=1] aov_view
+    aov_view = np.empty(nfreq, dtype=np.double)
+    #data = <double *>malloc(nfreq * sizeof(double))
+    cdef double aov_max,freq_best
+
+    for i in range(nfreq):
+        aov_view[i] = compute(frequencies[i], t, m, avg, npts, r)
+
+    return aov_view

@@ -684,5 +684,26 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
     
                 periods_best.append(period)
                 significances.append(significance)
-    
+   
+        elif algorithm == "AOV_cython":
+            from AOV_cython import aov as pyaov
+            for ii,data in enumerate(lightcurves):
+                if np.mod(ii,10) == 0:
+                    print("%d/%d"%(ii,len(lightcurves)))
+
+                copy = np.ma.copy(data).T
+                copy[:,1] = (copy[:,1]  - np.min(copy[:,1])) \
+                   / (np.max(copy[:,1]) - np.min(copy[:,1]))
+
+                aov = pyaov(freqs, copy[:,0], copy[:,1],
+                            np.mean(copy[:,1]),
+                            len(copy[:,0]), 10, len(freqs))
+
+                significance = np.abs(np.mean(aov)-np.max(aov))/np.std(aov)
+                freq = freqs[np.argmax(aov)]
+                period = 1.0/freq
+
+                periods_best.append(period)
+                significances.append(significance)
+ 
     return np.array(periods_best), np.array(significances), np.array(pdots)
