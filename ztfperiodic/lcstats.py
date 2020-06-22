@@ -1,9 +1,16 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+@author: Jan van Roestel and Michael Coughlin
+
+06/2020
+"""
+
 import numpy as np
 import copy
 from scipy.stats import anderson, shapiro
 import scipy.optimize
 from scipy.optimize import curve_fit
-
 
 
 def calc_weighted_mean_std(mag,w):
