@@ -91,27 +91,42 @@ if opts.lightcurve_source == "Kowalski":
             #     }
             #r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
             #nlightcurves = r['result_data']['query_result']
-            nlightcurves = 1000000
+
+            #qu = {"query_type":"count_documents",
+            #      "query": {
+            #          "catalog": 'ZTF_source_features_20191101_20_fields',
+            #          "filter": {}
+            #          }
+            #     }
+            #r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
+            #nlightcurves = r['result_data']['query_result']
+
+            nlightcurves = 34681547
+            #nlightcurves = 1000000
             Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
 
-        for modelFile in modelFiles: 
-            modelName = modelFile.replace(".model","").split("/")[-1]
-            for ii in range(Ncatalog):
+        for ii in range(Ncatalog):
+            modelFiles_tmp = []
+            for modelFile in modelFiles:
+                modelName = modelFile.replace(".model","").split("/")[-1]
+
                 catalogFile = os.path.join(catalogDir,modelName, "%d.h5"%(ii))
                 if os.path.isfile(catalogFile):
                     print('%s already exists... continuing.' % catalogFile)
                     continue
-    
-                if opts.doDocker:
-                    fid1.write('nvidia-docker run --runtime=nvidia python-ztfperiodic --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type quadrant --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doPlots --doRemoveBrightStars --doLightcurveStats %s\n'%(outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, extra_flags))
-                else:
-                    fid1.write('%s %s/ztfperiodic_classify_objects.py --outputDir %s --user %s --pwd %s -l Kowalski --source_type quadrant --Ncatalog %d --Ncatindex %d --algorithm %s --doPlots --modelFile %s\n'%(opts.python, dir_path, outputDir, opts.user, opts.pwd, Ncatalog, ii, opts.algorithm, modelFile))
+
+                modelFiles_tmp.append(modelFile)
+
+            if opts.doDocker:
+                fid1.write('nvidia-docker run --runtime=nvidia python-ztfperiodic --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type quadrant --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doPlots --doRemoveBrightStars --doLightcurveStats %s\n'%(outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, extra_flags))
+            else:
+                fid1.write('%s %s/ztfperiodic_classify_objects.py --outputDir %s --user %s --pwd %s -l Kowalski --source_type quadrant --Ncatalog %d --Ncatindex %d --algorithm %s --doPlots --modelFiles %s\n'%(opts.python, dir_path, outputDir, opts.user, opts.pwd, Ncatalog, ii, opts.algorithm, ",".join(modelFiles_tmp)))
         
-                fid.write('JOB %d condor.sub\n'%(job_number))
-                fid.write('RETRY %d 3\n'%(job_number))
-                fid.write('VARS %d jobNumber="%d" Ncatindex="%d" Ncatalog="%d" modelFile="%s"\n'%(job_number,job_number,ii, Ncatalog, modelFile))
-                fid.write('\n\n')
-                job_number = job_number + 1
+            fid.write('JOB %d condor.sub\n'%(job_number))
+            fid.write('RETRY %d 3\n'%(job_number))
+            fid.write('VARS %d jobNumber="%d" Ncatindex="%d" Ncatalog="%d" modelFiles="%s"\n'%(job_number,job_number,ii, Ncatalog, ",".join(modelFiles_tmp)))
+            fid.write('\n\n')
+            job_number = job_number + 1
 
     elif opts.source_type == "catalog":
         for ii in range(Ncatalog):
@@ -135,7 +150,7 @@ fid.write('output = logs/out.$(jobNumber)\n');
 fid.write('error = logs/err.$(jobNumber)\n');
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('arguments = --outputDir %s --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doPlots --algorithm %s --modelFile $(modelFile)\n'%(outputDir,opts.user,opts.pwd,opts.algorithm))
+        fid.write('arguments = --outputDir %s --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doPlots --algorithm %s --modelFiles $(modelFiles)\n'%(outputDir,opts.user,opts.pwd,opts.algorithm))
     elif opts.source_type == "catalog":
         fid.write('arguments = %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --Ncatindex $(Ncatindex) --algorithm %s %s\n'%(outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,opts.algorithm,extra_flags))
 fid.write('requirements = OpSys == "LINUX"\n');

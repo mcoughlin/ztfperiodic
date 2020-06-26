@@ -51,7 +51,7 @@ def parse_commandline():
     parser.add_option("--quadrant_index",default=0,type=int)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
-    parser.add_option("-m","--modelFile",default="/home/michael.coughlin/ZTF/ZTFVariability/pipeline/saved_models/d11.ea.f.model") 
+    parser.add_option("-m","--modelFiles",default="/home/michael.coughlin/ZTF/ZTFVariability/pipeline/saved_models/d11.ea.f.model") 
 
     parser.add_option("-k","--kowalski_batch_size",default=1000,type=int)
     parser.add_option("-a","--algorithm",default="xgboost")
@@ -88,7 +88,13 @@ catalog_file = opts.catalog_file
 quadrant_file = opts.quadrant_file
 Ncatalog = opts.Ncatalog
 Ncatindex = opts.Ncatindex
-modelFile = opts.modelFile
+modelFiles = opts.modelFiles.split(",")
+
+basecatalogDir = os.path.join(outputDir,'catalog',algorithm)
+if (opts.source_type == "catalog") and ("fermi" in catalog_file):
+    basecatalogDir = os.path.join(basecatalogDir,'%d' % Ncatindex)
+if not os.path.isdir(basecatalogDir):
+    os.makedirs(basecatalogDir)
 
 if opts.doQuadrantFile:
     if opts.lightcurve_source == "Kowalski":
@@ -110,14 +116,6 @@ scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
 inputDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"input")
 
-catalogDir = os.path.join(outputDir,'catalog',algorithm)
-if (opts.source_type == "catalog") and ("fermi" in catalog_file):
-    catalogDir = os.path.join(catalogDir,'%d' % Ncatindex)
-modelName = modelFile.replace(".model","").split("/")[-1]
-catalogDir = os.path.join(catalogDir, modelName)
-if not os.path.isdir(catalogDir):
-    os.makedirs(catalogDir)
-
 lightcurves = []
 coordinates = []
 baseline=0
@@ -125,8 +123,6 @@ fil = 'all'
 
 print('Organizing lightcurves...')
 if opts.lightcurve_source == "Kowalski":
-
-    catalogFile = os.path.join(catalogDir,"%d.h5"%(Ncatindex))
 
     kow = []
     nquery = 10
@@ -142,8 +138,6 @@ if opts.lightcurve_source == "Kowalski":
         raise Exception('Kowalski connection failed...')
 
     if opts.source_type == "quadrant":
-        catalogFile = os.path.join(catalogDir,"%d.h5"%(Ncatindex))
-
         ids, features = get_kowalski_features(kow, 
                                               num_batches=Ncatalog,
                                               nb=Ncatindex)
@@ -345,13 +339,18 @@ if len(features) == 0:
 print('Analyzing %d lightcurves...' % len(features))
 start_time = time.time()
 
-pred = classify(algorithm, features, modelFile=modelFile)
+for modelFile in modelFiles:
+    pred = classify(algorithm, features, modelFile=modelFile)
+    data_out = np.vstack([ids, pred]).T
+
+    modelName = modelFile.replace(".model","").split("/")[-1]
+    catalogDir = os.path.join(basecatalogDir, modelName)
+    if not os.path.isdir(catalogDir):
+        os.makedirs(catalogDir)
+    catalogFile = os.path.join(catalogDir,"%d.h5"%(Ncatindex))
+
+    with h5py.File(catalogFile, 'w') as hf:
+        hf.create_dataset("preds",  data=data_out)
 
 end_time = time.time()
 print('Lightcurve analysis took %.2f seconds' % (end_time - start_time))
-
-data_out = np.vstack([ids, pred]).T
-with h5py.File(catalogFile, 'w') as hf:
-    hf.create_dataset("preds",  data=data_out)
-
-

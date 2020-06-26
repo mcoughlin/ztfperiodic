@@ -359,6 +359,11 @@ if opts.lightcurve_source == "Kowalski":
                     decs.append(float(lineSplit[2]))
                     err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
                     errs.append(err)
+                elif ("apogee" in catalog_file):
+                    names.append(lineSplit[0])
+                    ras.append(float(lineSplit[3]))
+                    decs.append(float(lineSplit[4]))
+                    errs.append(default_err)
                 elif ("fermi" in catalog_file):
                     names.append(lineSplit[0])
                     ras.append(float(lineSplit[1]))
@@ -467,12 +472,12 @@ if opts.lightcurve_source == "Kowalski":
 
     elif opts.source_type == "objid":
 
-        if ".dat" in catalog_file:
+        if (".dat" in catalog_file) or (".txt" in catalog_file):
             objids = np.loadtxt(catalog_file)
         else:
             print("Sorry I don't know this file extension...")
             exit(0)
-
+        objids = objids[:,0]         
         objids_split = np.array_split(objids,Ncatalog)
         objids = objids_split[Ncatindex]
 
@@ -751,6 +756,9 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                                np.array([[objid, coordinate[0],
                                           coordinate[1], period, significance,
                                           pdot]]), axis=0)
+
+    if (period/(1.0/fmax)) <= 1.05:
+        print("%d %.5f %.5f %d: Period is within 5 per." % (objid, coordinate[0], coordinate[1], stats[cnt][0]))
 
     if opts.doVariability:
         significance = stats[cnt][9]        

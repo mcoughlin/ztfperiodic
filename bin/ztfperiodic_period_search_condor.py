@@ -151,6 +151,8 @@ if opts.lightcurve_source == "Kowalski":
         fields = np.arange(700,800)
         fields = np.setdiff1d(fields,fields_complete)
 
+        fields = [700]
+
         for field in fields:
             print('Running field %d' % field)
             for ccd in ccds:
