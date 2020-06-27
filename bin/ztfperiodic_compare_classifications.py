@@ -6,8 +6,10 @@ import optparse
 import copy
 import time
 import h5py
+from functools import reduce
 
 import numpy as np
+import pandas as pd
 
 import matplotlib
 matplotlib.use('Agg')
@@ -42,6 +44,8 @@ def parse_commandline():
     parser.add_option("-m","--modelPath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/xgboost/")
 
     parser.add_option("--crossmatch_distance",default=1.0,type=float)
+
+    parser.add_option("-f","--featuresetname",default="b")
 
     opts, args = parser.parse_args()
 
@@ -84,11 +88,17 @@ opts = parse_commandline()
 
 outputDir = opts.outputDir
 modelPath = opts.modelPath
+featuresetname = opts.featuresetname
 
 if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
 
-catalogPaths = glob.glob(os.path.join(modelPath, '*.*'))
+plotDir = os.path.join(outputDir, 'plots')
+if not os.path.isdir(plotDir):
+    os.makedirs(plotDir)
+
+catalogPaths = glob.glob(os.path.join(modelPath, "*.*.%s" % featuresetname))
+dictlist = []
 for catalogPath in catalogPaths:
     modelName = catalogPath.split("/")[-1]
     cat1file = os.path.join(outputDir,'catalog_%s.fits' % modelName)
@@ -102,13 +112,40 @@ for catalogPath in catalogPaths:
     idx = np.where(cat1["prob"] >= 0.9)[0]
     print("Model %s: %.5f%%" % (modelName, 100*len(idx)/len(cat1["prob"])))
 
+    df = cat1.to_pandas()
+    df.rename(columns={"prob": modelName}, inplace=True)
+    df.set_index('objid', inplace=True)
+    dictlist.append(df)
+
     if opts.doPlots:
-        pdffile = os.path.join(outputDir,'magnitude.pdf')
-        fig = plt.figure(figsize=(10,10))
+        pdffile = os.path.join(plotDir,'%s.pdf' % modelName)
+        fig = plt.figure(figsize=(10,8))
         ax=fig.add_subplot(1,1,1)
-        hist2 = plt.hist2d(data_out[:,6], data_out[:,7], bins=100,
-                           zorder=0,norm=LogNorm())
-        plt.xlabel('IQR')
-        plt.ylabel('Magnitude')
+        plt.hist(cat1["prob"][cat1["prob"]>0.1])
+        plt.title(modelName)
+        plt.xlabel('Probability')
+        plt.ylabel('Counts')
         fig.savefig(pdffile)
         plt.close()
+
+cat1file = os.path.join(outputDir,'catalog.h5')
+if not os.path.isfile(cat1file):
+    # Merge the DataFrames
+    df_merged = reduce(lambda  left,right: pd.merge(left,right, how='outer',
+                                                    left_index=True,
+                                                    right_index=True),
+                       dictlist)
+    df_merged.to_hdf(cat1file, key='df_merged', mode='w')
+else:
+    df_merged = pd.read_hdf(cat1file)
+
+if opts.doPlots:
+    psums = df_merged.sum(axis=1)
+    pdffile = os.path.join(plotDir,'%s.pdf' % 'summed')
+    fig = plt.figure(figsize=(10,8))
+    ax=fig.add_subplot(1,1,1)
+    plt.hist(psums.loc[psums>1.0])
+    plt.xlabel('Sum (Probability)')
+    plt.ylabel('Counts')
+    fig.savefig(pdffile)
+    plt.close()

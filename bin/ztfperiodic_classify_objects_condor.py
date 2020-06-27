@@ -39,6 +39,8 @@ def parse_commandline():
 
     parser.add_option("--doDocker",  action="store_true", default=False)
 
+    parser.add_option("-f","--featuresetname",default="b")
+
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
 
@@ -54,6 +56,7 @@ outputDir = opts.outputDir
 batch_size = opts.batch_size
 algorithm = opts.algorithm
 modelPath = opts.modelPath
+featuresetname = opts.featuresetname
 
 catalogDir = os.path.join(outputDir,'catalog',algorithm)
 
@@ -65,7 +68,7 @@ logDir = os.path.join(condorDir,'logs')
 if not os.path.isdir(logDir):
     os.makedirs(logDir)
 
-modelFiles = glob.glob(os.path.join(modelPath, "d11*.f.*model"))
+modelFiles = glob.glob(os.path.join(modelPath, "d11*.%s.*model" % featuresetname))
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 

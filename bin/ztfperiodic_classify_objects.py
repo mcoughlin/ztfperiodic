@@ -90,6 +90,13 @@ Ncatalog = opts.Ncatalog
 Ncatindex = opts.Ncatindex
 modelFiles = opts.modelFiles.split(",")
 
+modeltype = modelFiles[0].split("/")[-1].split(".")[-2]
+for modelFile in modelFiles:
+    modelname = modelFile.split("/")[-1].split(".")[-2]
+    if not modelname == modeltype:
+        print("model types differ... please run with same types")
+        exit(0)
+
 basecatalogDir = os.path.join(outputDir,'catalog',algorithm)
 if (opts.source_type == "catalog") and ("fermi" in catalog_file):
     basecatalogDir = os.path.join(basecatalogDir,'%d' % Ncatindex)
@@ -140,7 +147,8 @@ if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
         ids, features = get_kowalski_features(kow, 
                                               num_batches=Ncatalog,
-                                              nb=Ncatindex)
+                                              nb=Ncatindex,
+                                              featuresetname=modeltype)
 
     elif opts.source_type == "catalog":
 
