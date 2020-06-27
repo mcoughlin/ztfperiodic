@@ -108,6 +108,7 @@ for catalogPath in catalogPaths:
         cat1.write(cat1file, format='fits')
     else:
         cat1 = Table.read(cat1file, format='fits')
+        continue
 
     idx = np.where(cat1["prob"] >= 0.9)[0]
     print("Model %s: %.5f%%" % (modelName, 100*len(idx)/len(cat1["prob"])))
@@ -139,8 +140,11 @@ if not os.path.isfile(cat1file):
 else:
     df_merged = pd.read_hdf(cat1file)
 
+psums = df_merged.drop(columns=['d11.pnp.f', 'd11.vnv.f']).sum(axis=1)
+cat1file = os.path.join(outputDir,'catalog_slice.h5')
+df_merged.loc[psums>1.0].to_hdf(cat1file, key='df_merged', mode='w')
+
 if opts.doPlots:
-    psums = df_merged.sum(axis=1)
     pdffile = os.path.join(plotDir,'%s.pdf' % 'summed')
     fig = plt.figure(figsize=(10,8))
     ax=fig.add_subplot(1,1,1)
