@@ -620,8 +620,6 @@ def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
                     raobj, decobj = raobj[idx], decobj[idx]
                     fid = fid[idx]
 
-            print(len(hjd))
-
             if len(hjd) < min_epochs: continue
 
             lightcurve=(hjd,mag,magerr)
