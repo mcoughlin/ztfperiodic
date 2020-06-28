@@ -597,9 +597,15 @@ def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
             fid = fid[idx]
 
             if doRemoveHC:
-                dt = np.diff(hjd)
-                idx = np.setdiff1d(np.arange(len(hjd)),
-                                   np.where(dt < 30.0*60.0/86400.0)[0])
+                idx = []
+                for ii, t in enumerate(hjd):
+                    if ii == 0:
+                        idx.append(ii)
+                    else:
+                        dt = hjd[ii] - hjd[idx[-1]]
+                        if dt >= 30.0*60.0/86400.0:
+                            idx.append(ii)
+                idx = np.array(idx)
                 hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
                 raobj, decobj = raobj[idx], decobj[idx]
                 fid = fid[idx]
@@ -613,6 +619,8 @@ def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
                     hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
                     raobj, decobj = raobj[idx], decobj[idx]
                     fid = fid[idx]
+
+            print(len(hjd))
 
             if len(hjd) < min_epochs: continue
 

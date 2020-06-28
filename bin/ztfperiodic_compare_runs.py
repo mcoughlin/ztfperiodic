@@ -11,7 +11,7 @@ import numpy as np
 
 import matplotlib
 matplotlib.use('Agg')
-font = {'size'   : 22}
+font = {'size'   : 30}
 matplotlib.rc('font', **font)
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -38,9 +38,9 @@ def parse_commandline():
     parser = optparse.OptionParser()
     parser.add_option("--doPlots",  action="store_true", default=False)
 
-    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/compare/v1_v2")
-    parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields/catalog/compare/700/catalog_GCE_LS_AOV.fits")
-    parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields_v2/catalog/compare/700/catalog_GCE_LS_AOV.fits")
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields_v2/catalog/compare/v2_v3/")
+    parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields_v2/catalog/compare/700/catalog_GCE_LS_AOV.fits")
+    parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields_v3/catalog/compare/700/catalog_GCE_LS_AOV.fits")
 
     parser.add_option("--sig1",default=7.0,type=float)
     parser.add_option("--sig2",default=7.0,type=float)
@@ -127,9 +127,11 @@ if opts.doPlots:
     pdffile = os.path.join(outputDir,'periods.pdf')
     cmap = cm.autumn
 
-    xedges = np.logspace(np.log10(0.02),3.0,100)
-    yedges = np.logspace(np.log10(0.02),3.0,100)
-
+    #xedges = np.logspace(np.log10(0.02),3.0,100)
+    xedges = np.logspace(np.log10(0.02),4.0,100)
+    #yedges = np.logspace(np.log10(0.02),3.0,100)
+    yedges = np.logspace(np.log10(0.02),4.0,100)
+   
     H, xedges, yedges = np.histogram2d(xs, ys, bins=(xedges, yedges))
     H = H.T  # Let each row list bins with common y range.
     X, Y = np.meshgrid(xedges, yedges)
@@ -146,14 +148,17 @@ if opts.doPlots:
     cbar.set_label('Counts')
     ax.set_xscale('log')
     ax.set_yscale('log')
-    plt.xlim([0.02, 1000])
-    plt.ylim([0.02, 1000])
-    plt.xlabel('%s Frequency [1/days]' % name1)
-    plt.ylabel('%s Frequency [1/days]' % name2)
+    #plt.xlim([0.02, 50])
+    plt.xlim([0.02, 500])
+    #plt.ylim([0.02, 50])
+    plt.ylim([0.02, 500])
+    plt.fill_between([0.02, 500],[50,50],[500,500],color='gray',alpha=0.5)
+    plt.xlabel('Frequency [1/days]')
+    plt.ylabel('Frequency [1/days]')
     fig.savefig(pdffile)
     plt.close()
    
     pdffile = os.path.join(outputDir,'periods.pdf')
-    fig.savefig(pdffile)
+    fig.savefig(pdffile, bbox_inches='tight')
     plt.close() 
 
