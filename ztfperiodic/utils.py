@@ -193,10 +193,10 @@ def get_catalog(data):
 def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
                  program_ids = [1, 2,3], min_epochs = 1, name = None):
 
-    tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
+    tmax = Time('2020-01-01T00:00:00', format='isot', scale='utc').jd
 
     #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20191101": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
-    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20191101": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } }
+    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20200401": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } }
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
@@ -900,9 +900,9 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                       doPercentile=False,
                       percmin = 10.0, percmax = 90.0):
 
-    tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
+    tmax = Time('2020-01-01T00:00:00', format='isot', scale='utc').jd
 
-    qu = {"query_type":"general_search","query":"db['ZTF_sources_20191101'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
+    qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
@@ -1085,6 +1085,111 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
     print('Loaded %d lightcurves in %.5f seconds' % (len(lightcurves), loadtime))
 
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
+
+def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f'):
+
+    feature_set11 = ['median', 'wmean', 'chi2red', 'roms', 'wstd', 'norm_peak_to_peak_amp',
+           'norm_excess_var', 'median_abs_dev', 'iqr', 'f60', 'f70', 'f80', 'f90',
+           'skew', 'smallkurt', 'inv_vonneumannratio', 'welch_i', 'stetson_j',
+           'stetson_k', 'ad', 'sw']
+    
+    feature_set12 = ['f1_power', 'f1_bic', 'f1_a', 'f1_b', 'f1_amp',
+           'f1_phi0', 'f1_relamp1', 'f1_relphi1', 'f1_relamp2', 'f1_relphi2',
+           'f1_relamp3', 'f1_relphi3', 'f1_relamp4', 'f1_relphi5']
+    
+    feature_set21 = ['period', 'significance', 'pdot']
+    feature_set22 = [ # removing n from featureset. It does not really belong there.
+    #    'n', 
+        'n_ztf_alerts', 'mean_ztf_alert_braai']
+    
+    feature_set31 = [
+    #    'AllWISE___id', 
+            'AllWISE__w1mpro', 'AllWISE__w1sigmpro',
+           'AllWISE__w2mpro', 'AllWISE__w2sigmpro', 'AllWISE__w3mpro',
+           'AllWISE__w3sigmpro', 'AllWISE__w4mpro', 'AllWISE__w4sigmpro',
+    #       'AllWISE__ph_qual', 
+    #        'Gaia_DR2___id', 
+            'Gaia_DR2__phot_g_mean_mag',
+           'Gaia_DR2__phot_bp_mean_mag', 'Gaia_DR2__phot_rp_mean_mag',
+           'Gaia_DR2__parallax',
+    #    'Gaia_DR2__parallax_error', 'Gaia_DR2__pmra',
+    #       'Gaia_DR2__pmra_error', 'Gaia_DR2__pmdec', 'Gaia_DR2__pmdec_error',
+    #       'Gaia_DR2__astrometric_excess_noise',
+           'Gaia_DR2__phot_bp_rp_excess_factor',
+    #    'PS1_DR1___id',
+           'PS1_DR1__gMeanPSFMag', 'PS1_DR1__gMeanPSFMagErr',
+           'PS1_DR1__rMeanPSFMag', 'PS1_DR1__rMeanPSFMagErr',
+           'PS1_DR1__iMeanPSFMag', 'PS1_DR1__iMeanPSFMagErr',
+           'PS1_DR1__zMeanPSFMag', 'PS1_DR1__zMeanPSFMagErr',
+           'PS1_DR1__yMeanPSFMag', 'PS1_DR1__yMeanPSFMagErr',
+    #       'PS1_DR1__qualityFlag'
+            ]
+    feature_set32 = ['Gaia_DR2__parallax_error', 'Gaia_DR2__pmra',
+           'Gaia_DR2__pmra_error', 'Gaia_DR2__pmdec', 'Gaia_DR2__pmdec_error',
+           'Gaia_DR2__astrometric_excess_noise']
+    
+    # Do b, d, e, f in that order 
+    feature_set_b = feature_set11
+    feature_set_c =  feature_set_b + feature_set12
+    feature_set_d =  feature_set_c + feature_set21 + feature_set22
+    feature_set_e =  feature_set_d + feature_set31
+    feature_set_f =  feature_set_e + feature_set32
+    
+    featuresetnames = {'b': feature_set_b,   # 21 features
+                        'c': feature_set_c,  # 35 features
+                        'd': feature_set_d,  # 41 features - 1 (n)
+                        'e': feature_set_e,  # 64 features - 1 (n)
+                        'f': feature_set_f,  # 70 features - 1 (n)
+                          }
+
+
+    #qu = {"query_type":"general_search","query":"db['ZTF_source_features_20191101'].count_documents()"}
+    qu = {"query_type":"general_search","query":"db['ZTF_source_features_20191101_20_fields'].count_documents()"}
+
+    #start = time.time()
+    #r = database_query(kow, qu, nquery = 10)
+    #end = time.time()
+    #loadtime = end - start
+
+    #if not "result_data" in r:
+    #    print("Query for batch %d failed... returning."%(nb))
+    #    return [], [], [], []
+
+    #nlightcurves = r['result_data']['query_result']
+    nlightcurves = 34681547
+    #nlightcurves = 1000000
+
+    batch_size = np.ceil(nlightcurves/num_batches).astype(int)
+
+    objdata = {}
+    #for nb in range(num_batches):
+    for nb in [nb]:
+        print("Querying batch number %d/%d..."%(nb, num_batches))
+
+        start = time.time()
+        qu = {"query_type":"general_search","query":"db['ZTF_source_features_20191101'].find({}).skip(%d).limit(%d)"%(int(nb*batch_size),int(batch_size))}
+        r = database_query(kow, qu, nquery = 10)
+        end = time.time()
+        loadtime = end - start
+        print("Feature query: %.5f seconds" % loadtime)
+
+        if not "result_data" in r:
+            print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
+            continue
+
+        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20191101'].find_one({})"}
+        #r = kow.query(query=qu)
+
+        datas = r["result_data"]["query_result"]
+        start = time.time()
+        df_features = pd.DataFrame(datas).fillna(0)
+        df_features.rename(columns={"_id": "ztf_id"}, inplace=True)
+        end = time.time()
+        loadtime = end - start
+        print("Dataframe: %.5f seconds" % loadtime)
+
+    return df_features["ztf_id"], df_features[featuresetnames[featuresetname]]
+
 
 def split_lightcurve(hjd, mag, magerr, fid, min_epochs):
 
