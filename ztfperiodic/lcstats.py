@@ -239,32 +239,34 @@ def calc_basic_stats(t,mag,err):
 
 def calc_stats(t,mag,err,p):
 
+    # calculate basic stats
+    (N,median,wmean,chi2red,Roms,wstd,
+    NormPeaktoPeakamp,NormExcessVar,medianAbsDev,iqr,
+    F60,F70,F80,F90,skew,smallkurt,invNeumann,
+    WelchI,StetsonJ,StetsonK,AD,SW) = calc_basic_stats(t,mag,err)
+
     try:
-        # calculate basic stats
-        (N,median,wmean,chi2red,Roms,wstd,
-        NormPeaktoPeakamp,NormExcessVar,medianAbsDev,iqr,
-        F60,F70,F80,F90,skew,smallkurt,invNeumann,
-        WelchI,StetsonJ,StetsonK,AD,SW) = calc_basic_stats(t,mag,err)
-
-
         # fourier decomposition stuff
         (f1_power,f1_BIC,f1_a,f1_b,f1_amp,f1_phi0,
             f1_relamp1,f1_relphi1,f1_relamp2,f1_relphi2,
             f1_relamp3,f1_relphi3,f1_relamp4,f1_relphi5
             ) = fourier_decomposition(t,mag,err,N,p)
-
-        # return all
-        return np.r_[N,median,wmean,chi2red,Roms,wstd,
-                    NormPeaktoPeakamp,NormExcessVar,medianAbsDev,iqr,
-                    F60,F70,F80,F90,skew,smallkurt,invNeumann,
-                    WelchI,StetsonJ,StetsonK,AD,SW,
-                    f1_power,f1_BIC,f1_a,f1_b,f1_amp,f1_phi0,
-                    f1_relamp1,f1_relphi1,f1_relamp2,f1_relphi2,
-                    f1_relamp3,f1_relphi3,f1_relamp4,f1_relphi5]
     except:
-        # if anything fails, just return nans
-        return np.nan*np.ones(36)
+        (f1_power,f1_BIC,f1_a,f1_b,f1_amp,f1_phi0,
+        f1_relamp1,f1_relphi1,f1_relamp2,f1_relphi2,
+        f1_relamp3,f1_relphi3,f1_relamp4,f1_relphi5) = \
+        (np.nan, np.nan, np.nan, np.nan, np.nan, np.nan,
+        np.nan, np.nan, np.nan, np.nan,
+        np.nan, np.nan, np.nan, np.nan)
 
+    # return all
+    return np.r_[N,median,wmean,chi2red,Roms,wstd,
+                 NormPeaktoPeakamp,NormExcessVar,medianAbsDev,iqr,
+                 F60,F70,F80,F90,skew,smallkurt,invNeumann,
+                 WelchI,StetsonJ,StetsonK,AD,SW,
+                 f1_power,f1_BIC,f1_a,f1_b,f1_amp,f1_phi0,
+                 f1_relamp1,f1_relphi1,f1_relamp2,f1_relphi2,
+                 f1_relamp3,f1_relphi3,f1_relamp4,f1_relphi5]
 
 
     
