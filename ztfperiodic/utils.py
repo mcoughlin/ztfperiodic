@@ -207,7 +207,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
         print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec)) 
         return {}
 
-    key1, key2, key3 = 'ZTF_sources_20191101', 'Gaia_DR2', 'ZTF_alerts'
+    key1, key2, key3 = 'ZTF_sources_20200401', 'Gaia_DR2', 'ZTF_alerts'
     data1, data2, data3 = r["result_data"][key1], r["result_data"][key2], r["result_data"][key3]
     key = list(data1.keys())[0]
     data = data1[key]
@@ -409,10 +409,10 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
 
     start = time.time()
 
-    tmax = Time('2019-01-01T00:00:00', format='isot', scale='utc').jd
+    tmax = Time('2020-01-01T00:00:00', format='isot', scale='utc').jd
 
     for objid in objids:
-        qu = {"query_type":"general_search","query":"db['ZTF_sources_20191101'].find({'_id':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1})"%(objid)}
+        qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].find({'_id':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1})"%(objid)}
         r = database_query(kow, qu, nquery = 10)
 
         if not "result_data" in r:
@@ -937,14 +937,14 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
     for nb in [nb]:
         print("Querying batch number %d/%d..."%(nb, num_batches))
 
-        qu = {"query_type":"general_search","query":"db['ZTF_sources_20191101'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
+        qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
         r = database_query(kow, qu, nquery = 10)
 
         if not "result_data" in r:
             print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
             continue
 
-        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20191101'].find_one({})"}
+        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].find_one({})"}
         #r = kow.query(query=qu)
 
         datas = r["result_data"]["query_result"]
@@ -1177,7 +1177,7 @@ def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f'):
             print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
             continue
 
-        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20191101'].find_one({})"}
+        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].find_one({})"}
         #r = kow.query(query=qu)
 
         datas = r["result_data"]["query_result"]
