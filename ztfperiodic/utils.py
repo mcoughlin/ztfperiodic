@@ -498,6 +498,47 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
 
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
 
+def get_kowalski_features_list(ras, decs, kow,
+                               errs = None, names = None,
+                               amaj=None, amin=None, phi=None,
+                               featuresetname='f'):
+
+    if errs is None:
+        errs = 5.0*np.ones(ras.shape)
+    if names is None:
+        names = []
+        for ra, dec in zip(ras, decs):
+            ra_hex, dec_hex = convert_to_hex(ra*24/360.0,delimiter=''), convert_to_hex(dec,delimiter='')
+            if dec_hex[0] == "-":
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+            else:
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+            names.append(objname)
+
+    cnt = 0
+    for name, ra, dec, err in zip(names, ras, decs, errs):
+        if amaj is not None:
+            ellipse = patches.Ellipse((ra, dec), amaj[cnt], amin[cnt],
+                                      angle=phi[cnt])
+
+        if np.mod(cnt,100) == 0:
+            print('%d/%d'%(cnt,len(ras)))
+        ids, features = get_kowalski_features_ind(ra, dec, kow,
+                                                  radius = err, oid = None,
+                                                  featuresetname=featuresetname)
+        if len(ids) == 0:
+            continue
+
+        if cnt == 0:
+            df_features = features
+        else:
+            df_features = df_features.append(features)
+
+        cnt = cnt + 1
+
+    print(df_features)
+    return df_features["ztf_id"], df_features
+
 
 def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
                       max_error = 2.0, errs = None, names = None,
@@ -1092,7 +1133,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
 
-def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f'):
+def get_featuresetnames(featuresetname):
 
     feature_set11 = ['median', 'wmean', 'chi2red', 'roms', 'wstd', 'norm_peak_to_peak_amp',
            'norm_excess_var', 'median_abs_dev', 'iqr', 'f60', 'f70', 'f80', 'f90',
@@ -1148,6 +1189,49 @@ def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f'):
                         'f': feature_set_f,  # 70 features - 1 (n)
                           }
 
+    return featuresetnames[featuresetname]
+
+
+def get_kowalski_features_ind(ra, dec, kow, radius = 5.0, oid = None,
+                              featuresetname='f'):
+
+    featuresetnames = get_featuresetnames(featuresetname)
+
+    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_source_features_20191101": { "filter": "{}", "projection": "{}" } } }
+
+    start = time.time()
+    r = database_query(kow, qu, nquery = 10)
+    end = time.time()
+    loadtime = end - start
+
+    data = r["result_data"]["ZTF_source_features_20191101"]
+    key = data.keys()[0]
+    data = data[key]
+    start = time.time()
+
+    features = {}
+    for datlist in data:
+        objid = str(datlist["_id"])
+        if not oid is None:
+            if not objid == str(oid):
+                continue
+        datlist["ztf_id"] = datlist["_id"]
+        del datlist["_id"]
+        df_series = pd.Series(datlist).fillna(0)
+        features[objid] = df_series
+
+    if not features:
+        return [], []
+
+    df_features = pd.DataFrame.from_dict(features, orient='index', 
+                                         columns=df_series.index)
+
+    return df_features["ztf_id"], df_features[featuresetnames]
+
+
+def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f'):
+
+    featuresetnames = get_featuresetnames(featuresetname)
 
     #qu = {"query_type":"general_search","query":"db['ZTF_source_features_20191101'].count_documents()"}
     qu = {"query_type":"general_search","query":"db['ZTF_source_features_20191101_20_fields'].count_documents()"}
@@ -1194,7 +1278,7 @@ def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f'):
         loadtime = end - start
         print("Dataframe: %.5f seconds" % loadtime)
 
-    return df_features["ztf_id"], df_features[featuresetnames[featuresetname]]
+    return df_features["ztf_id"], df_features[featuresetnames]
 
 
 def split_lightcurve(hjd, mag, magerr, fid, min_epochs):
