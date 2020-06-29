@@ -97,6 +97,10 @@ plotDir = os.path.join(outputDir, 'plots')
 if not os.path.isdir(plotDir):
     os.makedirs(plotDir)
 
+sliceDir = os.path.join(outputDir, 'slices')
+if not os.path.isdir(sliceDir):
+    os.makedirs(sliceDir)
+
 catalogPaths = glob.glob(os.path.join(modelPath, "*.*.%s" % featuresetname))
 dictlist = []
 for catalogPath in catalogPaths:
@@ -108,7 +112,7 @@ for catalogPath in catalogPaths:
         cat1.write(cat1file, format='fits')
     else:
         cat1 = Table.read(cat1file, format='fits')
-        continue
+    #    continue
 
     idx = np.where(cat1["prob"] >= 0.9)[0]
     print("Model %s: %.5f%%" % (modelName, 100*len(idx)/len(cat1["prob"])))
@@ -117,6 +121,9 @@ for catalogPath in catalogPaths:
     df.rename(columns={"prob": modelName}, inplace=True)
     df.set_index('objid', inplace=True)
     dictlist.append(df)
+
+    cat1file = os.path.join(sliceDir,'%s.h5' % modelName)
+    df.loc[cat1["prob"] >= 0.9].to_hdf(cat1file, key='df', mode='w')
 
     if opts.doPlots:
         pdffile = os.path.join(plotDir,'%s.pdf' % modelName)
@@ -140,7 +147,8 @@ if not os.path.isfile(cat1file):
 else:
     df_merged = pd.read_hdf(cat1file)
 
-psums = df_merged.drop(columns=['d11.pnp.f', 'd11.vnv.f']).sum(axis=1)
+psums = df_merged.drop(columns=['d11.pnp.%s' % featuresetname,
+                                'd11.vnv.%s' % featuresetname]).sum(axis=1)
 cat1file = os.path.join(outputDir,'catalog_slice.h5')
 df_merged.loc[psums>1.0].to_hdf(cat1file, key='df_merged', mode='w')
 

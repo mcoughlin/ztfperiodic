@@ -28,7 +28,9 @@ import astropy.constants as const
 import astropy.io.fits
 
 import ztfperiodic
+from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.utils import get_kowalski_features
+from ztfperiodic.utils import get_kowalski_features_list
 from ztfperiodic.classify import classify
 
 try:
@@ -55,6 +57,7 @@ def parse_commandline():
 
     parser.add_option("-k","--kowalski_batch_size",default=1000,type=int)
     parser.add_option("-a","--algorithm",default="xgboost")
+    parser.add_option("--default_err",default=None,type=float)
 
     parser.add_option("-l","--lightcurve_source",default="Kowalski")
     parser.add_option("-s","--source_type",default="quadrant")
@@ -156,10 +159,7 @@ if opts.lightcurve_source == "Kowalski":
         if not opts.default_err is None:
             default_err = opts.default_err
         else:
-            if doCombineFilt:
-                default_err = 3.0
-            else:
-                default_err = 5.0
+            default_err = 5.0
 
         if ".dat" in catalog_file:
             lines = [line.rstrip('\n') for line in open(catalog_file)]
@@ -238,19 +238,6 @@ if opts.lightcurve_source == "Kowalski":
                 names.append(objname)
             names = np.array(names)
 
-        if opts.doRemoveBrightStars:
-            filename = "%s/bsc5.hdf5" % inputDir
-            sep = brightstardist(filename,ras,decs)
-            idx1 = np.where(sep >= opts.stardist)[0]
-            filename = "%s/Gaia.hdf5" % inputDir
-            sep = brightstardist(filename,ras,decs)
-            idx2 = np.where(sep >= opts.stardist)[0]
-            idx = np.union1d(idx1,idx2)
-            names = names[idx]
-            ras, decs, errs = ras[idx], decs[idx], errs[idx]
-            if ("fermi" in catalog_file):
-                amaj, amin, phi = amaj[idx], amin[idx], phi[idx]
-
         names_split = np.array_split(names,Ncatalog)
         ras_split = np.array_split(ras,Ncatalog)
         decs_split = np.array_split(decs,Ncatalog)
@@ -271,39 +258,16 @@ if opts.lightcurve_source == "Kowalski":
             phi = phi_split[Ncatindex]
 
         catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
-        catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(catalog_file_split,
-                                                           Ncatindex))
-        if opts.doSpectra:
-            spectraFile = os.path.join(spectraDir,"%s_%d.pkl"%(catalog_file_split,
-                                                               Ncatindex))
+        catalogFile = os.path.join(basecatalogDir,"%s_%d.h5" % (catalog_file_split,
+                                                                Ncatindex))
 
-        if doSimulateLightcurves:
-            lightcurves, coordinates, filters, ids,\
-            absmags, bp_rps, names, baseline =\
-                get_simulated_list(ras, decs,
-                                  min_epochs=min_epochs,
-                                  names=names,
-                                  doCombineFilt=doCombineFilt,
-                                  doRemoveHC=doRemoveHC,
-                                  doUsePDot=doUsePDot)
-        else:
-            lightcurves, coordinates, filters, ids,\
-            absmags, bp_rps, names, baseline =\
-                get_kowalski_list(ras, decs,
-                                  kow,
-                                  program_ids=program_ids,
-                                  min_epochs=min_epochs,
-                                  errs=errs,
-                                  names=names,
-                                  amaj=amaj, amin=amin, phi=phi,
-                                  doCombineFilt=doCombineFilt,
-                                  doRemoveHC=doRemoveHC,
-                                  doExtinction=doExtinction,
-                                  doSigmaClipping=doSigmaClipping,
-                                  sigmathresh=sigmathresh,
-                                  doOutbursting=doOutbursting,
-                                  doCrossMatch=doCrossMatch,
-                                  crossmatch_radius=crossmatch_radius)
+        ids, features = get_kowalski_features_list(ras, decs,
+                                                   kow,
+                                                   errs=errs,
+                                                   names=names,
+                                                   amaj=amaj, amin=amin,
+                                                   phi=phi,
+                                                   featuresetname=modeltype)
 
     elif opts.source_type == "objid":
 

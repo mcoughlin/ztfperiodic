@@ -35,10 +35,12 @@ from ztfperiodic.utils import ps1_query
 from ztfperiodic.utils import get_kowalski
 from ztfperiodic.utils import get_lightcurve
 from ztfperiodic.utils import combine_lcs
+from ztfperiodic.utils import get_kowalski_features_ind
 from ztfperiodic.periodsearch import find_periods
 from ztfperiodic.mylombscargle import period_search_ls
 from ztfperiodic.plotfunc import plot_gaia_subplot
 from ztfperiodic.specfunc import correlate_spec, adjust_subplots_band, tick_function
+from ztfperiodic.classify import classify
 
 try:
     from penquins import Kowalski
@@ -64,7 +66,7 @@ def parse_commandline():
 
     parser.add_option("-r", "--ra", default=237.3234518, type=float)
     parser.add_option("-d", "--declination", default=39.8249067, type=float)
-    parser.add_option("-f", "--filt", default="r")
+    parser.add_option("--filt", default="r")
 
     parser.add_option("-u", "--user")
     parser.add_option("-w", "--pwd")
@@ -100,6 +102,11 @@ def parse_commandline():
     parser.add_option("--lightcurve_file", default="../data/asassn/light_curve_ebaf8149-7882-4a6b-876e-7d68299518f3.csv")
 
     parser.add_option("--doFourierDecomposition", action="store_true", default=False)
+    parser.add_option("--doFeatures", action="store_true", default=False)
+
+    parser.add_option("-m","--modelPath",default="/home/michael.coughlin/ZTF/ZTFVariability/pipeline/saved_models/")
+    parser.add_option("-f","--featuresetname",default="b")
+    parser.add_option("--classification_algorithm",default="xgboost")
 
     opts, args = parser.parse_args()
 
@@ -116,6 +123,9 @@ pwd = opts.pwd
 algorithms = opts.algorithms.split(",")
 program_ids = list(map(int,opts.program_ids.split(",")))
 min_epochs = opts.min_epochs
+modelPath = opts.modelPath
+featuresetname = opts.featuresetname
+classification_algorithm = opts.classification_algorithm
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
@@ -233,6 +243,20 @@ if opts.lightcurve_source == "Kowalski":
                                    program_ids=program_ids,
                                    min_epochs=min_epochs)
     lightcurves_combined = combine_lcs(lightcurves_all)
+
+    if opts.doFeatures:
+        ids, features = get_kowalski_features_ind(opts.ra,
+                                                  opts.declination, kow,
+                                                  oid=opts.objid,
+                                                  featuresetname=featuresetname)
+
+        modelFiles = glob.glob(os.path.join(modelPath, "d11*.%s.*model" % featuresetname))
+        for modelFile in modelFiles:
+            modelName = modelFile.replace(".model","").split("/")[-1]
+            pred = classify(classification_algorithm, features.to_numpy(),
+                            modelFile=modelFile)
+            for objid, pr in zip(ids,pred):
+                print("%d %s %.5f" % (objid, modelName, pr))
 
     if len(lightcurves_all.keys()) == 0:
         print("No objects... sorry.")
@@ -429,7 +453,8 @@ if opts.doPlots:
     plt.figure(figsize=(12,8))
     plt.errorbar(hjd-hjd[0],mag,yerr=magerr,fmt='ko')
     fittedmodel = fdecomp.make_f(period)
-    plt.plot(hjd-hjd[0],fittedmodel(hjd,*LCfit),'k-')
+    if opts.doFourierDecomposition:
+        plt.plot(hjd-hjd[0],fittedmodel(hjd,*LCfit),'k-')
     ymed = np.nanmedian(mag)
     y10, y90 = np.nanpercentile(mag,10), np.nanpercentile(mag,90)
     ystd = np.nanmedian(magerr)
