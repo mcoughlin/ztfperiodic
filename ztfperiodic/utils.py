@@ -516,13 +516,12 @@ def get_kowalski_features_list(ras, decs, kow,
             names.append(objname)
 
     cnt = 0
+    ztf_ids, df_features = [], []
     for name, ra, dec, err in zip(names, ras, decs, errs):
         if amaj is not None:
             ellipse = patches.Ellipse((ra, dec), amaj[cnt], amin[cnt],
                                       angle=phi[cnt])
 
-        if np.mod(cnt,100) == 0:
-            print('%d/%d'%(cnt,len(ras)))
         ids, features = get_kowalski_features_ind(ra, dec, kow,
                                                   radius = err, oid = None,
                                                   featuresetname=featuresetname)
@@ -530,14 +529,15 @@ def get_kowalski_features_list(ras, decs, kow,
             continue
 
         if cnt == 0:
+            ztf_ids = ids
             df_features = features
         else:
+            ztf_ids = ztf_ids.append(ids)
             df_features = df_features.append(features)
 
         cnt = cnt + 1
 
-    print(df_features)
-    return df_features["ztf_id"], df_features
+    return ztf_ids, df_features
 
 
 def get_kowalski_list(ras, decs, kow, program_ids = [1,2,3], min_epochs = 1,
