@@ -472,12 +472,51 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
             filters.append(np.unique(fid).tolist())
             nlightcurves = 1
 
+            radius = 5
+            qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(np.median(ra),np.median(dec)), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"} } }
+            r = database_query(kow, qu, nquery = 10)
+  
+            coords = SkyCoord(ra=np.median(ra)*u.degree, 
+                              dec=np.median(dec)*u.degree, frame='icrs')
+
+            absmag, bp_rp = [np.nan, np.nan, np.nan], np.nan
+            if "result_data" in r:
+                key2 = 'Gaia_DR2'
+                data2 = r["result_data"][key2]
+                key = list(data2.keys())[0]
+                data2 = data2[key]
+                cat2 = get_catalog(data2)
+                idx,sep,_ = coords.match_to_catalog_sky(cat2)
+                dat2 = data2[idx]
+                if not "parallax" in dat2:
+                    parallax, parallaxerr = None, None
+                else:
+                    parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
+                if not "phot_g_mean_mag" in dat2:
+                    g_mag = None
+                else:
+                    g_mag = dat2["phot_g_mean_mag"]
+
+                if not "phot_bp_mean_mag" in dat2:
+                    bp_mag = None
+                else:
+                    bp_mag = dat2["phot_bp_mean_mag"]
+
+                if not "phot_rp_mean_mag" in dat2:
+                    rp_mag = None
+                else:
+                    rp_mag = dat2["phot_rp_mean_mag"]
+
+                if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None)):
+                    absmag = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
+                    bp_rp = bp_mag-rp_mag
+
             for jj in range(nlightcurves):
                 coordinate=(np.median(ra),np.median(dec))
                 coordinates.append(coordinate)
                 ids.append(objid)
-                absmags.append([np.nan, np.nan, np.nan])
-                bp_rps.append(np.nan)
+                absmags.append(absmag)
+                bp_rps.append(bp_rp)
 
                 ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
                 if dec_hex[0] == "-":
@@ -494,7 +533,8 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
     end = time.time()
     loadtime = end - start
 
-    print('Loaded %d lightcurves in %.5f seconds' % (len(lightcurves), loadtime))
+    if len(lightcurves) > 1:
+        print('Loaded %d lightcurves in %.5f seconds' % (len(lightcurves), loadtime))
 
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
 
@@ -1238,7 +1278,7 @@ def get_kowalski_features_objids(objids, kow, featuresetname='f',
 
     features = {}    
     for ii, objid in enumerate(objids):
-        if np.mod(ii,100) == 0:
+        if (ii > 0) and (np.mod(ii,100) == 0):
             print('Loading %d/%d...' % (ii, len(objids)))
 
         qu = {"query_type":"find",

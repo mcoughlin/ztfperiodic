@@ -40,6 +40,7 @@ def parse_commandline():
     parser.add_option("--doDocker",  action="store_true", default=False)
 
     parser.add_option("-f","--featuresetname",default="b")
+    parser.add_option("-d","--dbname",default="ZTF_source_features_20191101")
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
@@ -57,6 +58,15 @@ batch_size = opts.batch_size
 algorithm = opts.algorithm
 modelPath = opts.modelPath
 featuresetname = opts.featuresetname
+dbname = opts.dbname
+
+if dbname == 'ZTF_source_features_20191101_20_fields':
+    nlightcurves = 34681547
+elif dbname == 'ZTF_source_features_20191101':
+    nlightcurves = 578676249
+else:
+    print('dbname %s now known... exiting.')
+    exit(0)
 
 catalogDir = os.path.join(outputDir,'catalog',algorithm)
 
@@ -104,8 +114,6 @@ if opts.lightcurve_source == "Kowalski":
             #r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
             #nlightcurves = r['result_data']['query_result']
 
-            nlightcurves = 34681547
-            #nlightcurves = 1000000
             Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
 
         for ii in range(Ncatalog):
@@ -123,7 +131,7 @@ if opts.lightcurve_source == "Kowalski":
             if opts.doDocker:
                 fid1.write('nvidia-docker run --runtime=nvidia python-ztfperiodic --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type quadrant --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doPlots %s\n'%(outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, extra_flags))
             else:
-                fid1.write('%s %s/ztfperiodic_classify_objects.py --outputDir %s --user %s --pwd %s -l Kowalski --source_type quadrant --Ncatalog %d --Ncatindex %d --algorithm %s --doPlots --modelFiles %s\n'%(opts.python, dir_path, outputDir, opts.user, opts.pwd, Ncatalog, ii, opts.algorithm, ",".join(modelFiles_tmp)))
+                fid1.write('%s %s/ztfperiodic_classify_objects.py --outputDir %s --user %s --pwd %s -l Kowalski --source_type quadrant --Ncatalog %d --Ncatindex %d --algorithm %s --dbname %s --doPlots --modelFiles %s\n'%(opts.python, dir_path, outputDir, opts.user, opts.pwd, Ncatalog, ii, opts.algorithm, dbname, ",".join(modelFiles_tmp)))
         
             fid.write('JOB %d condor.sub\n'%(job_number))
             fid.write('RETRY %d 3\n'%(job_number))
@@ -147,7 +155,7 @@ if opts.lightcurve_source == "Kowalski":
             if opts.doDocker:
                 fid1.write('nvidia-docker run --runtime=nvidia python-ztfperiodic %s --outputDir %s --user %s --pwd %s --batch_size %d -l Kowalski --source_type catalog --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --catalog_file %s --doPlots --Ncatalog %d --Ncatindex %d %s\n'%(cpu_gpu_flag, outputDir, opts.user, opts.pwd,opts.batch_size, opts.algorithm, opts.catalog_file,opts.Ncatalog,ii,extra_flags))
             else:
-                fid1.write('%s %s/ztfperiodic_classify_objects.py --outputDir %s --user %s --pwd %s -l Kowalski --source_type catalog --algorithm %s --catalog_file %s --doPlots --Ncatalog %d --Ncatindex %d --modelFiles %s\n'%(opts.python, dir_path, outputDir, opts.user, opts.pwd, opts.algorithm, opts.catalog_file, opts.Ncatalog,ii,",".join(modelFiles_tmp)))
+                fid1.write('%s %s/ztfperiodic_classify_objects.py --outputDir %s --user %s --pwd %s -l Kowalski --source_type catalog --algorithm %s --catalog_file %s --doPlots --Ncatalog %d --Ncatindex %d --dbname %s --modelFiles %s\n'%(opts.python, dir_path, outputDir, opts.user, opts.pwd, opts.algorithm, opts.catalog_file, opts.Ncatalog,ii,dbname,",".join(modelFiles_tmp)))
 
             fid.write('JOB %d condor.sub\n'%(job_number))
             fid.write('RETRY %d 3\n'%(job_number))
@@ -164,9 +172,9 @@ fid.write('output = logs/out.$(jobNumber)\n');
 fid.write('error = logs/err.$(jobNumber)\n');
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('arguments = --outputDir %s --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doPlots --algorithm %s --modelFiles $(modelFiles)\n'%(outputDir,opts.user,opts.pwd,opts.algorithm))
+        fid.write('arguments = --outputDir %s --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doPlots --algorithm %s --dbname %s --modelFiles $(modelFiles)\n'%(outputDir,opts.user,opts.pwd,opts.algorithm,dbname))
     elif opts.source_type == "catalog":
-        fid.write('arguments = --outputDir %s --user %s --pwd %s -l Kowalski --source_type catalog --catalog_file %s --doPlots --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --algorithm %s --modelFiles $(modelFiles)\n'%(outputDir,opts.user,opts.pwd,opts.catalog_file,opts.algorithm))
+        fid.write('arguments = --outputDir %s --user %s --pwd %s -l Kowalski --source_type catalog --catalog_file %s --doPlots --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --algorithm %s --dbname %s --modelFiles $(modelFiles)\n'%(outputDir,opts.user,opts.pwd,opts.catalog_file,opts.algorithm,dbname))
 fid.write('requirements = OpSys == "LINUX"\n');
 fid.write('request_memory = 8192\n');
 fid.write('request_cpus = 1\n');
