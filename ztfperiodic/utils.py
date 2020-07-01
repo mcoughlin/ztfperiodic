@@ -501,7 +501,8 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
 def get_kowalski_features_list(ras, decs, kow,
                                errs = None, names = None,
                                amaj=None, amin=None, phi=None,
-                               featuresetname='f'):
+                               featuresetname='f',
+                               dbname='ZTF_source_features_20191101'):
 
     if errs is None:
         errs = 5.0*np.ones(ras.shape)
@@ -524,7 +525,8 @@ def get_kowalski_features_list(ras, decs, kow,
 
         ids, features = get_kowalski_features_ind(ra, dec, kow,
                                                   radius = err, oid = None,
-                                                  featuresetname=featuresetname)
+                                                  featuresetname=featuresetname,
+                                                  dbname=dbname)
         if len(ids) == 0:
             continue
 
@@ -1193,18 +1195,19 @@ def get_featuresetnames(featuresetname):
 
 
 def get_kowalski_features_ind(ra, dec, kow, radius = 5.0, oid = None,
-                              featuresetname='f'):
+                              featuresetname='f',
+                              dbname='ZTF_source_features_20191101'):
 
     featuresetnames = get_featuresetnames(featuresetname)
 
-    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_source_features_20191101": { "filter": "{}", "projection": "{}" } } }
+    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { dbname: { "filter": "{}", "projection": "{}" } } }
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
     end = time.time()
     loadtime = end - start
 
-    data = r["result_data"]["ZTF_source_features_20191101"]
+    data = r["result_data"][dbname]
     key = data.keys()[0]
     data = data[key]
     start = time.time()
@@ -1228,13 +1231,50 @@ def get_kowalski_features_ind(ra, dec, kow, radius = 5.0, oid = None,
 
     return df_features["ztf_id"], df_features[featuresetnames]
 
+def get_kowalski_features_objids(objids, kow, featuresetname='f',
+                                 dbname='ZTF_source_features_20191101'):
 
-def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f'):
+    featuresetnames = get_featuresetnames(featuresetname)
+
+    features = {}    
+    for ii, objid in enumerate(objids):
+        if np.mod(ii,100) == 0:
+            print('Loading %d/%d...' % (ii, len(objids)))
+
+        qu = {"query_type":"find",
+              "query": {"catalog": dbname,
+                        "filter": {"_id": int(objid)},
+                        "projection": {}},
+             }
+        r = database_query(kow, qu, nquery = 10)
+
+        if not "result_data" in r:
+            print("Query for objid %d failed... continuing."%(objid))
+            continue
+ 
+        if len(r["result_data"]["query_result"]) == 0: continue
+
+        datlist = r["result_data"]["query_result"][0]
+        datlist["ztf_id"] = datlist["_id"]
+        del datlist["_id"]
+        df_series = pd.Series(datlist).fillna(0)
+        features[objid] = df_series
+
+    if not features:
+        return [], []
+
+    df_features = pd.DataFrame.from_dict(features, orient='index',
+                                         columns=df_series.index)
+
+    return df_features["ztf_id"], df_features[featuresetnames]
+
+def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f',
+                          dbname='ZTF_source_features_20191101'):
 
     featuresetnames = get_featuresetnames(featuresetname)
 
     #qu = {"query_type":"general_search","query":"db['ZTF_source_features_20191101'].count_documents()"}
-    qu = {"query_type":"general_search","query":"db['ZTF_source_features_20191101_20_fields'].count_documents()"}
+    qu = {"query_type":"general_search","query":"db['%s'].count_documents()" % dbname}
 
     #start = time.time()
     #r = database_query(kow, qu, nquery = 10)
@@ -1246,7 +1286,15 @@ def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f'):
     #    return [], [], [], []
 
     #nlightcurves = r['result_data']['query_result']
-    nlightcurves = 34681547
+
+    if dbname == 'ZTF_source_features_20191101_20_fields':
+        nlightcurves = 34681547
+    elif dbname == 'ZTF_source_features_20191101':
+        nlightcurves = 578676249
+    else:
+        print('dbname %s now known... exiting.')
+        exit(0)
+
     #nlightcurves = 1000000
 
     batch_size = np.ceil(nlightcurves/num_batches).astype(int)
@@ -1257,7 +1305,15 @@ def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f'):
         print("Querying batch number %d/%d..."%(nb, num_batches))
 
         start = time.time()
-        qu = {"query_type":"general_search","query":"db['ZTF_source_features_20191101'].find({}).skip(%d).limit(%d)"%(int(nb*batch_size),int(batch_size))}
+        #qu = {"query_type":"general_search","query":"db['%s'].find({}).skip(%d).limit(%d)"%(dbname, int(nb*batch_size),int(batch_size))}
+        qu = {"query_type":"find",
+              "query": {"catalog": dbname,
+                        "filter": {},
+                        "projection": {}},
+              "kwargs": {"skip": int(nb*batch_size),
+                        "limit": int(batch_size)}
+             }
+                       
         r = database_query(kow, qu, nquery = 10)
         end = time.time()
         loadtime = end - start
