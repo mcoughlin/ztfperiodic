@@ -626,7 +626,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
         if algorithm == "LS":
             from astropy.stats import LombScargle
             for ii,data in enumerate(lightcurves):
-                if np.mod(ii,10) == 0:
+                if np.mod(ii,1) == 0:
                     print("%d/%d"%(ii,len(lightcurves)))
                 copy = np.ma.copy(data).T
                 nrows, ncols = copy.shape
@@ -649,7 +649,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
         elif algorithm == "CE":
             from ztfperiodic.period import CE
             for ii,data in enumerate(lightcurves):
-                if np.mod(ii,10) == 0:
+                if np.mod(ii,1) == 0:
                     print("%d/%d"%(ii,len(lightcurves)))
     
                 copy = np.ma.copy(data).T

@@ -51,7 +51,7 @@ def parse_commandline():
     parser.add_option("-c","--catalogPath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.pnp.f.h5")
 
     parser.add_option("--doDifference",  action="store_true", default=False)
-    parser.add_option("-d","--differencePath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.dscu.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.rrlyr.f.h5")
+    parser.add_option("-d","--differencePath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.dscu.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.rrlyr.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.ea.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.eb.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.ew.f.h5")
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
@@ -59,6 +59,118 @@ def parse_commandline():
     opts, args = parser.parse_args()
 
     return opts
+
+def query_variability(kow):
+
+    cuts = {
+        'pnp': {'$gt': 0.9},
+        'rrlyr': {'$lt': 0.9},
+        'dscu': {'$lt': 0.9},
+        'e': {'$lt': 0.9},
+        'ea': {'$lt': 0.9},
+        'eb': {'$lt': 0.9},
+        'ew': {'$lt': 0.9},
+    }
+    q = {
+        "query_type": "aggregate",
+        "query": {
+            "catalog": "ZTF_source_classifications_20191101",
+            "pipeline": [
+                {
+                    '$match': {
+                        'pnp': {
+                            '$elemMatch': {
+                                'version': 'd10_dnn_v2_20200616', 
+                                'value': cuts['pnp']
+                            }
+                        }, 
+                        'rrlyr': {
+                            '$elemMatch': {
+                                'version': 'd10_dnn_v2_20200616', 
+                                'value': cuts['rrlyr']
+                            }
+                        }, 
+                        'dscu': {
+                            '$elemMatch': {
+                                'version': 'd10_dnn_v2_20200616', 
+                                'value': cuts['dscu']
+                            }
+                        }, 
+                        'e': {
+                            '$elemMatch': {
+                                'version': 'd10_dnn_v2_20200616', 
+                                'value': cuts['e']
+                            }
+                        }, 
+    #                     'ea': {
+    #                         '$elemMatch': {
+    #                             'version': 'd10_dnn_v2_20200616', 
+    #                             'value': cuts['ea']
+    #                         }
+    #                     }, 
+    #                     'eb': {
+    #                         '$elemMatch': {
+    #                             'version': 'd10_dnn_v2_20200616', 
+    #                             'value': cuts['eb']
+    #                         }
+    #                     }, 
+    #                     'ew': {
+    #                         '$elemMatch': {
+    #                             'version': 'd10_dnn_v2_20200616', 
+    #                             'value': cuts['ew']
+    #                         }
+    #                     }
+                    }
+                }, 
+                {
+                    '$lookup': {
+                        'from': 'ZTF_source_features_20191101', 
+                        'localField': '_id', 
+                        'foreignField': '_id', 
+                        'as': 'features'
+                    }
+                }, 
+                {
+                    '$match': {
+                        'features.period': {
+                            '$gte': 0.1, 
+                            '$lte': 1
+                        }, 
+                        'features.f1_amp': {
+                            '$gte': 0.3
+                        }
+                    }
+                },
+                {
+                    '$project': {
+                        '_id': 1, 
+                        'ra': {
+                            '$arrayElemAt': [
+                                '$features.ra', 0
+                            ]
+                        }, 
+                        'dec': {
+                            '$arrayElemAt': [
+                                '$features.dec', 0
+                            ]
+                        }, 
+                        'period': {
+                            '$arrayElemAt': [
+                                '$features.period', 0
+                            ]
+                        }, 
+                        'f1_amp': {
+                            '$arrayElemAt': [
+                                '$features.f1_amp', 0
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    }
+    data = kow.query(q).get("result_data", dict()).get("query_result", dict())
+    return data
 
 # Parse command line
 opts = parse_commandline()
@@ -104,6 +216,20 @@ if opts.doDifference:
 #objids = np.array(df.index).astype(int)
 #objids_tmp, features = get_kowalski_features_objids(objids, kow)
 
+variability = query_variability(kow)
+objids_2 = []
+for obj in variability:
+    objids_2.append(obj["_id"])
+
+objids_1 = []
+plotFiles = glob.glob(os.path.join(plotDir,'*.png'))
+for plotFile in plotFiles:
+    objid = plotFile.split("/")[-1].replace(".png","")
+    objids_1.append(int(objid))
+
+print(len(objids_1),len(objids_2))
+print(len(np.setdiff1d(objids_1,objids_2))/len(objids_1))
+
 for ii, (index, row) in enumerate(df.iterrows()): 
     if np.mod(ii,100) == 0:
         print('Loading %d/%d'%(ii,len(df)))
@@ -114,6 +240,8 @@ for ii, (index, row) in enumerate(df.iterrows()):
     if (period < 0.1) or (period > 1.0): continue
     if (amp < 0.3): continue
     lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline = get_kowalski_objids([index], kow)
+
+    objids_1.append(index)
 
     hjd, magnitude, err = lightcurves[0]
     absmag, bp_rp = absmags[0], bp_rps[0]
@@ -144,4 +272,5 @@ for ii, (index, row) in enumerate(df.iterrows()):
         pngfile = os.path.join(plotDir,'%d.png' % objid)
         fig.savefig(pngfile, bbox_inches='tight')
         plt.close()
+
 

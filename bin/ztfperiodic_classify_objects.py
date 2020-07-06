@@ -31,6 +31,7 @@ import ztfperiodic
 from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.utils import get_kowalski_features
 from ztfperiodic.utils import get_kowalski_features_list
+from ztfperiodic.utils import get_kowalski_features_objids
 from ztfperiodic.classify import classify
 
 try:
@@ -66,6 +67,9 @@ def parse_commandline():
     parser.add_option("--catalog_file",default="../catalogs/swift.dat")
     parser.add_option("--Ncatalog",default=1,type=int)
     parser.add_option("--Ncatindex",default=0,type=int)
+
+    parser.add_option("-q","--query_type",default="ids")
+    parser.add_option("-i","--ids_file",default="/home/michael.coughlin/ZTF/ZTFVariability/ids/ids.20fields.npy")
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
@@ -151,12 +155,21 @@ if opts.lightcurve_source == "Kowalski":
         raise Exception('Kowalski connection failed...')
 
     if opts.source_type == "quadrant":
-        ids, features = get_kowalski_features(kow, 
-                                              num_batches=Ncatalog,
-                                              nb=Ncatindex,
-                                              featuresetname=modeltype,
-                                              dbname=dbname)
+        if opts.query_type == "skiplimit":
+            ids, features = get_kowalski_features(kow,
+                                                  num_batches=Ncatalog,
+                                                  nb=Ncatindex,
+                                                  featuresetname=modeltype,
+                                                  dbname=dbname) 
+        elif opts.query_type == "ids":
+            objids = np.load(opts.ids_file)
+            nlightcurves = len(objids)
+            objids_split = np.array_split(objids, Ncatalog)
+            objids = objids_split[Ncatindex]
 
+            ids, features = get_kowalski_features_objids(objids, kow, 
+                                                         featuresetname=modeltype,
+                                                         dbname=dbname)
     elif opts.source_type == "catalog":
 
         amaj, amin, phi = None, None, None
