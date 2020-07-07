@@ -388,10 +388,53 @@ if opts.lightcurve_source == "Kowalski":
             ras, decs, errs = np.array(ras), np.array(decs), np.array(errs)
             if ("fermi" in catalog_file):
                 amaj, amin, phi = np.array(amaj), np.array(amin), np.array(phi)
+
+            names_split = np.array_split(names,Ncatalog)
+            ras_split = np.array_split(ras,Ncatalog)
+            decs_split = np.array_split(decs,Ncatalog)
+            errs_split = np.array_split(errs,Ncatalog)
+    
+            names = names_split[Ncatindex]
+            ras = ras_split[Ncatindex]
+            decs = decs_split[Ncatindex]
+            errs = errs_split[Ncatindex]
+    
+            if ("fermi" in catalog_file):
+                amaj_split = np.array_split(amaj,Ncatalog)
+                amin_split = np.array_split(amin,Ncatalog)
+                phi_split = np.array_split(phi,Ncatalog)
+    
+                amaj = amaj_split[Ncatindex]
+                amin = amin_split[Ncatindex]
+                phi = phi_split[Ncatindex]
+
         elif ".hdf5" in catalog_file:
-            with h5py.File(catalog_file, 'r') as f:
-                ras, decs = f['ra'][:], f['dec'][:]
+            if "underMS" in catalog_file:
+                with h5py.File(catalog_file.replace(".hdf5","_ra.hdf5"), 'r') as f:
+                    ras = f['ra'][:]
+                with h5py.File(catalog_file.replace(".hdf5","_dec.hdf5"), 'r') as f:
+                    decs = f['dec'][:]
+            else:
+                with h5py.File(catalog_file, 'r') as f:
+                    ras, decs = f['ra'][:], f['dec'][:]
             errs = default_err*np.ones(ras.shape)
+
+            ras_split = np.array_split(ras,Ncatalog)
+            decs_split = np.array_split(decs,Ncatalog)
+            errs_split = np.array_split(errs,Ncatalog)
+ 
+            ras = ras_split[Ncatindex]
+            decs = decs_split[Ncatindex]
+            errs = errs_split[Ncatindex]
+ 
+            if ("fermi" in catalog_file):
+                amaj_split = np.array_split(amaj,Ncatalog)
+                amin_split = np.array_split(amin,Ncatalog)
+                phi_split = np.array_split(phi,Ncatalog)
+ 
+                amaj = amaj_split[Ncatindex]
+                amin = amin_split[Ncatindex]
+                phi = phi_split[Ncatindex]
 
             names = []
             for ra, dec in zip(ras, decs):
@@ -415,25 +458,6 @@ if opts.lightcurve_source == "Kowalski":
             ras, decs, errs = ras[idx], decs[idx], errs[idx]
             if ("fermi" in catalog_file):
                 amaj, amin, phi = amaj[idx], amin[idx], phi[idx]
-
-        names_split = np.array_split(names,Ncatalog)
-        ras_split = np.array_split(ras,Ncatalog)
-        decs_split = np.array_split(decs,Ncatalog)
-        errs_split = np.array_split(errs,Ncatalog)
-
-        names = names_split[Ncatindex]
-        ras = ras_split[Ncatindex]
-        decs = decs_split[Ncatindex]
-        errs = errs_split[Ncatindex]
-
-        if ("fermi" in catalog_file):
-            amaj_split = np.array_split(amaj,Ncatalog)
-            amin_split = np.array_split(amin,Ncatalog)
-            phi_split = np.array_split(phi,Ncatalog)
-
-            amaj = amaj_split[Ncatindex]
-            amin = amin_split[Ncatindex]
-            phi = phi_split[Ncatindex]
 
         catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
         catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(catalog_file_split,
