@@ -47,11 +47,15 @@ def parse_commandline():
     parser = optparse.OptionParser()
     parser.add_option("--doPlots",  action="store_true", default=False)
 
-    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/bw/")
-    parser.add_option("-c","--catalogPath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.pnp.f.h5")
+    #parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/bw/")
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/rrlyr/")
+    parser.add_option("-c","--catalogPath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.vnv.f.h5")
 
     parser.add_option("--doDifference",  action="store_true", default=False)
     parser.add_option("-d","--differencePath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.dscu.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.rrlyr.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.ea.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.eb.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.ew.f.h5")
+
+    parser.add_option("--doIntersection",  action="store_true", default=False)
+    parser.add_option("-i","--intersectionPath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.rrlyr.f.h5")
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
@@ -71,6 +75,12 @@ def query_variability(kow):
         'eb': {'$lt': 0.9},
         'ew': {'$lt': 0.9},
     }
+
+    cuts = {
+        'vnv': {'$gt': 0.9},
+        'rrlyr': {'$gt': 0.9},
+    }
+
     q = {
         "query_type": "aggregate",
         "query": {
@@ -78,30 +88,36 @@ def query_variability(kow):
             "pipeline": [
                 {
                     '$match': {
-                        'pnp': {
+                        #'pnp': {
+                        #    '$elemMatch': {
+                        #        'version': 'd10_dnn_v2_20200616', 
+                        #        'value': cuts['pnp']
+                        #    }
+                        #},
+                        'vnv': {
                             '$elemMatch': {
-                                'version': 'd10_dnn_v2_20200616', 
-                                'value': cuts['pnp']
+                                'version': 'd11_dnn_v2_20200616',
+                                'value': cuts['vnv']
                             }
                         }, 
                         'rrlyr': {
                             '$elemMatch': {
-                                'version': 'd10_dnn_v2_20200616', 
+                                'version': 'd11_dnn_v2_20200616', 
                                 'value': cuts['rrlyr']
                             }
                         }, 
-                        'dscu': {
-                            '$elemMatch': {
-                                'version': 'd10_dnn_v2_20200616', 
-                                'value': cuts['dscu']
-                            }
-                        }, 
-                        'e': {
-                            '$elemMatch': {
-                                'version': 'd10_dnn_v2_20200616', 
-                                'value': cuts['e']
-                            }
-                        }, 
+                        #'dscu': {
+                        #    '$elemMatch': {
+                        #        'version': 'd10_dnn_v2_20200616', 
+                        #        'value': cuts['dscu']
+                        #    }
+                        #}, 
+                        #'e': {
+                        #    '$elemMatch': {
+                        #        'version': 'd10_dnn_v2_20200616', 
+                        #        'value': cuts['e']
+                        #    }
+                        #}, 
     #                     'ea': {
     #                         '$elemMatch': {
     #                             'version': 'd10_dnn_v2_20200616', 
@@ -130,17 +146,17 @@ def query_variability(kow):
                         'as': 'features'
                     }
                 }, 
-                {
-                    '$match': {
-                        'features.period': {
-                            '$gte': 0.1, 
-                            '$lte': 1
-                        }, 
-                        'features.f1_amp': {
-                            '$gte': 0.3
-                        }
-                    }
-                },
+                #{
+                #    '$match': {
+                #        'features.period': {
+                #            '$gte': 0.1, 
+                #            '$lte': 1
+                #        }, 
+                #        'features.f1_amp': {
+                #            '$gte': 0.3
+                #        }
+                #    }
+                #},
                 {
                     '$project': {
                         '_id': 1, 
@@ -178,6 +194,7 @@ opts = parse_commandline()
 outputDir = opts.outputDir
 catalogPath = opts.catalogPath
 differencePath = opts.differencePath   
+intersectionPath = opts.intersectionPath
 
 plotDir = os.path.join(outputDir,'plots')
 if not os.path.isdir(plotDir):
@@ -212,6 +229,31 @@ if opts.doDifference:
         df1 = pd.read_hdf(differenceFile, 'df')
         idx = df.index.difference(df1.index)
         df = df.loc[idx]
+if opts.doIntersection:
+    intersectionFiles = intersectionPath.split(",")
+    for intersectionFile in intersectionFiles:
+        df1 = pd.read_hdf(intersectionFile, 'df')
+        idx = df.index.intersection(df1.index)
+        df = df.loc[idx]
+
+variability = query_variability(kow)
+objids_2 = []
+for obj in variability:
+    objids_2.append(obj["_id"])
+objids_1 = list(df.index)
+
+print(len(objids_1),len(objids_2))
+objids = list(set(objids_1 + objids_2))
+
+h5file = os.path.join(plotDir, 'objids.h5')
+df.to_hdf(h5file, key='df', mode='w')
+
+objfile = os.path.join(plotDir, 'objids.dat')
+fid = open(objfile, 'w')
+for objid in objids:
+    fid.write('%d\n' % objid)
+fid.close()
+print(stop)
 
 #objids = np.array(df.index).astype(int)
 #objids_tmp, features = get_kowalski_features_objids(objids, kow)
@@ -227,8 +269,8 @@ for plotFile in plotFiles:
     objid = plotFile.split("/")[-1].replace(".png","")
     objids_1.append(int(objid))
 
-print(len(objids_1),len(objids_2))
-print(len(np.setdiff1d(objids_1,objids_2))/len(objids_1))
+#print(len(objids_1),len(objids_2))
+#print(len(np.setdiff1d(objids_1,objids_2))/len(objids_1))
 
 for ii, (index, row) in enumerate(df.iterrows()): 
     if np.mod(ii,100) == 0:
