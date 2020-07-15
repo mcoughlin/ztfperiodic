@@ -39,6 +39,7 @@ def parse_commandline():
     """
     parser = optparse.OptionParser()
     parser.add_option("--doPlots",  action="store_true", default=False)
+    parser.add_option("--doLowVar",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/")
     parser.add_option("-m","--modelPath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/xgboost/")

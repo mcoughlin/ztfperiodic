@@ -145,7 +145,8 @@ if opts.doPlots:
     c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm(),
                        cmap=cmap)
     cbar = plt.colorbar(c)
-    cbar.set_label('Counts')
+    cbar.set_label('Counts', fontsize=24)
+    cbar.ax.tick_params(labelsize=24) 
     ax.set_xscale('log')
     ax.set_yscale('log')
     #plt.xlim([0.02, 50])
@@ -153,8 +154,12 @@ if opts.doPlots:
     #plt.ylim([0.02, 50])
     plt.ylim([0.02, 500])
     plt.fill_between([0.02, 500],[50,50],[500,500],color='gray',alpha=0.5)
-    plt.xlabel('Frequency [1/days]')
-    plt.ylabel('Frequency [1/days]')
+    plt.xlabel('Frequency [1/days]', fontsize=24)
+    plt.ylabel('Frequency [1/days]', fontsize=24)
+
+    ax.tick_params(axis='both', which='major', labelsize=24)
+    ax.tick_params(axis='both', which='minor', labelsize=24)
+
     fig.savefig(pdffile)
     plt.close()
    
