@@ -15,8 +15,11 @@ import pickle
 
 import matplotlib
 matplotlib.use('Agg')
-fs = 14
-matplotlib.rcParams.update({'font.size': fs})
+fs = 24
+font = {'family' : 'normal',
+        'weight' : 'normal',
+        'size'   : fs}
+matplotlib.rc('font', **font)
 matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
@@ -673,7 +676,8 @@ if opts.doPlots:
         plt.close()
 
         plotName = os.path.join(path_out_dir,'phase_color.pdf')
-        plt.figure(figsize=(7,5))
+        plt.figure(figsize=(8,6))
+        ax = plt.gca()
         bands_count = np.zeros((len(fids),1))
         for jj, (fid, color, symbol) in enumerate(zip(fids, colors, symbols)):
             for ii, key in enumerate(lightcurves_all.keys()):
@@ -685,10 +689,12 @@ if opts.doPlots:
                 else:
                     plt.errorbar(np.mod(lc["hjd"]-T0, 2.0*phase)/(2.0*phase), lc["mag"],yerr=lc["magerr"],fmt='%s%s' % (color,symbol))
                 bands_count[idx] = bands_count[idx] + 1
-        plt.xlabel('Phase')
-        plt.ylabel('Magnitude [ab]')
-        plt.legend()
-        #plt.title("period = %.2f days"%phase, fontsize = fs)
+        plt.xlabel('Phase', fontsize = fs)
+        plt.ylabel('Magnitude [ab]', fontsize = fs)
+        plt.legend(prop={'size': 20})
+        plt.title("Period = %.3f days"%phase, fontsize = fs)
+        ax.tick_params(axis='both', which='major', labelsize=fs)
+        ax.tick_params(axis='both', which='minor', labelsize=fs)
         plt.gca().invert_yaxis()
         plt.tight_layout()
         plt.savefig(plotName)
