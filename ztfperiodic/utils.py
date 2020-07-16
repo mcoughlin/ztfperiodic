@@ -1308,6 +1308,53 @@ def get_kowalski_features_objids(objids, kow, featuresetname='f',
 
     return df_features["ztf_id"], df_features[featuresetnames]
 
+
+def get_kowalski_classifications_objids(objids, kow,
+                                        dbname='ZTF_source_classifications_20191101',
+                                        version='d11_dnn_v2_20200627'):
+
+    classifications = {}
+    for ii, objid in enumerate(objids):
+        if (ii > 0) and (np.mod(ii,100) == 0):
+            print('Loading %d/%d...' % (ii, len(objids)))
+
+        qu = {"query_type":"find",
+              "query": {"catalog": dbname,
+                        "filter": {"_id": int(objid)},
+                        "projection": {}},
+             }
+        r = database_query(kow, qu, nquery = 10)
+
+        if not "result_data" in r:
+            print("Query for objid %d failed... continuing."%(objid))
+            continue
+
+        if len(r["result_data"]["query_result"]) == 0: continue
+
+        datlist = r["result_data"]["query_result"][0]
+
+        datas = {}
+        for datkey in datlist.keys():
+            if datkey == "_id":
+                datas["_id"] = datlist["_id"]
+                continue
+            for dat in datlist[datkey]:
+                if "version" in dat.keys() and dat["version"] == version:
+                    datas[datkey] = dat["value"]
+
+        datas["ztf_id"] = datas["_id"]
+        del datas["_id"]
+        df_series = pd.Series(datas).fillna(0)
+        classifications[objid] = df_series
+
+    if not classifications:
+        return []
+
+    df_classifications = pd.DataFrame.from_dict(classifications, orient='index',
+                                                columns=df_series.index)
+
+    return df_classifications
+
 def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f',
                           dbname='ZTF_source_features_20191101'):
 
