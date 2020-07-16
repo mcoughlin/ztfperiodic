@@ -33,6 +33,7 @@ Simbad.TIMEOUT = 300000
 
 from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.utils import get_kowalski_features_objids 
+from ztfperiodic.utils import get_kowalski_classifications_objids
 from ztfperiodic.utils import get_kowalski_objids
 
 try:
@@ -48,14 +49,14 @@ def parse_commandline():
     parser.add_option("--doPlots",  action="store_true", default=False)
 
     #parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/bw/")
-    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/rrlyr/")
-    parser.add_option("-c","--catalogPath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.vnv.f.h5")
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields_ids_DR2/catalog/compare/rrlyr/")
+    parser.add_option("-c","--catalogPath",default="/home/michael.coughlin/ZTF/output_features_20Fields_ids_DR2/catalog/compare/catalog_d11.vnv.f.fits")
 
     parser.add_option("--doDifference",  action="store_true", default=False)
     parser.add_option("-d","--differencePath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.dscu.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.rrlyr.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.ea.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.eb.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.ew.f.h5")
 
     parser.add_option("--doIntersection",  action="store_true", default=False)
-    parser.add_option("-i","--intersectionPath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.rrlyr.f.h5")
+    parser.add_option("-i","--intersectionPath",default="/home/michael.coughlin/ZTF/output_features_20Fields_ids_DR2/catalog/compare/catalog_d11.rrlyr.f.fits")
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
@@ -96,13 +97,13 @@ def query_variability(kow):
                         #},
                         'vnv': {
                             '$elemMatch': {
-                                'version': 'd11_dnn_v2_20200616',
+                                'version': 'd11_dnn_v2_20200627',
                                 'value': cuts['vnv']
                             }
                         }, 
                         'rrlyr': {
                             '$elemMatch': {
-                                'version': 'd11_dnn_v2_20200616', 
+                                'version': 'd11_dnn_v2_20200627', 
                                 'value': cuts['rrlyr']
                             }
                         }, 
@@ -179,6 +180,16 @@ def query_variability(kow):
                             '$arrayElemAt': [
                                 '$features.f1_amp', 0
                             ]
+                        },
+                        'vnv': {
+                            '$arrayElemAt': [
+                                '$vnv', 0
+                            ]
+                        },
+                        'rrlyr': {
+                            '$arrayElemAt': [
+                                '$rrlyr', 0
+                            ]
                         }
                     }
                 }
@@ -222,7 +233,13 @@ while cnt < nquery:
 if cnt == nquery:
     raise Exception('Kowalski connection failed...')
 
-df = pd.read_hdf(catalogPath, 'df')
+if ".h5" in catalogPath:
+    df = pd.read_hdf(catalogPath, 'df')
+elif ".fits" in catalogPath:
+    tab = Table.read(catalogPath, format='fits')
+    df = tab.to_pandas()
+    df.set_index('objid',inplace=True)
+
 if opts.doDifference:
     differenceFiles = differencePath.split(",")
     for differenceFile in differenceFiles:
@@ -232,31 +249,60 @@ if opts.doDifference:
 if opts.doIntersection:
     intersectionFiles = intersectionPath.split(",")
     for intersectionFile in intersectionFiles:
-        df1 = pd.read_hdf(intersectionFile, 'df')
+        if ".h5" in catalogPath:
+            df1 = pd.read_hdf(intersectionFile, 'df')
+        else:
+            tab = Table.read(intersectionFile, format='fits')
+            df1 = tab.to_pandas()
+            df1.set_index('objid',inplace=True)
+
         idx = df.index.intersection(df1.index)
         df = df.loc[idx]
 
+        idx = df1.index.intersection(df.index)
+        df1 = df1.loc[idx]
+
+idx1 = np.where(df["prob"] >= 0.9)[0]
+idx2 = np.where(df1["prob"] >= 0.9)[0]
+idx = np.intersect1d(idx1, idx2)
+objids_1 = df1.iloc[idx].index
+
 variability = query_variability(kow)
-objids_2 = []
+objids_2, probs_2_vnv, probs_2_rrlyr  = [], [], []
 for obj in variability:
     objids_2.append(obj["_id"])
-objids_1 = list(df.index)
 
-print(len(objids_1),len(objids_2))
-objids = list(set(objids_1 + objids_2))
+objids_2 = np.array(objids_2)
 
-h5file = os.path.join(plotDir, 'objids.h5')
-df.to_hdf(h5file, key='df', mode='w')
+objids = np.union1d(objids_1,objids_2)
 
 objfile = os.path.join(plotDir, 'objids.dat')
 fid = open(objfile, 'w')
 for objid in objids:
-    fid.write('%d\n' % objid)
-fid.close()
-print(stop)
+    
+    idx = np.where(np.array(df.index) == objid)[0]
+    df_slice = df.iloc[idx]
+    df1_slice = df1.iloc[idx]
 
-#objids = np.array(df.index).astype(int)
-#objids_tmp, features = get_kowalski_features_objids(objids, kow)
+    dnn_classifications = get_kowalski_classifications_objids([objid], kow)
+
+    if len(df_slice) > 0:
+        prob_1_vnv, prob_1_rrlyr = df_slice["prob"], df1_slice["prob"]
+    else:
+        prob_1_vnv, prob_1_rrlyr = -1, -1
+    if len(dnn_classifications) > 0:
+        prob_2_vnv, prob_2_rrlyr = dnn_classifications["vnv"], dnn_classifications["rrlyr"]
+    else:
+        prob_2_vnv, prob_2_rrlyr = -1, -1
+    fid.write('%d %.5f %.5f %.5f %.5f\n' % (objid, prob_1_vnv, prob_1_rrlyr,
+                                            prob_2_vnv, prob_2_rrlyr))
+fid.close()
+
+print(stop)
+objids_tmp, features = get_kowalski_features_objids(objids, kow)
+h5file = os.path.join(plotDir, 'features.h5')
+features.to_hdf(h5file, key='df', mode='w')
+print(stop)
 
 variability = query_variability(kow)
 objids_2 = []
