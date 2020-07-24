@@ -7,6 +7,7 @@ import copy
 import time
 import h5py
 from functools import reduce
+import traceback
 
 import numpy as np
 import pandas as pd
@@ -28,9 +29,7 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 
 from ztfperiodic.utils import convert_to_hex
-from ztfperiodic.utils import get_kowalski_features_objids 
-from ztfperiodic.utils import get_kowalski_classifications_objids
-from ztfperiodic.utils import get_kowalski_objids
+from ztfperiodic.utils import get_kowalski
 
 try:
     from penquins import Kowalski
@@ -101,17 +100,14 @@ def get_source(ztf_id):
 
     return source
 
-def save_source(irow):
-    i, row = irow
-
-    verbose = False
+def save_source(zvmarshal, source, zvm_program_id, verbose = False):
 
     for ii in range(3):
         try:
             # see if there is a saved source to merge with
             q = {"query_type": "cone_search",
                  "object_coordinates": {
-                     "radec": {'source': [row.ra, row.dec]},
+                     "radec": {'source': [source["ra"], source["dec"]]},
                      "cone_search_radius": 2,
                      "cone_search_unit": "arcsec"
                  },
@@ -122,36 +118,46 @@ def save_source(irow):
                      }
                  }
                 }
-            r = z.query(query=q)
+            r = zvmarshal.query(query=q)
             data = r['result']['result_data']['sources']['source']
             if len(data) > 0:
                 # saved to this program? merge
                 source_id = data[0]['_id']
-                ztf_source_id = int(row._id)
-                r = z.api(endpoint=f'sources/{source_id}', method='post',
-                          data={'source_id': source_id, 'action': 'merge', '_id': ztf_source_id})
+                ztf_source_id = int(source["_id"])
+                r = zvmarshal.api(endpoint=f'sources/{source_id}',
+                                  method='post',
+                                  data={'source_id': source_id,
+                                        'action': 'merge',
+                                        '_id': ztf_source_id})
                 # save period:
-                if not np.isnan(row['period']):
-                    r = z.api(endpoint=f'sources/{source_id}', method='post',
-                              data={'source_id': source_id, 'action': 'add_period',
-                                    'period': row['period'], 'period_unit': 'Days'})
+                if not np.isnan(source['period']):
+                    r = zvmarshal.api(endpoint=f'sources/{source_id}',
+                                      method='post',
+                                      data={'source_id': source_id,
+                                            'action': 'add_period',
+                                            'period': source['period'],
+                                            'period_unit': 'Days'})
                 # display(JSON(r, expanded=False))
             else:
                 # not previously saved? save by position:
-                r = z.api(endpoint='sources', method='put',
-                          data={'ra': row.ra, 'dec': row.dec,
-                                'prefix': 'ZTF', 'naming': 'random',
-                                'zvm_program_id': int(row.zvm_program_id),
-                                'automerge': True})
+                r = zvmarshal.api(endpoint='sources', method='put',
+                                  data={'ra': source["ra"],
+                                        'dec': source["dec"],
+                                        'prefix': 'ZTF', 'naming': 'random',
+                                        'zvm_program_id': int(zvm_program_id),
+                                        'automerge': True})
                 source_id = r['result']['_id']
                 if verbose:
-                    print('saved: ', source_id, int(row._id))
+                    print('saved: ', source_id, int(source["_id"]))
 
                 # set period
-                if not np.isnan(row['period']):
-                    r = z.api(endpoint=f'sources/{source_id}', method='post',
-                              data={'source_id': source_id, 'action': 'add_period',
-                                    'period': row['period'], 'period_unit': 'Days'})
+                if not np.isnan(source['period']):
+                    r = zvmarshal.api(endpoint=f'sources/{source_id}',
+                                      method='post',
+                                      data={'source_id': source_id,
+                                            'action': 'add_period',
+                                            'period': source['period'],
+                                            'period_unit': 'Days'})
 
                 # add classifications:
                 # set labels
@@ -188,12 +194,6 @@ plotDir = os.path.join(outputDir,'plots')
 if not os.path.isdir(plotDir):
     os.makedirs(plotDir)
 
-filenames = glob.glob(os.path.join(plotDir,'*.png'))
-objids = []
-for filename in filenames:
-    filenameSplit = filename.split("/")[-1].split(".png")[0]
-    objids.append(int(filenameSplit))
-
 kow = []
 nquery = 10
 cnt = 0
@@ -207,12 +207,13 @@ while cnt < nquery:
 if cnt == nquery:
     raise Exception('Kowalski connection failed...')
 
-zvmarshal = []
 nquery = 10
 cnt = 0
 while cnt < nquery:
     try:
-        zvmarshal = zvm(username=opts.zvm_user, password=opts.zvm_pwd)
+        zvmarshal = zvm(username=str(opts.zvm_user),
+                        password=str(opts.zvm_pwd),
+                        verbose=True, host="rico.caltech.edu")
         break
     except:
         time.sleep(5)
@@ -220,16 +221,62 @@ while cnt < nquery:
 if cnt == nquery:
     raise Exception('zvm connection failed...')
 
+objids = []
+periods = []
+
+filenames = glob.glob(os.path.join(plotDir,'*.png'))
+if len(filenames) == 0:
+    filedirs = glob.glob(os.path.join(outputDir,'*-*'))
+    for ii, filedir in enumerate(filedirs):
+        filenames = glob.glob(os.path.join(filedir,'*.png'))
+        for jj, filename in enumerate(filenames):
+            if np.mod(jj, 10) == 0:
+                print('Dir %d/%d File %d/%d' % (ii,len(filedirs),
+                                                jj,len(filenames)))
+            filenameSplit = filename.split("/")[-1].split(".png")[0].split("_")
+            sig, ra, dec, period, filt = np.array(filenameSplit,
+                                                  dtype=float)
+            lcs = get_kowalski(ra, dec, kow, radius = 1.0)
+            for objid in lcs.keys():
+                objids.append(objid)
+                periods.append(period)
+ 
+else:
+    for filename in filenames:
+        filenameSplit = filename.split("/")[-1].split(".png")[0]
+        objids.append(int(filenameSplit))
+        periods.append(-1)
+
+objids = np.array(objids)
+periods = np.array(periods)
+idx = np.argsort(objids)
+objids, periods = objids[idx], periods[idx]
+
 #r = zvmarshal.api(
-#    endpoint='programs', method='put', 
+#    endpoint='programs', method='get',
 #    data={
-#        'program_name': opts.program_name,
-#        'program_description': opts.program_description
+#        'program_name': str(opts.program_name),
 #    }
 #)
 
-for objid in objids:
-    source = get_source(objid)
-    print(source)
+#r = zvmarshal.api(
+#    endpoint='programs', method='put', 
+#    data={
+#        'program_name': str(opts.program_name),
+#        'program_description': str(opts.program_description)
+#    }
+#)
 
+zvm_program_id = 101
 
+for ii, (objid, period) in enumerate(zip(objids, periods)):
+    if np.mod(ii, 10) == 0:
+        print('Pushed %d/%d' % (ii, len(objids)))
+
+    source = get_source(int(objid))
+    if len(source) == 0:
+        print('No info for %d... continuing.' % objid)
+        continue
+    if np.isnan(source['period']) and (period > 0):
+        source['period'] = period   
+    save_source(zvmarshal, source, zvm_program_id, verbose = True)    
