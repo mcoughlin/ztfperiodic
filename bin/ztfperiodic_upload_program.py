@@ -57,6 +57,8 @@ def parse_commandline():
     parser.add_option("--zvm_user")
     parser.add_option("--zvm_pwd")
 
+    parser.add_option("--sigthresh",default=None,type=float)
+
     opts, args = parser.parse_args()
 
     return opts
@@ -94,7 +96,10 @@ def get_source(ztf_id):
     sources = kow.query(q).get("result_data", dict()).get("query_result", dict())
     if len(sources) > 0:
         source = sources[0]
-        source['period'] = source['period'][0]
+        if len(source['period']) > 0:
+            source['period'] = source['period'][0]
+        else:
+            source['period'] = np.nan
     else:
         source = []
 
@@ -221,6 +226,21 @@ while cnt < nquery:
 if cnt == nquery:
     raise Exception('zvm connection failed...')
 
+zvm_program_id = -1
+r = zvmarshal.api(endpoint='programs', method='get', data={'format': 'json'})
+for prog in r:
+    if prog["name"] == opts.program_name:
+        zvm_program_id = prog["_id"]
+        break
+if zvm_program_id < 0:
+    print('Creating new program...')
+    r = zvmarshal.api(endpoint='programs', method='put',
+                      data={'program_name': str(opts.program_name),
+                            'program_description': str(opts.program_description)
+                           }
+                     )
+    zvm_program_id = r["result"]["_id"]
+
 objids = []
 periods = []
 
@@ -231,11 +251,15 @@ if len(filenames) == 0:
         filenames = glob.glob(os.path.join(filedir,'*.png'))
         for jj, filename in enumerate(filenames):
             if np.mod(jj, 10) == 0:
-                print('Dir %d/%d File %d/%d' % (ii,len(filedirs),
-                                                jj,len(filenames)))
+                print('Dir %d/%d File %d/%d' % (ii+1,len(filedirs),
+                                                jj+1,len(filenames)))
             filenameSplit = filename.split("/")[-1].split(".png")[0].split("_")
             sig, ra, dec, period, filt = np.array(filenameSplit,
                                                   dtype=float)
+
+            if not opts.sigthresh is None:
+                if sig < opts.sigthresh: continue
+
             lcs = get_kowalski(ra, dec, kow, radius = 1.0)
             for objid in lcs.keys():
                 objids.append(objid)
@@ -251,23 +275,6 @@ objids = np.array(objids)
 periods = np.array(periods)
 idx = np.argsort(objids)
 objids, periods = objids[idx], periods[idx]
-
-#r = zvmarshal.api(
-#    endpoint='programs', method='get',
-#    data={
-#        'program_name': str(opts.program_name),
-#    }
-#)
-
-#r = zvmarshal.api(
-#    endpoint='programs', method='put', 
-#    data={
-#        'program_name': str(opts.program_name),
-#        'program_description': str(opts.program_description)
-#    }
-#)
-
-zvm_program_id = 101
 
 for ii, (objid, period) in enumerate(zip(objids, periods)):
     if np.mod(ii, 10) == 0:
