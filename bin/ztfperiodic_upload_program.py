@@ -43,7 +43,7 @@ def parse_commandline():
     Parse the options given on the command-line.
     """
     parser = optparse.OptionParser()
-    parser.add_option("--doPlots",  action="store_true", default=False)
+    parser.add_option("--doUpload",  action="store_true", default=False)
 
     #parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/bw/")
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_ids_DR2/catalog/compare/bw/")
@@ -199,6 +199,10 @@ plotDir = os.path.join(outputDir,'plots')
 if not os.path.isdir(plotDir):
     os.makedirs(plotDir)
 
+infoDir = os.path.join(outputDir,'info')
+if not os.path.isdir(infoDir):
+    os.makedirs(infoDir)
+
 kow = []
 nquery = 10
 cnt = 0
@@ -276,6 +280,8 @@ periods = np.array(periods)
 idx = np.argsort(objids)
 objids, periods = objids[idx], periods[idx]
 
+fid = open(os.path.join(infoDir, 'objs.dat'), 'w')
+
 for ii, (objid, period) in enumerate(zip(objids, periods)):
     if np.mod(ii, 10) == 0:
         print('Pushed %d/%d' % (ii, len(objids)))
@@ -285,5 +291,12 @@ for ii, (objid, period) in enumerate(zip(objids, periods)):
         print('No info for %d... continuing.' % objid)
         continue
     if np.isnan(source['period']) and (period > 0):
-        source['period'] = period   
-    save_source(zvmarshal, source, zvm_program_id, verbose = True)    
+        source['period'] = period  
+
+    fid.write('%d %.10f %.10f %.10f\n' % (objid, source['ra'], source['dec'],
+                                          source['period'])) 
+
+    if opts.doUpload: 
+        save_source(zvmarshal, source, zvm_program_id, verbose = True)   
+
+fid.close() 

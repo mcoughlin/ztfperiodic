@@ -62,7 +62,7 @@ def parse_commandline():
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
 
-    parser.add_option("--min_epochs",default=40,type=int)
+    parser.add_option("--min_epochs",default=50,type=int)
 
     opts, args = parser.parse_args()
 
@@ -163,7 +163,7 @@ if opts.lightcurve_source == "Kowalski":
                     if opts.doQuadrantScale:
                         qu = {"query_type":"count_documents",
                               "query": {
-                                  "catalog": 'ZTF_sources_20191101',
+                                  "catalog": 'ZTF_sources_20200401',
                                   "filter": {'field': {'$eq': int(field)},
                                              'ccd': {'$eq': int(ccd)},
                                              'quad': {'$eq': int(quadrant)}
