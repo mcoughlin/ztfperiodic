@@ -399,7 +399,9 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
                         doRemoveHC=False, doExtinction=False, max_error = 2.0,
                         doSigmaClipping=False,
                         sigmathresh=5.0,
-                        doOutbursting=False):
+                        doOutbursting=False,
+                        doPercentile=False,
+                        percmin = 10.0, percmax = 90.0):
 
     baseline=0
     cnt=0
@@ -411,7 +413,10 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
 
     tmax = Time('2020-01-01T00:00:00', format='isot', scale='utc').jd
 
-    for objid in objids:
+    for oo, objid in enumerate(objids):
+        if np.mod(oo, 100) == 0:
+            print('Loading object %d/%d' % (oo, len(objids)))
+
         qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].find({'_id':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1})"%(objid)}
         r = database_query(kow, qu, nquery = 10)
 
@@ -422,6 +427,7 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
         datas = r["result_data"]["query_result"]
 
         for ii, data in enumerate(datas):
+
             hjd, mag, magerr, ra, dec, fid = [], [], [], [], [], []
             objid = data["_id"]
             filt = data["filter"]
@@ -458,9 +464,39 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
             ra, dec = ra[idx], dec[idx]
 
             if doRemoveHC:
+                idx = []
+                for ii, t in enumerate(hjd):
+                    if ii == 0:
+                        idx.append(ii)
+                    else:
+                        dt = hjd[ii] - hjd[idx[-1]]
+                        if dt >= 30.0*60.0/86400.0:
+                            idx.append(ii)
+                if len(idx) == 0: continue 
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                ra, decobj = ra[idx], dec[idx]
+                fid = fid[idx]
+            elif doHCOnly:
                 dt = np.diff(hjd)
                 idx = np.setdiff1d(np.arange(len(hjd)),
-                                   np.where(dt < 30.0*60.0/86400.0)[0])
+                                   np.where(dt >= 30.0*60.0/86400.0)[0])
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                fid = fid[idx]
+                ra, dec = ra[idx], dec[idx]
+
+            if doSigmaClipping or doOutbursting:
+                iqr = np.diff(np.percentile(mag,q=[25,75]))[0]
+                idx = np.where(mag >= np.median(mag)-sigmathresh*iqr)[0]
+                if doOutbursting and (len(idx) == len(mag)):
+                    continue
+                if doSigmaClipping:
+                    hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                    ra, dec = ra[idx], dec[idx]
+                    fid = fid[idx]
+
+            if doPercentile:
+                magmin, magmax = np.percentile(mag, percmin), np.percentile(mag, percmax)
+                idx = np.where((mag >= magmin) & (mag <= magmax))[0]
                 hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
                 fid = fid[idx]
                 ra, dec = ra[idx], dec[idx]
@@ -486,8 +522,11 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
                 key = list(data2.keys())[0]
                 data2 = data2[key]
                 cat2 = get_catalog(data2)
-                idx,sep,_ = coords.match_to_catalog_sky(cat2)
-                dat2 = data2[idx]
+                if len(cat2) > 0:
+                    idx,sep,_ = coords.match_to_catalog_sky(cat2)
+                    dat2 = data2[idx]
+                else:
+                    dat2 = {}
                 if not "parallax" in dat2:
                     parallax, parallaxerr = None, None
                 else:
@@ -1096,12 +1135,18 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                 magerr[:] = errors
 
             if doRemoveHC:
-                dt = np.diff(hjd)
-                idx = np.setdiff1d(np.arange(len(hjd)),
-                                   np.where(dt < 30.0*60.0/86400.0)[0])
+                idx = []
+                for ii, t in enumerate(hjd):
+                    if ii == 0:
+                        idx.append(ii)
+                    else:
+                        dt = hjd[ii] - hjd[idx[-1]]
+                        if dt >= 30.0*60.0/86400.0:
+                            idx.append(ii)
+                idx = np.array(idx)
                 hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                raobj, decobj = raobj[idx], decobj[idx]
                 fid = fid[idx]
-                ra, dec = ra[idx], dec[idx]
             elif doHCOnly:
                 dt = np.diff(hjd)
                 idx = np.setdiff1d(np.arange(len(hjd)),
@@ -1109,6 +1154,16 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                 hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
                 fid = fid[idx]
                 ra, dec = ra[idx], dec[idx]
+
+            if doSigmaClipping or doOutbursting:
+                iqr = np.diff(np.percentile(mag,q=[25,75]))[0]
+                idx = np.where(mag >= np.median(mag)-sigmathresh*iqr)[0]
+                if doOutbursting and (len(idx) == len(mag)):
+                    continue
+                if doSigmaClipping:
+                    hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                    raobj, decobj = raobj[idx], decobj[idx]
+                    fid = fid[idx]
 
             if len(hjd) < min_epochs: continue
 

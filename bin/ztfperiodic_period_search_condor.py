@@ -59,6 +59,8 @@ def parse_commandline():
     parser.add_option("--doDocker",  action="store_true", default=False)
     parser.add_option("--doRsyncFiles",  action="store_true", default=False)
 
+    parser.add_option("--doPercentile",  action="store_true", default=False)
+
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
 
@@ -104,6 +106,8 @@ if opts.doRsyncFiles:
     extra_flags.append("--doRsyncFiles")
 if opts.doCrossMatch:
     extra_flags.append("--doCrossMatch")
+if opts.doPercentile:
+    extra_flags.append("--doPercentile")
 extra_flags = " ".join(extra_flags)
 
 matchfileDir = opts.matchfileDir
@@ -120,6 +124,10 @@ if not os.path.isdir(condorDir):
 logDir = os.path.join(condorDir,'logs')
 if not os.path.isdir(logDir):
     os.makedirs(logDir)
+
+idsDir = os.path.join(condorDir,'ids')
+if not os.path.isdir(idsDir):
+    os.makedirs(idsDir)
 
 if opts.doCutNObs:
     nobsfile = "../input/nobs.dat"
@@ -149,10 +157,11 @@ if opts.lightcurve_source == "Kowalski":
         fields3 = [851,848,797,761,721,508,352,355,364,379]
         fields4 = [1866,1834,1835,1804,1734,1655,1565]
 
-        fields_complete = fields1 + fields2 # + fields3 + fields4
-        fields = np.arange(300,400)
-        fields = np.arange(700,800)
-        fields = np.setdiff1d(fields,fields_complete)
+        fields = fields1 + fields2
+        #fields_complete = fields1 + fields2 # + fields3 + fields4
+        #fields = np.arange(300,400)
+        #fields = np.arange(700,800)
+        #fields = np.setdiff1d(fields,fields_complete)
 
         fields = [700]
 
@@ -176,6 +185,22 @@ if opts.lightcurve_source == "Kowalski":
 
                         Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
 
+                        idsFile = os.path.join(idsDir,"%d_%d_%d.npy"%(field, ccd, quadrant))
+                        if not os.path.isfile(idsFile):
+                            qu = {"query_type":"find",
+                                  "query": {"catalog": 'ZTF_sources_20200401',
+                                            "filter": {'field': {'$eq': int(field)},
+                                                       'ccd': {'$eq': int(ccd)},
+                                                       'quad': {'$eq': int(quadrant)}
+                                                      },
+                                            "projection": "{'_id': 1}"},
+                                 }
+                            r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
+                            objids = []
+                            for obj in r['result_data']['query_result']:
+                                objids.append(obj['_id'])
+                            np.save(idsFile, objids)
+
                     for ii in range(Ncatalog):
                         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant, ii))
                         if os.path.isfile(catalogFile):
@@ -185,11 +210,11 @@ if opts.lightcurve_source == "Kowalski":
                         if opts.doDocker:
                             fid1.write('nvidia-docker run --runtime=nvidia python-ztfperiodic %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type quadrant --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doPlots --doRemoveBrightStars --doLightcurveStats %s\n'%(cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, extra_flags))
                         else:
-                            fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type quadrant --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doPlots --doRemoveBrightStars --doLightcurveStats %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, extra_flags))
+                            fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type objid --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doPlots --doRemoveBrightStars --doLightcurveStats --catalog_file %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, idsFile, extra_flags))
     
                         fid.write('JOB %d condor.sub\n'%(job_number))
                         fid.write('RETRY %d 3\n'%(job_number))
-                        fid.write('VARS %d jobNumber="%d" field="%d" ccd="%d" quadrant="%d" Ncatindex="%d" Ncatalog="%d"\n'%(job_number,job_number,field, ccd, quadrant, ii, Ncatalog))
+                        fid.write('VARS %d jobNumber="%d" field="%d" ccd="%d" quadrant="%d" Ncatindex="%d" Ncatalog="%d" idsFile="%s"\n'%(job_number,job_number,field, ccd, quadrant, ii, Ncatalog, idsFile))
                         fid.write('\n\n')
                         job_number = job_number + 1
 
@@ -246,7 +271,7 @@ fid.write('output = logs/out.$(jobNumber)\n');
 fid.write('error = logs/err.$(jobNumber)\n');
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('arguments = %s --outputDir %s --batch_size %d --field $(field) --ccd $(ccd) --quadrant $(quadrant) --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --program_ids 1,2,3 --doPlots --doLightcurveStats --algorithm %s %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.algorithm,extra_flags))
+        fid.write('arguments = %s --outputDir %s --batch_size %d --field $(field) --ccd $(ccd) --quadrant $(quadrant) --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --program_ids 1,2,3 --doPlots --doLightcurveStats --algorithm %s --catalog_file $(idsFile) %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.algorithm,extra_flags))
     elif opts.source_type == "catalog":
         fid.write('arguments = %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --doPlots --Ncatalog %d --Ncatindex $(Ncatindex) --algorithm %s --min_epochs %d %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,opts.algorithm,min_epochs,extra_flags))
 elif opts.lightcurve_source == "matchfiles":

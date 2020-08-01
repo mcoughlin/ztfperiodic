@@ -245,35 +245,45 @@ if zvm_program_id < 0:
                      )
     zvm_program_id = r["result"]["_id"]
 
+print('Using program ID: %d' % (zvm_program_id))
+
 objids = []
 periods = []
 
-filenames = glob.glob(os.path.join(plotDir,'*.png'))
-if len(filenames) == 0:
-    filedirs = glob.glob(os.path.join(outputDir,'*-*'))
-    for ii, filedir in enumerate(filedirs):
-        filenames = glob.glob(os.path.join(filedir,'*.png'))
-        for jj, filename in enumerate(filenames):
-            if np.mod(jj, 10) == 0:
-                print('Dir %d/%d File %d/%d' % (ii+1,len(filedirs),
-                                                jj+1,len(filenames)))
-            filenameSplit = filename.split("/")[-1].split(".png")[0].split("_")
-            sig, ra, dec, period, filt = np.array(filenameSplit,
-                                                  dtype=float)
+compareFile = os.path.join(outputDir,'catalog.dat')
+if os.path.isfile(compareFile):
+    data_out = np.loadtxt(compareFile)
 
-            if not opts.sigthresh is None:
-                if sig < opts.sigthresh: continue
+    objids = data_out[:,1]
+    periods = data_out[:,4]
 
-            lcs = get_kowalski(ra, dec, kow, radius = 1.0)
-            for objid in lcs.keys():
-                objids.append(objid)
-                periods.append(period)
- 
 else:
-    for filename in filenames:
-        filenameSplit = filename.split("/")[-1].split(".png")[0]
-        objids.append(int(filenameSplit))
-        periods.append(-1)
+    filenames = glob.glob(os.path.join(plotDir,'*.png'))
+    if len(filenames) == 0:
+        filedirs = glob.glob(os.path.join(outputDir,'*-*'))
+        for ii, filedir in enumerate(filedirs):
+            filenames = glob.glob(os.path.join(filedir,'*.png'))
+            for jj, filename in enumerate(filenames):
+                if np.mod(jj, 10) == 0:
+                    print('Dir %d/%d File %d/%d' % (ii+1,len(filedirs),
+                                                    jj+1,len(filenames)))
+                filenameSplit = filename.split("/")[-1].split(".png")[0].split("_")
+                sig, ra, dec, period, filt = np.array(filenameSplit,
+                                                      dtype=float)
+    
+                if not opts.sigthresh is None:
+                    if sig < opts.sigthresh: continue
+    
+                lcs = get_kowalski(ra, dec, kow, radius = 1.0)
+                for objid in lcs.keys():
+                    objids.append(objid)
+                    periods.append(period)
+     
+    else:
+        for filename in filenames:
+            filenameSplit = filename.split("/")[-1].split(".png")[0]
+            objids.append(int(filenameSplit))
+            periods.append(-1)
 
 objids = np.array(objids)
 periods = np.array(periods)

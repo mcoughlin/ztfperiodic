@@ -7,6 +7,7 @@ import glob
 import optparse
 import pickle
 from functools import partial
+import subprocess
 
 import tables
 import pandas as pd
@@ -275,6 +276,11 @@ coordinates = []
 baseline=0
 fil = 'all'
 
+try:
+    print('Running on host %s' % (subprocess.check_output(['hostname','-f']).decode().replace("\n","")))
+except:
+    pass
+
 print('Organizing lightcurves...')
 if opts.lightcurve_source == "Kowalski":
 
@@ -498,14 +504,17 @@ if opts.lightcurve_source == "Kowalski":
 
         if (".dat" in catalog_file) or (".txt" in catalog_file):
             objids = np.loadtxt(catalog_file)
+            objids = objids[:,0] 
+        elif ".npy" in catalog_file:
+            objids = np.load(catalog_file)
         else:
             print("Sorry I don't know this file extension...")
             exit(0)
-        objids = objids[:,0]         
+
         objids_split = np.array_split(objids,Ncatalog)
         objids = objids_split[Ncatindex]
 
-        catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+        catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").replace(".npy","").split("/")[-1]
         catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(catalog_file_split,
                                                            Ncatindex))
 
@@ -523,7 +532,9 @@ if opts.lightcurve_source == "Kowalski":
                                 doExtinction=doExtinction,
                                 doSigmaClipping=doSigmaClipping,
                                 sigmathresh=sigmathresh,
-                                doOutbursting=doOutbursting)
+                                doOutbursting=doOutbursting,
+                                doPercentile=doPercentile,
+                                percmin = percmin, percmax = percmax)
     else:
         print("Source type unknown...")
         exit(0)

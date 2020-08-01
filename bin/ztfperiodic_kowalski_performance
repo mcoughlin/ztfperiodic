@@ -43,6 +43,7 @@ if not os.path.isfile(pcklFile):
     data_out = np.empty((0,5))
     #logfiles = logfiles[:1000]
     for ii, logfile in enumerate(logfiles):
+        print(logfile)
         if np.mod(ii,100) == 0:
             print('Loading %d/%d' % (ii, len(logfiles)))
     
@@ -64,7 +65,7 @@ if not os.path.isfile(pcklFile):
    
                 data_out = np.append(data_out,np.atleast_2d(data), axis=0)
                 data = np.array([np.nan, np.nan, np.nan, np.nan, ii])
- 
+
     f = open(pcklFile, 'wb')
     pickle.dump((data_out), f)
     f.close()
@@ -98,11 +99,11 @@ plt.ylim([3e-2,5])
 plt.savefig(plotName, bbox_inches='tight')
 plt.close()
 
-xedges = np.logspace(1,3.0,50)
+xedges = np.logspace(-1,2.0,50)
 yedges = np.logspace(1,3.5,50)
 
 idx = np.where(~np.isnan(data_out[:,0]))[0]
-H, xedges, yedges = np.histogram2d(data_out[idx,0], data_out[idx,1], bins=(xedges, yedges))
+H, xedges, yedges = np.histogram2d(data_out[idx,1], data_out[idx,0], bins=(xedges, yedges))
 H = H.T  # Let each row list bins with common y range.
 X, Y = np.meshgrid(xedges, yedges)
 H[H==0] = 1e-5
@@ -117,9 +118,9 @@ cbar = plt.colorbar(c)
 cbar.set_label('Counts')
 ax.set_xscale('log')
 ax.set_yscale('log')
-plt.xlim([10,1000])
+plt.xlim([0.1,50])
 plt.ylim([10,1000])
-ax.set_xticks([10,100,1000])
+ax.set_xticks([0.1,1,10])
 ax.set_yticks([10,100,1000])
 ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
 

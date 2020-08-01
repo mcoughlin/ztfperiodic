@@ -261,7 +261,6 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             for ii, stat in enumerate(data_out):
                 if np.isnan(stat.significance):
                     raise ValueError("Oops... significance  is nan... something went wrong")
-
                 periods_best[ii] = stat.best_params[0]
                 pdots[ii] = stat.best_params[1]
                 significances[ii] = stat.significance
