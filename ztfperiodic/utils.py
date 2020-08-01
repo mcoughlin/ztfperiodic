@@ -411,13 +411,33 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
 
     start = time.time()
 
+    Nmax = 100
+    Ncatalog = int(np.ceil(float(len(objids))/Nmax))
+    objids_split = np.array_split(objids, Ncatalog)
+
     tmax = Time('2020-01-01T00:00:00', format='isot', scale='utc').jd
 
-    for oo, objid in enumerate(objids):
-        if np.mod(oo, 100) == 0:
-            print('Loading object %d/%d' % (oo, len(objids)))
+    #for oo, objid in enumerate(objids):
+    #    if np.mod(oo, 100) == 0:
+    #        print('Loading object %d/%d' % (oo, len(objids)))
 
-        qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].find({'_id':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1})"%(objid)}
+    for oo in range(Ncatalog):
+        if np.mod(oo, 10) == 0:
+            print('Loading object set %d/%d' % (oo, Ncatalog))
+        #qu = {"query_type":"find",
+        #      "query": {"catalog": 'ZTF_sources_20200401',
+        #                "filter": {'_id': {'$eq': int(objid)}},
+        #                "projection": "{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}"
+        #                }
+        #     }
+
+        qu = {"query_type":"find",
+              "query": {"catalog": 'ZTF_sources_20200401',
+                        "filter": {'_id': {'$in': objids_split[oo].tolist()}}, 
+                        "projection": "{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}"
+                        },
+              "kwargs": {'max_time_ms': 1000}
+             }
         r = database_query(kow, qu, nquery = 10)
 
         if not "result_data" in r:
