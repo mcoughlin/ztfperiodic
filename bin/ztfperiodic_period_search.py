@@ -69,7 +69,7 @@ def parse_commandline():
     parser.add_option("--doSpectra",  action="store_true", default=False)
 
     parser.add_option("--doParallel",  action="store_true", default=False)
-    parser.add_option("-n","--Ncore",default=4,type=int)
+    parser.add_option("-n","--Ncore",default=8,type=int)
 
     parser.add_option("--doSimulateLightcurves",  action="store_true", default=False)
     parser.add_option("--doNotPeriodFind",  action="store_true", default=False)
@@ -534,7 +534,9 @@ if opts.lightcurve_source == "Kowalski":
                                 sigmathresh=sigmathresh,
                                 doOutbursting=doOutbursting,
                                 doPercentile=doPercentile,
-                                percmin = percmin, percmax = percmax)
+                                percmin = percmin, percmax = percmax,
+                                doParallel = opts.doParallel,
+                                Ncore = opts.Ncore)
     else:
         print("Source type unknown...")
         exit(0)
@@ -692,6 +694,7 @@ else:
 
 if opts.doLightcurveStats:
     print('Running lightcurve stats...')
+    start_time = time.time()
 
     if opts.doParallel:
         from joblib import Parallel, delayed
@@ -700,13 +703,15 @@ if opts.doLightcurveStats:
         stats = []
         for ii,data in enumerate(lightcurves):
             period = periods_best[ii]
-            if np.mod(ii,10) == 0:
+            if np.mod(ii,100) == 0:
                 print("%d/%d"%(ii,len(lightcurves)))
             copy = np.ma.copy(data).T
             t, mag, magerr = copy[:,0], copy[:,1], copy[:,2]
 
             stat = calc_stats(t, mag, magerr, period)
             stats.append(stat)
+    end_time = time.time()
+    print('Lightcurve statistics took %.2f seconds' % (end_time - start_time))
 
 if not opts.sigthresh is None:
     sigthresh = opts.sigthresh

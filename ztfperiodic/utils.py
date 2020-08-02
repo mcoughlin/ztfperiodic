@@ -401,7 +401,9 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
                         sigmathresh=5.0,
                         doOutbursting=False,
                         doPercentile=False,
-                        percmin = 10.0, percmax = 90.0):
+                        percmin = 10.0, percmax = 90.0,
+                        doParallel = False,
+                        Ncore = 8):
 
     baseline=0
     cnt=0
@@ -415,179 +417,36 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
     Ncatalog = int(np.ceil(float(len(objids))/Nmax))
     objids_split = np.array_split(objids, Ncatalog)
 
-    tmax = Time('2020-01-01T00:00:00', format='isot', scale='utc').jd
+    data_out = []
+    if doParallel:
+        from joblib import Parallel, delayed
+        data_out = Parallel(n_jobs=Ncore)(delayed(get_kowalski_objid)(objids_tmp,kow,program_ids=program_ids,min_epochs=min_epochs,doRemoveHC=doRemoveHC,doExtinction=doExtinction,doSigmaClipping=doSigmaClipping,sigmathresh=sigmathresh,doOutbursting=doOutbursting,doPercentile=doPercentile,percmin = percmin, percmax = percmax) for objids_tmp in objids_split)
+    else:
+        for oo in range(Ncatalog):
+            if np.mod(oo, 10) == 0:
+                print('Loading object set %d/%d' % (oo, Ncatalog))
+    
+            data = get_kowalski_objid(objids_split[oo], kow,
+                                      program_ids=program_ids,
+                                      min_epochs=min_epochs,
+                                      doRemoveHC=doRemoveHC,
+                                      doExtinction=doExtinction,
+                                      doSigmaClipping=doSigmaClipping,
+                                      sigmathresh=sigmathresh,
+                                      doOutbursting=doOutbursting,
+                                      doPercentile=doPercentile,
+                                      percmin = percmin, percmax = percmax)
+            data_out.append(data)
 
-    #for oo, objid in enumerate(objids):
-    #    if np.mod(oo, 100) == 0:
-    #        print('Loading object %d/%d' % (oo, len(objids)))
-
-    for oo in range(Ncatalog):
-        if np.mod(oo, 10) == 0:
-            print('Loading object set %d/%d' % (oo, Ncatalog))
-        #qu = {"query_type":"find",
-        #      "query": {"catalog": 'ZTF_sources_20200401',
-        #                "filter": {'_id': {'$eq': int(objid)}},
-        #                "projection": "{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}"
-        #                }
-        #     }
-
-        qu = {"query_type":"find",
-              "query": {"catalog": 'ZTF_sources_20200401',
-                        "filter": {'_id': {'$in': objids_split[oo].tolist()}}, 
-                        "projection": "{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}"
-                        },
-              "kwargs": {'max_time_ms': 1000}
-             }
-        r = database_query(kow, qu, nquery = 10)
-
-        if not "result_data" in r:
-            print("Query for objid %d failed... continuing."%(objid))
-            continue
-
-        datas = r["result_data"]["query_result"]
-
-        for ii, data in enumerate(datas):
-
-            hjd, mag, magerr, ra, dec, fid = [], [], [], [], [], []
-            objid = data["_id"]
-            filt = data["filter"]
-            data = data["data"]
-            for dic in data:
-                if not dic["programid"] in program_ids: continue
-                if (dic["programid"]==1) and (dic["hjd"] > tmax): continue
-                if not dic["catflags"] == 0: continue
-
-                hjd.append(dic["hjd"])
-                mag.append(dic["mag"])
-                magerr.append(dic["magerr"])
-                ra.append(dic["ra"])
-                dec.append(dic["dec"])
-                fid.append(filt)
-
-            hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
-            ra, dec = np.array(ra), np.array(dec)
-
-            fid = np.array(fid)
-            idx = np.where(~np.isnan(mag) & ~np.isnan(magerr))[0]
-            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
-            fid = fid[idx]
-            ra, dec = ra[idx], dec[idx]
-
-            idx = np.where(magerr<=max_error)[0]
-            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
-            fid = fid[idx]
-            ra, dec = ra[idx], dec[idx]
-
-            idx = np.argsort(hjd)
-            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
-            fid = fid[idx]
-            ra, dec = ra[idx], dec[idx]
-
-            if doRemoveHC:
-                idx = []
-                for ii, t in enumerate(hjd):
-                    if ii == 0:
-                        idx.append(ii)
-                    else:
-                        dt = hjd[ii] - hjd[idx[-1]]
-                        if dt >= 30.0*60.0/86400.0:
-                            idx.append(ii)
-                if len(idx) == 0: continue 
-                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
-                ra, decobj = ra[idx], dec[idx]
-                fid = fid[idx]
-            elif doHCOnly:
-                dt = np.diff(hjd)
-                idx = np.setdiff1d(np.arange(len(hjd)),
-                                   np.where(dt >= 30.0*60.0/86400.0)[0])
-                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
-                fid = fid[idx]
-                ra, dec = ra[idx], dec[idx]
-
-            if doSigmaClipping or doOutbursting:
-                iqr = np.diff(np.percentile(mag,q=[25,75]))[0]
-                idx = np.where(mag >= np.median(mag)-sigmathresh*iqr)[0]
-                if doOutbursting and (len(idx) == len(mag)):
-                    continue
-                if doSigmaClipping:
-                    hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
-                    ra, dec = ra[idx], dec[idx]
-                    fid = fid[idx]
-
-            if doPercentile:
-                magmin, magmax = np.percentile(mag, percmin), np.percentile(mag, percmax)
-                idx = np.where((mag >= magmin) & (mag <= magmax))[0]
-                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
-                fid = fid[idx]
-                ra, dec = ra[idx], dec[idx]
-
-            if len(hjd) < min_epochs: continue
-
-            lightcurve=(hjd,mag,magerr)
-            lightcurves.append(lightcurve)
-            filters.append(np.unique(fid).tolist())
-            nlightcurves = 1
-
-            radius = 5
-            qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(np.median(ra),np.median(dec)), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"} } }
-            r = database_query(kow, qu, nquery = 10)
-  
-            coords = SkyCoord(ra=np.median(ra)*u.degree, 
-                              dec=np.median(dec)*u.degree, frame='icrs')
-
-            absmag, bp_rp = [np.nan, np.nan, np.nan], np.nan
-            if "result_data" in r:
-                key2 = 'Gaia_DR2'
-                data2 = r["result_data"][key2]
-                key = list(data2.keys())[0]
-                data2 = data2[key]
-                cat2 = get_catalog(data2)
-                if len(cat2) > 0:
-                    idx,sep,_ = coords.match_to_catalog_sky(cat2)
-                    dat2 = data2[idx]
-                else:
-                    dat2 = {}
-                if not "parallax" in dat2:
-                    parallax, parallaxerr = None, None
-                else:
-                    parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
-                if not "phot_g_mean_mag" in dat2:
-                    g_mag = None
-                else:
-                    g_mag = dat2["phot_g_mean_mag"]
-
-                if not "phot_bp_mean_mag" in dat2:
-                    bp_mag = None
-                else:
-                    bp_mag = dat2["phot_bp_mean_mag"]
-
-                if not "phot_rp_mean_mag" in dat2:
-                    rp_mag = None
-                else:
-                    rp_mag = dat2["phot_rp_mean_mag"]
-
-                if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None)):
-                    absmag = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
-                    bp_rp = bp_mag-rp_mag
-
-            for jj in range(nlightcurves):
-                coordinate=(np.median(ra),np.median(dec))
-                coordinates.append(coordinate)
-                ids.append(objid)
-                absmags.append(absmag)
-                bp_rps.append(bp_rp)
-
-                ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
-                if dec_hex[0] == "-":
-                    objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
-                else:
-                    objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
-                names.append(objname)
-
-            newbaseline = max(hjd)-min(hjd)
-            if newbaseline>baseline:
-                baseline=newbaseline
-            cnt = cnt + 1
+    for oo, data in enumerate(data_out):
+        lightcurves = lightcurves + data[0]
+        coordinates = coordinates + data[1]
+        filters = filters + data[2]
+        ids = ids + data[3]
+        absmags = absmags + data[4]
+        bp_rps = bp_rps + data[5]
+        names = names + data[6]
+        baseline = np.max([baseline,data[7]])
 
     end = time.time()
     loadtime = end - start
@@ -596,6 +455,190 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
         print('Loaded %d lightcurves in %.5f seconds' % (len(lightcurves), loadtime))
 
     return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
+
+
+def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
+                       doRemoveHC=False, doExtinction=False, max_error = 2.0,
+                       doSigmaClipping=False,
+                       sigmathresh=5.0,
+                       doOutbursting=False,
+                       doPercentile=False,
+                       percmin = 10.0, percmax = 90.0):
+
+    baseline=0
+    cnt=0
+    names = []
+    lightcurves, coordinates, filters, ids = [], [], [], []
+    absmags, bp_rps = [], []
+
+    tmax = Time('2020-01-01T00:00:00', format='isot', scale='utc').jd
+
+    #qu = {"query_type":"find",
+    #      "query": {"catalog": 'ZTF_sources_20200401',
+    #                "filter": {'_id': {'$eq': int(objid)}},
+    #                "projection": "{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}"
+    #                }
+    #     }
+
+    qu = {"query_type":"find",
+          "query": {"catalog": 'ZTF_sources_20200401',
+                    "filter": {'_id': {'$in': objids.tolist()}}, 
+                    "projection": "{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}"
+                    },
+          "kwargs": {'max_time_ms': 10000}
+         }
+    r = database_query(kow, qu, nquery = 10)
+
+    if not "result_data" in r:
+        print("Query for objid %d failed... continuing."%(objid))
+        return []
+
+    datas = r["result_data"]["query_result"]
+
+    for ii, data in enumerate(datas):
+
+        hjd, mag, magerr, ra, dec, fid = [], [], [], [], [], []
+        objid = data["_id"]
+        filt = data["filter"]
+        data = data["data"]
+        for dic in data:
+            if not dic["programid"] in program_ids: continue
+            if (dic["programid"]==1) and (dic["hjd"] > tmax): continue
+            if not dic["catflags"] == 0: continue
+
+            hjd.append(dic["hjd"])
+            mag.append(dic["mag"])
+            magerr.append(dic["magerr"])
+            ra.append(dic["ra"])
+            dec.append(dic["dec"])
+            fid.append(filt)
+
+        hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
+        ra, dec = np.array(ra), np.array(dec)
+
+        fid = np.array(fid)
+        idx = np.where(~np.isnan(mag) & ~np.isnan(magerr))[0]
+        hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+        fid = fid[idx]
+        ra, dec = ra[idx], dec[idx]
+
+        idx = np.where(magerr<=max_error)[0]
+        hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+        fid = fid[idx]
+        ra, dec = ra[idx], dec[idx]
+
+        idx = np.argsort(hjd)
+        hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+        fid = fid[idx]
+        ra, dec = ra[idx], dec[idx]
+
+        if doRemoveHC:
+            idx = []
+            for ii, t in enumerate(hjd):
+                if ii == 0:
+                    idx.append(ii)
+                else:
+                    dt = hjd[ii] - hjd[idx[-1]]
+                    if dt >= 30.0*60.0/86400.0:
+                        idx.append(ii)
+            if len(idx) == 0: continue 
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            ra, decobj = ra[idx], dec[idx]
+            fid = fid[idx]
+        elif doHCOnly:
+            dt = np.diff(hjd)
+            idx = np.setdiff1d(np.arange(len(hjd)),
+                               np.where(dt >= 30.0*60.0/86400.0)[0])
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            fid = fid[idx]
+            ra, dec = ra[idx], dec[idx]
+
+        if doSigmaClipping or doOutbursting:
+            iqr = np.diff(np.percentile(mag,q=[25,75]))[0]
+            idx = np.where(mag >= np.median(mag)-sigmathresh*iqr)[0]
+            if doOutbursting and (len(idx) == len(mag)):
+                continue
+            if doSigmaClipping:
+                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                ra, dec = ra[idx], dec[idx]
+                fid = fid[idx]
+
+        if doPercentile:
+            magmin, magmax = np.percentile(mag, percmin), np.percentile(mag, percmax)
+            idx = np.where((mag >= magmin) & (mag <= magmax))[0]
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            fid = fid[idx]
+            ra, dec = ra[idx], dec[idx]
+
+        if len(hjd) < min_epochs: continue
+
+        lightcurve=(hjd,mag,magerr)
+        lightcurves.append(lightcurve)
+        filters.append(np.unique(fid).tolist())
+        nlightcurves = 1
+
+        radius = 5
+        qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(np.median(ra),np.median(dec)), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"} } }
+        r = database_query(kow, qu, nquery = 10)
+  
+        coords = SkyCoord(ra=np.median(ra)*u.degree, 
+                          dec=np.median(dec)*u.degree, frame='icrs')
+
+        absmag, bp_rp = [np.nan, np.nan, np.nan], np.nan
+        if "result_data" in r:
+            key2 = 'Gaia_DR2'
+            data2 = r["result_data"][key2]
+            key = list(data2.keys())[0]
+            data2 = data2[key]
+            cat2 = get_catalog(data2)
+            if len(cat2) > 0:
+                idx,sep,_ = coords.match_to_catalog_sky(cat2)
+                dat2 = data2[idx]
+            else:
+                dat2 = {}
+            if not "parallax" in dat2:
+                parallax, parallaxerr = None, None
+            else:
+                parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
+            if not "phot_g_mean_mag" in dat2:
+                g_mag = None
+            else:
+                g_mag = dat2["phot_g_mean_mag"]
+
+            if not "phot_bp_mean_mag" in dat2:
+                bp_mag = None
+            else:
+                bp_mag = dat2["phot_bp_mean_mag"]
+
+            if not "phot_rp_mean_mag" in dat2:
+                rp_mag = None
+            else:
+                rp_mag = dat2["phot_rp_mean_mag"]
+
+            if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None)):
+                absmag = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
+                bp_rp = bp_mag-rp_mag
+
+        for jj in range(nlightcurves):
+            coordinate=(np.median(ra),np.median(dec))
+            coordinates.append(coordinate)
+            ids.append(objid)
+            absmags.append(absmag)
+            bp_rps.append(bp_rp)
+
+            ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
+            if dec_hex[0] == "-":
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+            else:
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+            names.append(objname)
+
+        newbaseline = max(hjd)-min(hjd)
+        if newbaseline>baseline:
+            baseline=newbaseline
+
+    return [lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline]
+
 
 def get_kowalski_features_list(ras, decs, kow,
                                errs = None, names = None,
@@ -1165,7 +1208,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                             idx.append(ii)
                 idx = np.array(idx)
                 hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
-                raobj, decobj = raobj[idx], decobj[idx]
+                ra, dec = ra[idx], dec[idx]
                 fid = fid[idx]
             elif doHCOnly:
                 dt = np.diff(hjd)
@@ -1182,7 +1225,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                     continue
                 if doSigmaClipping:
                     hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
-                    raobj, decobj = raobj[idx], decobj[idx]
+                    ra, dec = ra[idx], dec[idx]
                     fid = fid[idx]
 
             if len(hjd) < min_epochs: continue
