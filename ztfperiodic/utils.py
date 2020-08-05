@@ -1829,7 +1829,7 @@ def database_query(kow, qu, nquery = 5):
     cnt = 0
     while cnt < nquery:
         r = kow.query(query=qu)
-        if "result_data" in r:
+        if (r is not None) and ("result_data" in r):
             break
         time.sleep(5)        
         cnt = cnt + 1

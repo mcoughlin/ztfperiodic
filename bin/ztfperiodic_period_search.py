@@ -8,6 +8,8 @@ import optparse
 import pickle
 from functools import partial
 import subprocess
+import warnings
+warnings.filterwarnings("ignore")
 
 import tables
 import pandas as pd

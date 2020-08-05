@@ -101,7 +101,7 @@ def fourier_decomposition(t,y,dy,N,p,maxNterms=5,relative_output=True):
 
     f = make_f(p=p)
     chi2 = np.zeros(maxNterms+1,dtype=float) # fill in later
-    pars = np.zeros((maxNterms+1,(maxNterms+1)*2)) # fill in later
+    pars = np.zeros((maxNterms+2,(maxNterms+1)*2)) # fill in later
 
     
     init = np.array([np.median(y),0.000001]) # the initial values for the minimiser

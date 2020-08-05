@@ -367,10 +367,10 @@ for i,ii,s in zip(np.arange(len(sep)),idx,sep):
                                                              decdiff,
                                                              classification))
     else:
-        fid.write('%d %d %.5f %.5f %.5f %.5f %.5e %.5e\n' % (catnum, objid,
-                                                             ra1, dec1,
-                                                             period1, period2,
-                                                             sig1, sig2))
+        fid.write('%d %d %.5f %.5f %.10f %.10f %.5e %.5e\n' % (catnum, objid,
+                                                               ra1, dec1,
+                                                               period1, period2,
+                                                               sig1, sig2))
 fid.close() 
 
 if opts.doCrossMatch:
@@ -467,7 +467,8 @@ if opts.doPlots:
         plt.close() 
 
         xedges = np.logspace(np.log10(0.02),3.0,100)
-        yedges = np.linspace(4.0,40.0,50)
+        #yedges = np.linspace(4.0,40.0,50)
+        yedges = np.linspace(1.0,40.0,50)
 
         H, xedges, yedges = np.histogram2d(cat1["period"], cat1["sig"], bins=(xedges, yedges))
         H = H.T  # Let each row list bins with common y range.
