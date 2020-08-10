@@ -201,7 +201,7 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 ce = ConditionalEntropy(phase_bins, mag_bins)
             elif algorithm == "EAOV":
                 from periodfind.aov import AOV
-                aov = AOV(phase_bins, mag_bins)
+                aov = AOV(phase_bins)
 
             if doUsePDot:
                 num_pdots = 10
