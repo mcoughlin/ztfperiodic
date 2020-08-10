@@ -60,6 +60,7 @@ def parse_commandline():
     parser.add_option("--doRsyncFiles",  action="store_true", default=False)
 
     parser.add_option("--doPercentile",  action="store_true", default=False)
+    parser.add_option("--doParallel",  action="store_true", default=False)
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
@@ -108,6 +109,8 @@ if opts.doCrossMatch:
     extra_flags.append("--doCrossMatch")
 if opts.doPercentile:
     extra_flags.append("--doPercentile")
+if opts.doParallel:
+    extra_flags.append("--doParallel")
 extra_flags = " ".join(extra_flags)
 
 matchfileDir = opts.matchfileDir

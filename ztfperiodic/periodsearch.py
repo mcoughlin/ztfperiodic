@@ -194,10 +194,14 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                             pdots[jj] = pdot[kk]*1.0 
             pdots, periods_best, significances = pdots.flatten(), periods_best.flatten(), significances.flatten()
 
-        elif algorithm == "ECE":
-            from periodfind.ce import ConditionalEntropy
-            #ce = ConditionalEntropy(phase_bins=phase_bins, mag_bins=mag_bins)
-            ce = ConditionalEntropy(phase_bins, mag_bins)
+        elif (algorithm == "ECE") or (algorithm == "EAOV"):
+            if algorithm == "ECE":
+                from periodfind.ce import ConditionalEntropy
+                #ce = ConditionalEntropy(phase_bins=phase_bins, mag_bins=mag_bins)
+                ce = ConditionalEntropy(phase_bins, mag_bins)
+            elif algorithm == "EAOV":
+                from periodfind.aov import AOV
+                aov = AOV(phase_bins, mag_bins)
 
             if doUsePDot:
                 num_pdots = 10
@@ -257,7 +261,11 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
             significances = np.zeros((len(lightcurves),1))
             pdots = np.zeros((len(lightcurves),1))
 
-            data_out = ce.calc(time_stack, mag_stack, periods, pdots_to_test)
+            if algorithm == "ECE":
+                data_out = ce.calc(time_stack, mag_stack, periods, pdots_to_test)
+            elif algorithm == "EAOV":
+                data_out = aov.calc(time_stack, mag_stack, periods, pdots_to_test)
+
             for ii, stat in enumerate(data_out):
                 if np.isnan(stat.significance):
                     raise ValueError("Oops... significance  is nan... something went wrong")
