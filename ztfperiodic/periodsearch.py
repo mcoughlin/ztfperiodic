@@ -7,13 +7,22 @@ import matplotlib.pyplot as plt
 
 import ztfperiodic.utils
 
+try:
+    from ztfperiodic.pyaov.pyaov import aovw, amhw
+except:
+    print('Install pyaov if you want AOV')
+    pass
+
+
 def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                  doGPU=False, doCPU=False, doSaveMemory=False,
                  doRemoveTerrestrial=False,
                  doRemoveWindow=False,
                  doUsePDot=False, doSingleTimeSegment=False,
                  freqs_to_remove=None,
-                 phase_bins=20, mag_bins=10):
+                 phase_bins=20, mag_bins=10,
+                 doParallel=False,
+                 Ncore=4):
 
     if doRemoveTerrestrial and (freqs_to_remove is not None) and not (algorithm=="LS" or algorithm=="GCE_LS_AOV" or algorithm=="GCE_LS" or algorithm=="GCE_LS_AOV_x3"):
         for pair in freqs_to_remove:
@@ -370,34 +379,19 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                                               freqs[idx[:nfreqs_to_keep]])
             ls_proc.finish()
 
-            for jj, data in enumerate(lightcurves):
-                if np.mod(jj,10) == 0:
-                    print("%d/%d"%(jj,len(lightcurves)))
+            if doParallel:
+                from joblib import Parallel, delayed
+                res = Parallel(n_jobs=Ncore)(delayed(calc_AOV)(data, freqs_to_keep[jj], df) for jj, data in enumerate(lightcurves))
+                periods_best = [x[0] for x in res]
+                significances = [x[1] for x in res]
+            else:
+                for jj, data in enumerate(lightcurves):
+                    if np.mod(jj,10) == 0:
+                        print("%d/%d"%(jj,len(lightcurves)))
 
-                copy = np.ma.copy(data).T
-                copy[:,1] = (copy[:,1]  - np.min(copy[:,1])) \
-                   / (np.max(copy[:,1]) - np.min(copy[:,1]))
-
-                freqs, aovs = np.empty((0,1)), np.empty((0,1))
-                for ii, fr0 in enumerate(freqs_to_keep[jj]):
-                    err = copy[:,2]
-                    aov, frtmp, _ = amhw(copy[:,0], copy[:,1], err,
-                                         fr0=fr0-50*df,
-                                         fstop=fr0+50*df,
-                                         fstep=df/2.0,
-                                         nh2=4)
-                    idx = np.where(frtmp > 0)[0]
-
-                    aovs = np.append(aovs,aov[idx])
-                    freqs = np.append(freqs,frtmp[idx])
-
-                significance = np.abs(np.mean(aovs)-np.max(aovs))/np.std(aovs)
-                periods = 1./freqs
-                significance = np.max(aovs)
-                period = periods[np.argmax(aovs)]
-
-                periods_best.append(period)
-                significances.append(significance)
+                    period, significance = calc_AOV(data, freqs_to_keep[jj], df)
+                    periods_best.append(period)
+                    significances.append(significance)
 
         elif algorithm == "GCE_LS_AOV_x3":
             nfreqs_to_keep = 100
@@ -783,3 +777,28 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 significances.append(significance)
  
     return np.array(periods_best), np.array(significances), np.array(pdots)
+
+def calc_AOV(data, freqs_to_keep, df):
+    copy = np.ma.copy(data).T
+    copy[:,1] = (copy[:,1]  - np.min(copy[:,1])) \
+       / (np.max(copy[:,1]) - np.min(copy[:,1]))
+
+    freqs, aovs = np.empty((0,1)), np.empty((0,1))
+    for ii, fr0 in enumerate(freqs_to_keep):
+        err = copy[:,2]
+        aov, frtmp, _ = amhw(copy[:,0], copy[:,1], err,
+                             fr0=fr0-50*df,
+                             fstop=fr0+50*df,
+                             fstep=df/2.0,
+                             nh2=4)
+        idx = np.where(frtmp > 0)[0]
+
+        aovs = np.append(aovs,aov[idx])
+        freqs = np.append(freqs,frtmp[idx])
+
+    significance = np.abs(np.mean(aovs)-np.max(aovs))/np.std(aovs)
+    periods = 1./freqs
+    significance = np.max(aovs)
+    period = periods[np.argmax(aovs)]
+
+    return [period, significance]

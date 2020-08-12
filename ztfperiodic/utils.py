@@ -1087,6 +1087,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                       doRemoveHC=False, doHCOnly=False,
                       doSigmaClipping=False,
                       sigmathresh=5.0,
+                      doOutbursting=False,
                       doAlias=False,
                       doPercentile=False,
                       percmin = 10.0, percmax = 90.0):
@@ -1206,7 +1207,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                         dt = hjd[ii] - hjd[idx[-1]]
                         if dt >= 30.0*60.0/86400.0:
                             idx.append(ii)
-                idx = np.array(idx)
+                idx = np.array(idx).astype(int)
                 hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
                 ra, dec = ra[idx], dec[idx]
                 fid = fid[idx]
