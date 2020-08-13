@@ -690,7 +690,9 @@ else:
                                                       doRemoveTerrestrial=opts.doRemoveTerrestrial,
                                                       freqs_to_remove=freqs_to_remove,
                                                       doUsePDot=opts.doUsePDot,
-                                                      doSingleTimeSegment=opts.doSingleTimeSegment)
+                                                      doSingleTimeSegment=opts.doSingleTimeSegment,
+                                                      doParallel=opts.doParallel,
+                                                      Ncore=opts.Ncore)
     end_time = time.time()
     print('Lightcurve analysis took %.2f seconds' % (end_time - start_time))
 

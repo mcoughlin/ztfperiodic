@@ -1,10 +1,10 @@
 
 import numpy as np
 
-from xgboost import XGBClassifier
-import xgboost as xgb
-
 def classify(algorithm, features, modelFile=None):
+
+    from xgboost import XGBClassifier
+    import xgboost as xgb
 
     if algorithm == "xgboost":
         dtest = xgb.DMatrix(features)
