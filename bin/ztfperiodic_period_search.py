@@ -126,6 +126,8 @@ def parse_commandline():
     parser.add_option("--doObjIDFilenames",  action="store_true", default=False)
     parser.add_option("--doCheckLightcurves",  action="store_true", default=False)
 
+    parser.add_option("--samples_per_peak",default=3,type=int)
+
     opts, args = parser.parse_args()
 
     return opts
@@ -642,7 +644,7 @@ print('Using baseline: %.5f, fmin: %.5f, fmax %.5f' %(baseline, fmin, fmax))
 if (opts.source_type == "catalog") and ("fermi" in catalog_file):
     basefolder = os.path.join(basefolder,'%d' % Ncatindex)
 
-samples_per_peak = 3
+samples_per_peak = opts.samples_per_peak
 phase_bins, mag_bins = 20, 10
 
 df = 1./(samples_per_peak * baseline)

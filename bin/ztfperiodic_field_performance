@@ -1,0 +1,216 @@
+
+import os, sys, pickle
+import glob
+import optparse
+
+import tables
+import pandas as pd
+import numpy as np
+
+from astropy.table import Table, vstack
+
+import matplotlib
+matplotlib.use('Agg')
+matplotlib.rcParams.update({'font.size': 20})
+matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import cm
+from matplotlib.colors import LogNorm
+
+def parse_commandline():
+    """
+    Parse the options given on the command-line.
+    """
+    parser = optparse.OptionParser()
+
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields/catalog/performance/")
+    parser.add_option("-f","--filenames",default="/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields/catalog/compare/296/catalog_GCE_LS_AOV.fits,/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields/catalog/compare/487/catalog_GCE_LS_AOV.fits,/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields/catalog/compare/682/catalog_GCE_LS_AOV.fits,/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields/catalog/compare/853/catalog_GCE_LS_AOV.fits")
+
+    opts, args = parser.parse_args()
+
+    return opts
+
+# Parse command line
+opts = parse_commandline()
+
+outputDir = opts.outputDir
+if not os.path.isdir(outputDir):
+    os.makedirs(outputDir)
+
+data = {}
+filenames = opts.filenames.split(",")
+for filename in filenames:
+    cat = Table.read(filename, format='fits')
+    cat.sort("sig")
+    cat.reverse()
+
+    filenameSplit = filename.split("/")
+    key = filenameSplit[-2]
+
+    Nobs = cat['stats0']
+    wstd = cat['stats5']
+
+    data[key] = {}
+    data[key]["Nobs"] = Nobs
+    data[key]["wstd"] = wstd
+
+color1 = 'cornflowerblue'
+color2 = 'coral'
+color3 = 'darkgreen'
+color4 = 'pink'
+color5 = 'cyan'
+
+linestyles = ['-', '-.', ':','--']
+color_names = [color1, color2, color3, color4]
+
+plotName = os.path.join(outputDir, "Nobs.pdf")
+plt.figure(figsize=(8,6))
+ax = plt.gca()
+for ii, name in enumerate(data.keys()):
+    color_name = color_names[ii]
+    linestyle = linestyles[ii]
+
+    #hist = np.arange(len(data[name]["Nobs"]))
+    #hist = hist / np.max(hist)
+    #bins = np.sort(data[name]["Nobs"])
+ 
+    Nbins = 50
+    #bins = np.linspace(0,500,Nbins)
+    bins = np.logspace(np.log10(50),3,Nbins)
+    hist1, bin_edges = np.histogram(data[name]["Nobs"], bins=bins, density=True)
+    bins = (bin_edges[1:] + bin_edges[:-1])/2.0
+    hist1[hist1==0.0] = 1e-10
+
+    plt.step(bins, hist1, linestyle, color = color_name, where='mid',
+             label=name, linewidth=3, zorder=10)
+
+plt.grid()
+plt.legend(loc=1)
+plt.ylabel('Probability Density Function')
+plt.xlabel('Number of detections')
+ax.set_yscale('log')
+ax.set_xscale('log')
+plt.xlim([50,600])
+plt.ylim([10**-4,10**-1])
+#plt.ylim([10**-2,10**0])
+plt.gca().xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+#ax.set_xticks([50, 100, 300, 500])
+plt.savefig(plotName, bbox_inches='tight')
+plt.close()
+
+plotName = os.path.join(outputDir, "wstd.pdf")
+plt.figure(figsize=(8,6))
+ax = plt.gca()
+for ii, name in enumerate(data.keys()):
+    color_name = color_names[ii]
+    linestyle = linestyles[ii]
+
+    #hist = np.arange(len(data[name]["wstd"]))
+    #hist = hist / np.max(hist)
+    #bins = np.sort(data[name]["wstd"])
+    #plt.plot(bins, hist, color = color_name, linestyle=linestyle,
+    #         label=name, linewidth=3, zorder=10)
+
+    Nbins = 40
+    bins = np.logspace(-2,0,Nbins)
+    hist1, bin_edges = np.histogram(data[name]["wstd"], bins=bins, density=True)
+    bins = (bin_edges[1:] + bin_edges[:-1])/2.0
+    hist1[hist1==0.0] = 1e-10
+
+    plt.step(bins, hist1, linestyle, color = color_name, where='mid',
+             label=name, linewidth=3, zorder=10)
+
+plt.grid()
+plt.legend(loc=3)
+plt.ylabel('Probability Density Function')
+plt.xlabel('Weighted standard deviation [mag]')
+ax.set_yscale('log')
+ax.set_xscale('log')
+plt.xlim([10**-2,10**0])
+plt.ylim([10**-4,10**2])
+plt.savefig(plotName, bbox_inches='tight')
+plt.close()
+
+
+print(stop)
+
+xedges = np.logspace(2,3,50)
+yedges = np.logspace(-2,0,50)
+
+H, xedges, yedges = np.histogram2d(data_out[:,2], data_out[:,3], bins=(xedges, yedges))
+H = H.T  # Let each row list bins with common y range.
+X, Y = np.meshgrid(xedges, yedges)
+H[H==0] = 1e-5
+
+plotName = os.path.join(outputDir, "kowalski.pdf")
+plt.figure(figsize=(8,6))
+ax = plt.gca()
+c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm())
+plt.ylabel('Load Time [s]')
+plt.xlabel('Number of objects')
+cbar = plt.colorbar(c)
+cbar.set_label('Counts')
+ax.set_xscale('log')
+ax.set_yscale('log')
+plt.savefig(plotName)
+plt.close()
+
+xedges = np.logspace(2,3.0,50)
+yedges = np.logspace(2,3.5,50)
+
+H, xedges, yedges = np.histogram2d(data_out[:,0], data_out[:,1], bins=(xedges, yedges))
+H = H.T  # Let each row list bins with common y range.
+X, Y = np.meshgrid(xedges, yedges)
+H[H==0] = 1e-5
+
+plotName = os.path.join(outputDir, "period_finding.pdf")
+plt.figure(figsize=(8,6))
+ax = plt.gca()
+c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm())
+plt.xlabel('Analysis Time [s]')
+plt.ylabel('Number of objects')
+cbar = plt.colorbar(c)
+cbar.set_label('Counts')
+ax.set_xscale('log')
+ax.set_yscale('log')
+plt.savefig(plotName)
+plt.close()
+
+ngpus = int(np.max(data_out[:,4]))
+nlcurves = np.zeros((ngpus,1))
+for ii in range(ngpus):
+    idx = np.where(data_out[:,4] == ii)[0]
+    nlcurves[ii] = np.nansum(data_out[idx,0])
+
+color1 = 'cornflowerblue'
+color2 = 'coral'
+
+nsamples = 500
+
+fig = plt.figure(figsize=(14,8))
+ax = plt.gca()
+for ii in range(ngpus):
+    vals = np.zeros((nsamples,1))
+    cnt = ii + 1
+    for jj in range(nsamples):    
+        idx = np.random.permutation(np.arange(ngpus))
+        idx = idx[:cnt]
+        vals[jj] = np.sum(nlcurves[idx])
+
+    parts = plt.violinplot(vals,[cnt],widths=0.25)
+    for partname in ('cbars','cmins','cmaxes'):
+        vp = parts[partname]
+        vp.set_edgecolor(color1)
+        vp.set_linewidth(1)
+    for pc in parts['bodies']:
+        pc.set_facecolor(color1)
+        pc.set_edgecolor(color1)
+
+#plt.xticks([2**0,2**1,2**2,2**3])
+plt.grid()
+plt.xlabel(r'Number of GPUs')
+plt.ylabel('Lightcurves Analyzed')
+
+plotName = os.path.join(outputDir,'scaling.pdf')
+plt.savefig(plotName, bbox_inches='tight')
+plt.close()
