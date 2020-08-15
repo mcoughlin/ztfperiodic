@@ -1,0 +1,13 @@
+Name,Description,Images,No questions
+Delta Scuti,Their light curves have sawtooth shapes ranging in periods from ~0.03-0.1 days.,DeltaScuti.png,
+RR Lyrae ,Most of them have sawtooth patterns with periods ~0.1-1 day.,RRlyr_ab.png;RRlyr_c.png,
+Cepheid,Old population II stars which pulsate with periods longer than 1 day.,Cepheid.png,
+W Uma,"The lightcurves of these binaries typically show two eclipses, which can be of different depth. There is no sharp distinction between the start (and end) of eclipses. ",WUma.png,
+Eclipsing MS-MS binary,Simply two main-sequence stars which happen to eclipse each other.,MSMS_EA.png,
+Beta Lyr,"The lightcurve shows distinct, but smooth eclipses. One eclipse is usually deeper than the other. In addition to the eclipses, they are characterized by periods ranging from ~0.3-20 days.",BetaLyr.png,
+Eclipsing dWD,"The lightcurve can show one or two eclipses (depending on temperature ratio). The deepest eclipse is generally ~50% or shallower. In rare cases, a reflection effect or ellipsoidal variation can be seen. They have a period range of 0.003-0.1 d.",eclipsing_dWD.png,
+Eclipsing WD+dM ,"Ellipsoidal variation are also often seen in these systems. If the inclination is high, a single eclipse can be seen in ZTF lightcurves. These eclipses range from very shallow to a 100\%, and are often 'box'-shaped, although grazing eclipses can produce 'V' shaped eclipses. Eclipses are always deepest in g. They appear in a period range 0.04 to 5.0 days.",eclipsing_WD+RD.png,
+Eclipsing sdB+dM,"If the inclination is high, two 'V' shaped eclipses can typically be seen. The shallow secondary eclipse is due to the reflection effect. The secondary eclipse differentiates the lightcurve from a WD+dM lightcurve. They appear in a period range 0.05 to 1.0 days.",eclipsing_sdB+RD.png,
+Sinusoid ,"These are basic sine waves, with no further features, and can be produced by many astrophysical processes, including pulsating stars or compact objects like neutron stars and black holes interacting with stars.",Redback_pulsar.png,
+Something else,"If it doesn't (obviously) fit into this list, choose this option!",RRlyr_d.png,
+Non-Periodic,Sometimes the algorithms which determine periodicity get it wrong… and the light curves look like non-sense. ,Blackwidow_pulsar.png,
