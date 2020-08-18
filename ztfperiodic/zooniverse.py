@@ -1,16 +1,66 @@
-from panoptes_client import Panoptes, Project, SubjectSet, Subject, Workflow
+# Borrowing liberally from GravitySpy here
+# https://github.com/Gravity-Spy/GravitySpy/blob/develop/gravityspy/api/project.py
+
+from panoptes_client import Panoptes, Project, SubjectSet, Subject, Workflow, Classification
 import pandas as pd
 from pandas.io.json import json
 import datetime
 import math
 
+# This function generically flatten a dict
+def flatten(d, parent_key='', sep='_'):
+    """Parameters
+    ----------
 
-class Subjects:
-    def __init__(self, username='', password='', project_id=None):
+    Returns
+    -------
+    """
+    items = []
+    for k, v in d.items():
+        new_key = parent_key + sep + k if parent_key else k
+        try:
+            items.extend(flatten(v, new_key, sep=sep).items())
+        except:
+            items.append((new_key, v))
+    return dict(items)
+
+def workflow_with_most_answers(db):
+    """Parameters
+    ----------
+
+    Returns
+    -------
+    """
+    maxcount = max(len(v) for v in db.values())
+    return [k for k, v in db.items() if len(v) == maxcount]
+
+class ZooProject:
+    def __init__(self, username='', password='',
+                 project_id=None,
+                 #workflow_order=[16000]):
+                 workflow_order=None):
         self.username = username
         self.password = password
         self.project_id = project_id
         self.project = self.__connect()
+        self.project_info = flatten(self.project.raw)
+
+        # Determine workflow order
+        self.workflow_info = {}
+        if workflow_order is None:
+            #print(sorted(self.project_info.keys()))
+            order = self.project_info['links_active_workflows']
+            #order = self.project_info['configuration_workflow_order']
+        else:
+            order = workflow_order
+
+        workflows = [int(str(iWorkflow)) for iWorkflow in order]
+        self.workflow_order = workflows
+
+        # Save workflow information
+        for iWorkflow in workflows:
+            tmp1 = Workflow.find(iWorkflow)
+            self.workflow_info[str(iWorkflow)] = flatten(tmp1.raw)
 
     def __connect(self):
         """
@@ -199,4 +249,139 @@ class Subjects:
 
         return combine
 
+    def get_answers(self, workflow=None):
+        """Parameters
+        ----------
+        workflow : `int`, optional, default None
 
+        Returns
+        -------
+        A dict with keys of workflow IDs and values list
+        of golden sets associated with that workflow
+        """
+        # now determine infrastructure of workflows so we know what workflow
+        # this image belongs in
+        workflowDictAnswers = {}
+
+        if workflow:
+            workflows = [str(workflow)]
+        else:
+            workflows = self.workflow_info.keys()
+
+        # Determine possible answers to the workflows
+        for iWorkflow in workflows:
+            answerDict = {}
+            try:
+                answers = self.workflow_info[iWorkflow]['tasks_T1_choicesOrder']
+            except:
+                answers = self.workflow_info[iWorkflow]['tasks_T0_choicesOrder']
+
+            for answer in answers:
+                answerDict[answer] = []
+            workflowDictAnswers[iWorkflow] = answerDict
+
+        self.workflowDictAnswers = workflowDictAnswers
+        return workflowDictAnswers
+
+
+    def get_subject_sets_per_workflow(self, workflow=None):
+        """Parameters
+        ----------
+        workflow : `int`, optional, default None
+
+        Returns
+        -------
+        A dict with keys of workflow IDs and values list
+        of golden sets associated with that workflow
+        """
+        workflowDictSubjectSets = {}
+        workflowGoldenSetDict = self.get_golden_subject_sets()
+
+        if workflow is not None:
+            workflows = [str(workflow)]
+        else:
+            workflows = self.workflow_info.keys()
+
+        for iWorkflow in workflows:
+            # check if golden set exists for workflow
+            goldenset = workflowGoldenSetDict[iWorkflow]
+            # Determine subject sets associated with this workflow
+            subject_sets_for_workflow = self.workflow_info[iWorkflow]\
+                                        ['links_subject_sets']
+            subjectset_id = [int(str(iSubject)) \
+                            for iSubject in subject_sets_for_workflow]
+            subjectset_id = [iSubject for iSubject in subjectset_id\
+                            if iSubject not in goldenset]
+            workflowDictSubjectSets[iWorkflow] = subjectset_id
+
+        self.workflowDictSubjectSets = workflowDictSubjectSets
+        return workflowDictSubjectSets
+
+    def parse_classifications(self, last_id=None):
+        """
+        Parse classifications
+        :return:
+        """
+
+        # Created empty list to store the previous classifications
+        classificationsList = []
+        
+        # Query the last 100 classificaitons made (this is the max allowable)
+        if not last_id is None:
+            all_classifications = Classification.where(scope='project',
+                                               project_id=self.project_id,
+                                               last_id='{0}'.format(last_id),
+                                               page_size='100')
+        else:
+            all_classifications = Classification.where(scope='project',
+                                               project_id=self.project_id,
+                                               page_size='100')
+ 
+        # Loop until no more classifications
+        for iN in range(0,all_classifications.object_count):
+            try:
+                classification = all_classifications.next()
+            except:
+                break
+        
+            # Generically with no hard coding we want to parse all aspects of the
+            # classification metadata. This will ease any changes on the api side and
+            # any changes to the metadata on our side.
+        
+            try:
+                rawdata = flatten(classification.raw)
+                rawdata['links_subjects'] = rawdata['links_subjects'][0]
+                classificationsList.append(rawdata)
+            except:
+                continue
+
+        if not classificationsList:
+            raise ValueError('No New Classifications')
+        
+        # Now we want to make a panda data structure with all this information
+        classifications = pd.DataFrame(classificationsList)
+        annotations = classifications.annotations
+        choices = []
+        for annotation in annotations:
+            try:
+                choices.append(annotation[0]["value"][0]["choice"])
+            except:
+                choices.append('NOLABEL')
+        choices = pd.DataFrame({'choices': choices})
+        classifications = classifications.join(choices)
+
+        classifications = classifications.apply(pd.to_numeric,
+                                                axis=0, errors='ignore')
+        classifications.created_at = pd.to_datetime(classifications.created_at,
+                                                    infer_datetime_format=True)
+        classifications.metadata_started_at = pd.to_datetime(classifications.metadata_started_at,infer_datetime_format=True)
+        classifications.metadata_finished_at = pd.to_datetime(classifications.metadata_finished_at,infer_datetime_format=True)
+        classifications = classifications.loc[classifications.choices!="NOLABEL"]
+      
+        classifications = classifications[['created_at','id','links_project','links_subjects','links_user','links_workflow','metadata_finished_at','metadata_started_at','metadata_workflow_version','choices']]
+        classifications.loc[classifications.links_user.isnull(),'links_user'] = 0
+        classifications.links_user = classifications.links_user.astype(int)
+        classifications.loc[classifications.links_subjects.isnull(),'links_subjects'] = 0
+        classifications.links_subjects = classifications.links_subjects.astype(int)
+        classifications.choices = classifications.choices.astype(str)     
+        return classifications 
