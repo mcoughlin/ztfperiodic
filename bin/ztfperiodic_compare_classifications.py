@@ -48,11 +48,14 @@ def parse_commandline():
 
     parser.add_option("-f","--featuresetname",default="b")
 
+    parser.add_option("--catalog_min",type=int,default=0)
+    parser.add_option("--catalog_max",type=int,default=100000)
+
     opts, args = parser.parse_args()
 
     return opts
 
-def load_catalog(catalog):
+def load_catalog(catalog, catalog_min=0, catalog_max=100000):
 
     filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1] + \
                 sorted(glob.glob(os.path.join(catalog,"*.h5")))[::-1]
@@ -66,7 +69,10 @@ def load_catalog(catalog):
             print('Loading file %d/%d' % (ii, len(filenames)))
 
         filenameSplit = filename.split("/")
-        catnum = filenameSplit[-1].replace(".dat","").replace(".h5","").split("_")[-1]
+        catnum = int(filenameSplit[-1].replace(".dat","").replace(".h5","").split("_")[-1])
+
+        if (catnum < catalog_min) or (catnum > catalog_max):
+            continue
 
         try:
             with h5py.File(filename, 'r') as f:
@@ -90,7 +96,10 @@ opts = parse_commandline()
 outputDir = opts.outputDir
 modelPath = opts.modelPath
 featuresetname = opts.featuresetname
+catalog_min = opts.catalog_min
+catalog_max = opts.catalog_max
 
+outputDir = os.path.join(outputDir, '%d_%d' % (catalog_min, catalog_max))
 if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
 
@@ -109,7 +118,8 @@ for catalogPath in catalogPaths:
     cat1file = os.path.join(outputDir,'catalog_%s.fits' % modelName)
 
     if not os.path.isfile(cat1file):
-        cat1 = load_catalog(catalogPath)
+        cat1 = load_catalog(catalogPath, catalog_min=catalog_min,
+                            catalog_max=catalog_max)
         cat1.write(cat1file, format='fits')
     else:
         cat1 = Table.read(cat1file, format='fits')

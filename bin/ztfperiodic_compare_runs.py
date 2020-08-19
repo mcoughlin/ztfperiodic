@@ -64,54 +64,58 @@ name2 = 'v2'
 if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
 
-cat1 = Table.read(catalog1, format='fits')
-cat2 = Table.read(catalog2, format='fits')
-
-idx1 = np.where(cat1["sig"] >= opts.sig1)[0]
-print('Keeping %.5f %% of objects in catalog 1' % (100*len(idx1)/len(cat1)))
-catalog1 = SkyCoord(ra=cat1["ra"]*u.degree, dec=cat1["dec"]*u.degree, frame='icrs')
-
-idx2 = np.where(cat2["sig"] >= opts.sig2)[0]
-print('Keeping %.5f %% of objects in catalog 2' % (100*len(idx2)/len(cat2)))
-catalog2 = SkyCoord(ra=cat2["ra"]*u.degree, dec=cat2["dec"]*u.degree, frame='icrs')
-idx,sep,_ = catalog1.match_to_catalog_sky(catalog2)
-
-xs, ys, zs = [], [], []
-
 filename = os.path.join(outputDir,'catalog.dat')
-fid = open(filename,'w')
-for i,ii,s in zip(np.arange(len(sep)),idx,sep):
-    if s.arcsec > opts.crossmatch_distance: continue
-  
-    catnum = cat1["catnum"][i]
-    objid = cat1["objid"][i]
-    ra1, dec1 = cat1["ra"][i], cat1["dec"][i]
-    ra2, dec2 = cat2["ra"][ii], cat2["dec"][ii]
-    radiff = (ra1 - ra2)*3600.0
-    decdiff = (dec1 - dec2)*3600.0
+if not os.path.isfile(filename):
 
-    sig1, sig2 = cat1["sig"][i], cat2["sig"][ii]
-    sigsort1, sigsort2 = cat1["sigsort"][i], cat2["sigsort"][ii]
+    cat1 = Table.read(catalog1, format='fits')
+    cat2 = Table.read(catalog2, format='fits')
+    
+    idx1 = np.where(cat1["sig"] >= opts.sig1)[0]
+    print('Keeping %.5f %% of objects in catalog 1' % (100*len(idx1)/len(cat1)))
+    catalog1 = SkyCoord(ra=cat1["ra"]*u.degree, dec=cat1["dec"]*u.degree, frame='icrs')
+    
+    idx2 = np.where(cat2["sig"] >= opts.sig2)[0]
+    print('Keeping %.5f %% of objects in catalog 2' % (100*len(idx2)/len(cat2)))
+    catalog2 = SkyCoord(ra=cat2["ra"]*u.degree, dec=cat2["dec"]*u.degree, frame='icrs')
+    idx,sep,_ = catalog1.match_to_catalog_sky(catalog2)
+    
+    xs, ys, zs = [], [], []
 
-    period1, period2 = cat1["period"][i],cat2["period"][ii]
-
-    if sig1 < opts.sig1: continue
-    if sig2 < opts.sig2: continue
-
-    xs.append(1.0/period1)
-    ys.append(1.0/period2)
-    ratio = np.min([sigsort1/sigsort2,sigsort2/sigsort1])
-    zs.append(ratio)
-
-    fid.write('%d %d %.5f %.5f %.5f %.5f %.5e %.5e\n' % (catnum, objid,
-                                                         ra1, dec1,
-                                                         period1, period2,
-                                                         sig1, sig2))
-fid.close() 
+    fid = open(filename,'w')
+    for i,ii,s in zip(np.arange(len(sep)),idx,sep):
+        if s.arcsec > opts.crossmatch_distance: continue
+      
+        catnum = cat1["catnum"][i]
+        objid = cat1["objid"][i]
+        ra1, dec1 = cat1["ra"][i], cat1["dec"][i]
+        ra2, dec2 = cat2["ra"][ii], cat2["dec"][ii]
+        radiff = (ra1 - ra2)*3600.0
+        decdiff = (dec1 - dec2)*3600.0
+    
+        sig1, sig2 = cat1["sig"][i], cat2["sig"][ii]
+        sigsort1, sigsort2 = cat1["sigsort"][i], cat2["sigsort"][ii]
+    
+        period1, period2 = cat1["period"][i],cat2["period"][ii]
+    
+        if sig1 < opts.sig1: continue
+        if sig2 < opts.sig2: continue
+    
+        xs.append(1.0/period1)
+        ys.append(1.0/period2)
+        ratio = np.min([sigsort1/sigsort2,sigsort2/sigsort1])
+        zs.append(ratio)
+    
+        fid.write('%d %d %.5f %.5f %.5f %.5f %.5e %.5e\n' % (catnum, objid,
+                                                             ra1, dec1,
+                                                             period1, period2,
+                                                             sig1, sig2))
+    fid.close() 
 
 data_out = np.loadtxt(filename)
 
 if opts.doPlots:
+
+    xs, ys = 1.0/data_out[:,4], 1.0/data_out[:,5]
 
     pdffile = os.path.join(outputDir,'diffs.pdf')
     idx = np.where(data_out[:,4] != data_out[:,5])[0]
@@ -144,9 +148,6 @@ if opts.doPlots:
     ax=fig.add_subplot(1,1,1)
     c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm(),
                        cmap=cmap)
-    cbar = plt.colorbar(c)
-    cbar.set_label('Counts', fontsize=24)
-    cbar.ax.tick_params(labelsize=24) 
     ax.set_xscale('log')
     ax.set_yscale('log')
     #plt.xlim([0.02, 50])
@@ -167,3 +168,35 @@ if opts.doPlots:
     fig.savefig(pdffile, bbox_inches='tight')
     plt.close() 
 
+    #xedges = np.logspace(np.log10(0.02),3.0,100)
+    xedges = np.logspace(np.log10(0.02),4.0,100)
+    #yedges = np.logspace(np.log10(0.02),3.0,100)
+    yedges = np.logspace(-3,1.0,100)
+
+    diff = np.abs(ys-xs)/ys
+    diff[diff < 1e-3] = 1e-3
+
+    H, xedges, yedges = np.histogram2d(xs, diff, bins=(xedges, yedges))
+    H = H.T  # Let each row list bins with common y range.
+    X, Y = np.meshgrid(xedges, yedges)
+    #H[H==0] = np.nan
+
+    fig = plt.figure(figsize=(10,10))
+    ax=fig.add_subplot(1,1,1)
+    c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm(),
+                       cmap=cmap)
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    #plt.xlim([0.02, 50])
+    plt.xlim([0.02, 50])
+    #plt.ylim([0.02, 50])
+    #plt.ylim([0.02, 500])
+    plt.xlabel('Frequency [1/days]', fontsize=24)
+    plt.ylabel('Relative Difference in Computed Frequency', fontsize=24)
+
+    ax.tick_params(axis='both', which='major', labelsize=24)
+    ax.tick_params(axis='both', which='minor', labelsize=24)
+
+    pdffile = os.path.join(outputDir,'periods_relative.pdf')
+    fig.savefig(pdffile, bbox_inches='tight')
+    plt.close()

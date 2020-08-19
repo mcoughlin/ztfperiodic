@@ -49,8 +49,8 @@ def parse_commandline():
     parser.add_option("--doPlots",  action="store_true", default=False)
 
     #parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/bw/")
-    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields_ids_DR2/catalog/compare/rrlyr/")
-    parser.add_option("-c","--catalogPath",default="/home/michael.coughlin/ZTF/output_features_20Fields_ids_DR2/catalog/compare/catalog_d11.vnv.f.fits")
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_ids_DR2/catalog/compare/bw/")
+    parser.add_option("-c","--catalogPath",default="/home/michael.coughlin/ZTF/output_features_ids_DR2/catalog/compare/")
 
     parser.add_option("--doDifference",  action="store_true", default=False)
     parser.add_option("-d","--differencePath",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.dscu.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.rrlyr.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.ea.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.eb.f.h5,/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/slices/d11.ew.f.h5")
@@ -233,92 +233,79 @@ while cnt < nquery:
 if cnt == nquery:
     raise Exception('Kowalski connection failed...')
 
-if ".h5" in catalogPath:
-    df = pd.read_hdf(catalogPath, 'df')
-elif ".fits" in catalogPath:
-    tab = Table.read(catalogPath, format='fits')
-    df = tab.to_pandas()
-    df.set_index('objid',inplace=True)
+h5file = os.path.join(outputDir, 'slice.h5')
+if not os.path.isfile(h5file):
 
-if opts.doDifference:
-    differenceFiles = differencePath.split(",")
-    for differenceFile in differenceFiles:
-        df1 = pd.read_hdf(differenceFile, 'df')
-        idx = df.index.difference(df1.index)
-        df = df.loc[idx]
-if opts.doIntersection:
-    intersectionFiles = intersectionPath.split(",")
-    for intersectionFile in intersectionFiles:
-        if ".h5" in catalogPath:
-            df1 = pd.read_hdf(intersectionFile, 'df')
-        else:
-            tab = Table.read(intersectionFile, format='fits')
-            df1 = tab.to_pandas()
-            df1.set_index('objid',inplace=True)
-
-        idx = df.index.intersection(df1.index)
-        df = df.loc[idx]
-
-        idx = df1.index.intersection(df.index)
-        df1 = df1.loc[idx]
-
-idx1 = np.where(df["prob"] >= 0.9)[0]
-idx2 = np.where(df1["prob"] >= 0.9)[0]
-idx = np.intersect1d(idx1, idx2)
-objids_1 = df1.iloc[idx].index
-
-variability = query_variability(kow)
-objids_2, probs_2_vnv, probs_2_rrlyr  = [], [], []
-for obj in variability:
-    objids_2.append(obj["_id"])
-
-objids_2 = np.array(objids_2)
-
-objids = np.union1d(objids_1,objids_2)
-
-objfile = os.path.join(plotDir, 'objids.dat')
-fid = open(objfile, 'w')
-for objid in objids:
+    frames = []
+    folderPaths = glob.glob(os.path.join(catalogPath,'*_*'))
+    for ii, folderPath in enumerate(folderPaths):
+        #if ii > 2: continue
+     
+        print('Loading %d/%d files...' % (ii, len(folderPaths)))
     
-    idx = np.where(np.array(df.index) == objid)[0]
-    df_slice = df.iloc[idx]
-    df1_slice = df1.iloc[idx]
+        catalogFile = os.path.join(folderPath, 'catalog.h5')
+        if not os.path.isfile(catalogFile): continue
+    
+        if ".h5" in catalogFile:
+            df = pd.read_hdf(catalogFile, 'df_merged')
+        elif ".fits" in catalogPath:
+            tab = Table.read(catalogFile, format='fits')
+            df = tab.to_pandas()
+            df.set_index('objid',inplace=True)
+    
+        # do cuts
+        df_slice = df[df["d11.pnp.f"] >= 0.9]
+    
+        cuts = ["d11.dscu.f", "d11.rrlyr.f", "d11.ea.f", "d11.eb.f", "d11.ew.f"]
+        for cut in cuts:
+            df_slice = df_slice[df_slice[cut] < 0.9]
+        frames.append(df_slice)
+    df = pd.concat(frames)
+    df.to_hdf(h5file, key='df', mode='w')
 
-    dnn_classifications = get_kowalski_classifications_objids([objid], kow)
+df = pd.read_hdf(h5file, 'df')
 
-    if len(df_slice) > 0:
-        prob_1_vnv, prob_1_rrlyr = df_slice["prob"], df1_slice["prob"]
-    else:
-        prob_1_vnv, prob_1_rrlyr = -1, -1
-    if len(dnn_classifications) > 0:
-        prob_2_vnv, prob_2_rrlyr = dnn_classifications["vnv"], dnn_classifications["rrlyr"]
-    else:
-        prob_2_vnv, prob_2_rrlyr = -1, -1
-    fid.write('%d %.5f %.5f %.5f %.5f\n' % (objid, prob_1_vnv, prob_1_rrlyr,
-                                            prob_2_vnv, prob_2_rrlyr))
-fid.close()
+#objids_2, probs_2_vnv, probs_2_rrlyr  = [], [], []
+#for obj in variability:
+#    objids_2.append(obj["_id"])
+#
+#objids_2 = np.array(objids_2)
+#objids = np.union1d(objids_1,objids_2)
 
-print(stop)
-objids_tmp, features = get_kowalski_features_objids(objids, kow)
-h5file = os.path.join(plotDir, 'features.h5')
-features.to_hdf(h5file, key='df', mode='w')
-print(stop)
+#objfile = os.path.join(plotDir, 'objids.dat')
+#fid = open(objfile, 'w')
+#for objid in objids:
+#    
+#    idx = np.where(np.array(df.index) == objid)[0]
+#    df_slice = df.iloc[idx]
+#    df1_slice = df1.iloc[idx]
+#
+#    dnn_classifications = get_kowalski_classifications_objids([objid], kow)
+#
+#    if len(df_slice) > 0:
+#        prob_1_vnv, prob_1_rrlyr = df_slice["prob"], df1_slice["prob"]
+#    else:
+#        prob_1_vnv, prob_1_rrlyr = -1, -1
+#    if len(dnn_classifications) > 0:
+#        prob_2_vnv, prob_2_rrlyr = dnn_classifications["vnv"], dnn_classifications["rrlyr"]
+#    else:
+#        prob_2_vnv, prob_2_rrlyr = -1, -1
+#    fid.write('%d %.5f %.5f %.5f %.5f\n' % (objid, prob_1_vnv, prob_1_rrlyr,
+#                                            prob_2_vnv, prob_2_rrlyr))
+#fid.close()
 
-variability = query_variability(kow)
-objids_2 = []
-for obj in variability:
-    objids_2.append(obj["_id"])
-
-objids_1 = []
-plotFiles = glob.glob(os.path.join(plotDir,'*.png'))
-for plotFile in plotFiles:
-    objid = plotFile.split("/")[-1].replace(".png","")
-    objids_1.append(int(objid))
+#objids_tmp, features = get_kowalski_features_objids(objids, kow)
+#h5file = os.path.join(plotDir, 'features.h5')
+#features.to_hdf(h5file, key='df', mode='w')
+#print(stop)
 
 #print(len(objids_1),len(objids_2))
 #print(len(np.setdiff1d(objids_1,objids_2))/len(objids_1))
 
+objfile = os.path.join(outputDir, 'slice.dat')
+fid = open(objfile, 'w')
 for ii, (index, row) in enumerate(df.iterrows()): 
+    if ii < 204800: continue
     if np.mod(ii,100) == 0:
         print('Loading %d/%d'%(ii,len(df)))
 
@@ -329,8 +316,9 @@ for ii, (index, row) in enumerate(df.iterrows()):
     if (amp < 0.3): continue
     lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline = get_kowalski_objids([index], kow)
 
-    objids_1.append(index)
+    if len(lightcurves) == 0: continue
 
+    fid.write('%d\n' % (index))
     hjd, magnitude, err = lightcurves[0]
     absmag, bp_rp = absmags[0], bp_rps[0]
 
@@ -361,4 +349,4 @@ for ii, (index, row) in enumerate(df.iterrows()):
         fig.savefig(pngfile, bbox_inches='tight')
         plt.close()
 
-
+fid.close()

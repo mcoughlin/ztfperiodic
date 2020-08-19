@@ -22,6 +22,7 @@ def parse_commandline():
     parser = optparse.OptionParser()
 
     parser.add_option("-c","--condorDir",default="/home/michael.coughlin/ZTF/output_quadrants_20191018/condor/")
+    parser.add_option("--doScaling",  action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
@@ -35,7 +36,7 @@ if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
 
 pcklFile = os.path.join(outputDir,"data.pkl")
-logsDir = os.path.join(opts.condorDir,"logs1")
+logsDir = os.path.join(opts.condorDir,"logs")
 
 if not os.path.isfile(pcklFile):
     logfiles = glob.glob(os.path.join(logsDir,"*out*"))
@@ -73,8 +74,8 @@ if not os.path.isfile(pcklFile):
 with open(pcklFile, 'rb') as handle:
     data_out = pickle.load(handle)
 
-xedges = np.logspace(1,3,50)
-yedges = np.logspace(-2,1,50)
+xedges = np.logspace(2,4,50)
+yedges = np.logspace(1,3,50)
 
 H, xedges, yedges = np.histogram2d(data_out[:,2], data_out[:,3], bins=(xedges, yedges))
 H = H.T  # Let each row list bins with common y range.
@@ -92,15 +93,17 @@ cbar.set_label('Counts')
 ax.set_xscale('log')
 ax.set_yscale('log')
 #ax.set_xticks([10,100,1000])
-plt.xlim([10,1000])
-plt.ylim([3e-2,5])
+#plt.xlim([1,1000])
+#plt.ylim([100,10000])
 #ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
 plt.savefig(plotName, bbox_inches='tight')
 plt.close()
 
-xedges = np.logspace(-1,2.0,50)
-yedges = np.logspace(1,3.5,50)
+xedges = np.logspace(-1,3.0,50)
+yedges = np.logspace(2,4,50)
 
 idx = np.where(~np.isnan(data_out[:,0]))[0]
 H, xedges, yedges = np.histogram2d(data_out[idx,1], data_out[idx,0], bins=(xedges, yedges))
@@ -118,56 +121,57 @@ cbar = plt.colorbar(c)
 cbar.set_label('Counts')
 ax.set_xscale('log')
 ax.set_yscale('log')
-plt.xlim([0.1,50])
-plt.ylim([10,1000])
-ax.set_xticks([0.1,1,10])
-ax.set_yticks([10,100,1000])
+plt.xlim([1,1000])
+plt.ylim([100,10000])
+#ax.set_xticks([0.1,1,10])
+#ax.set_yticks([10,100,1000])
 ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
 
 plt.savefig(plotName, bbox_inches='tight')
 plt.close()
 
-print(stop)
-
-ngpus = int(np.max(data_out[:,4]))
-nlcurves = np.zeros((ngpus,1))
-for ii in range(ngpus):
-    idx = np.where(data_out[:,4] == ii)[0]
-    nlcurves[ii] = np.nansum(data_out[idx,0]) / np.nansum(data_out[idx,1])
-
-filename = os.path.join(outputDir,'scaling.npz')
-np.savez(filename, nlcurves=nlcurves, data_out=data_out)
-
-color1 = 'cornflowerblue'
-color2 = 'coral'
-
-nsamples = 500
-
-fig = plt.figure(figsize=(14,8))
-ax = plt.gca()
-for ii in range(ngpus):
-    vals = np.zeros((nsamples,1))
-    cnt = ii + 1
-    for jj in range(nsamples):    
-        idx = np.random.permutation(np.arange(ngpus))
-        idx = idx[:cnt]
-        vals[jj] = np.sum(nlcurves[idx])
-
-    parts = plt.violinplot(vals,[cnt],widths=0.25)
-    for partname in ('cbars','cmins','cmaxes'):
-        vp = parts[partname]
-        vp.set_edgecolor(color1)
-        vp.set_linewidth(1)
-    for pc in parts['bodies']:
-        pc.set_facecolor(color1)
-        pc.set_edgecolor(color1)
-
-#plt.xticks([2**0,2**1,2**2,2**3])
-plt.grid()
-plt.xlabel(r'Number of GPUs')
-plt.ylabel('Lightcurves Analyzed per second')
-ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-
-plotName = os.path.join(outputDir,'scaling.pdf')
-plt.savefig(plotName, bbox_inches='tight')
-plt.close()
+if opts.doScaling:
+    
+    ngpus = int(np.max(data_out[:,4]))
+    nlcurves = np.zeros((ngpus,1))
+    for ii in range(ngpus):
+        idx = np.where(data_out[:,4] == ii)[0]
+        nlcurves[ii] = np.nansum(data_out[idx,0]) / np.nansum(data_out[idx,1])
+    
+    filename = os.path.join(outputDir,'scaling.npz')
+    np.savez(filename, nlcurves=nlcurves, data_out=data_out)
+    
+    color1 = 'cornflowerblue'
+    color2 = 'coral'
+    
+    nsamples = 500
+    
+    fig = plt.figure(figsize=(14,8))
+    ax = plt.gca()
+    for ii in range(ngpus):
+        vals = np.zeros((nsamples,1))
+        cnt = ii + 1
+        for jj in range(nsamples):    
+            idx = np.random.permutation(np.arange(ngpus))
+            idx = idx[:cnt]
+            vals[jj] = np.sum(nlcurves[idx])
+    
+        parts = plt.violinplot(vals,[cnt],widths=0.25)
+        for partname in ('cbars','cmins','cmaxes'):
+            vp = parts[partname]
+            vp.set_edgecolor(color1)
+            vp.set_linewidth(1)
+        for pc in parts['bodies']:
+            pc.set_facecolor(color1)
+            pc.set_edgecolor(color1)
+    
+    #plt.xticks([2**0,2**1,2**2,2**3])
+    plt.grid()
+    plt.xlabel(r'Number of GPUs')
+    plt.ylabel('Lightcurves Analyzed per second')
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    
+    plotName = os.path.join(outputDir,'scaling.pdf')
+    plt.savefig(plotName, bbox_inches='tight')
+    plt.close()
