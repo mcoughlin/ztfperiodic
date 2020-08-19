@@ -459,6 +459,7 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
 
 def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
                        doRemoveHC=False, doExtinction=False, max_error = 2.0,
+                       doHCOnly=False,
                        doSigmaClipping=False,
                        sigmathresh=5.0,
                        doOutbursting=False,
