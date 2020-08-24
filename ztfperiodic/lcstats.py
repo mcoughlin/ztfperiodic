@@ -97,7 +97,9 @@ def calc_NormPeaktoPeakamp(mag,err):
 
 
 
-def fourier_decomposition(t,y,dy,N,p,maxNterms=5,relative_output=True):
+def fourier_decomposition(t,y,dy,p,maxNterms=5,relative_output=True):
+
+    N = np.size(y)
 
     f = make_f(p=p)
     chi2 = np.zeros(maxNterms+1,dtype=float) # fill in later
@@ -250,7 +252,7 @@ def calc_stats(t,mag,err,p):
         (f1_power,f1_BIC,f1_a,f1_b,f1_amp,f1_phi0,
             f1_relamp1,f1_relphi1,f1_relamp2,f1_relphi2,
             f1_relamp3,f1_relphi3,f1_relamp4,f1_relphi5
-            ) = fourier_decomposition(t,mag,err,N,p)
+            ) = fourier_decomposition(t,mag,err,p)
     except:
         (f1_power,f1_BIC,f1_a,f1_b,f1_amp,f1_phi0,
         f1_relamp1,f1_relphi1,f1_relamp2,f1_relphi2,
@@ -269,4 +271,23 @@ def calc_stats(t,mag,err,p):
                  f1_relamp3,f1_relphi3,f1_relamp4,f1_relphi5]
 
 
-    
+def calc_fourier_stats(t,mag,err,p):
+
+    try:
+        # fourier decomposition stuff
+        (f1_power,f1_BIC,f1_a,f1_b,f1_amp,f1_phi0,
+            f1_relamp1,f1_relphi1,f1_relamp2,f1_relphi2,
+            f1_relamp3,f1_relphi3,f1_relamp4,f1_relphi5
+            ) = fourier_decomposition(t,mag,err,p)
+    except:
+        (f1_power,f1_BIC,f1_a,f1_b,f1_amp,f1_phi0,
+        f1_relamp1,f1_relphi1,f1_relamp2,f1_relphi2,
+        f1_relamp3,f1_relphi3,f1_relamp4,f1_relphi5) = \
+        (np.nan, np.nan, np.nan, np.nan, np.nan, np.nan,
+        np.nan, np.nan, np.nan, np.nan,
+        np.nan, np.nan, np.nan, np.nan)
+
+    # return all
+    return np.r_[f1_power,f1_BIC,f1_a,f1_b,f1_amp,f1_phi0,
+                 f1_relamp1,f1_relphi1,f1_relamp2,f1_relphi2,
+                 f1_relamp3,f1_relphi3,f1_relamp4,f1_relphi5] 

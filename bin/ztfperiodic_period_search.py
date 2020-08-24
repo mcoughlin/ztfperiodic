@@ -32,7 +32,7 @@ import astropy.io.fits
 
 import ztfperiodic
 from ztfperiodic.period import CE
-from ztfperiodic.lcstats import calc_stats
+from ztfperiodic.lcstats import calc_basic_stats, calc_fourier_stats
 from ztfperiodic.utils import get_kowalski_bulk
 from ztfperiodic.utils import get_kowalski_list
 from ztfperiodic.utils import get_kowalski_objids
@@ -59,7 +59,6 @@ def parse_commandline():
     parser.add_option("--doCPU",  action="store_true", default=False)
     parser.add_option("--doSaveMemory",  action="store_true", default=False)
     parser.add_option("--doRemoveTerrestrial",  action="store_true", default=False)
-    parser.add_option("--doLightcurveStats",  action="store_true", default=False)
     parser.add_option("--doRemoveBrightStars",  action="store_true", default=False)
     parser.add_option("--doSingleTimeSegment",  action="store_true", default=False)
 
@@ -193,7 +192,7 @@ if not (opts.doCPU or opts.doGPU):
     print("--doCPU or --doGPU required")
     exit(0)
 
-algorithm = opts.algorithm
+algorithms = opts.algorithm.split(',')
 matchFile = opts.matchFile
 outputDir = opts.outputDir
 batch_size = opts.batch_size
@@ -248,7 +247,7 @@ with h5py.File(WDcat, 'r') as f:
     parallax = f['parallax'][:]
 absmagWD=gmag+5*(np.log10(np.abs(parallax))-2)
 
-if opts.doCPU and algorithm=="BLS":
+if opts.doCPU and "BLS" in algorithms:
     print("BLS only available for --doGPU")
     exit(0)
 
@@ -262,14 +261,14 @@ else:
 epoch_ranges = [0,100,500,np.inf]
 epoch_folders = ["0-100","100-500","500-all"]
 
-catalogDir = os.path.join(outputDir,'catalog',algorithm)
+catalogDir = os.path.join(outputDir,'catalog',"_".join(algorithms))
 if (opts.source_type == "catalog") and ("fermi" in catalog_file):
     catalogDir = os.path.join(catalogDir,'%d' % Ncatindex)
 if not os.path.isdir(catalogDir):
     os.makedirs(catalogDir)
 
 if opts.doSpectra:
-    spectraDir = os.path.join(outputDir,'spectra',algorithm)
+    spectraDir = os.path.join(outputDir,'spectra')
     if (opts.source_type == "spectra") and ("fermi" in spectra_file):
         spectraDir = os.path.join(spectraDir,'%d' % Ncatindex)
     if not os.path.isdir(spectraDir):
@@ -626,23 +625,37 @@ if opts.doCheckLightcurves:
     print('Just checking that there are lightcurves to analyze... exiting.')
     exit(0)
 
+print('Running lightcurve basic stats...')
+start_time = time.time()
+
+if opts.doParallel:
+    from joblib import Parallel, delayed
+    stats = Parallel(n_jobs=opts.Ncore)(delayed(calc_basic_stats)(LC[0],LC[1],LC[2]) for LC in lightcurves)
+else:
+    stats = []
+    for ii,data in enumerate(lightcurves):
+        if np.mod(ii,100) == 0:
+            print("%d/%d"%(ii,len(lightcurves)))
+        copy = np.ma.copy(data).T
+        t, mag, magerr = copy[:,0], copy[:,1], copy[:,2]
+
+        stat = calc_basic_stats(t, mag, magerr)
+        stats.append(stat)
+end_time = time.time()
+print('Lightcurve basic statistics took %.2f seconds' % (end_time - start_time))
+
 if baseline<10:
-    basefolder = os.path.join(outputDir,'%sHC'%algorithm)
     if opts.doLongPeriod:
         fmin, fmax = 18, 48
     else:
         fmin, fmax = 18, 1440
 else:
-    basefolder = os.path.join(outputDir,'%s'%algorithm)
     if opts.doLongPeriod:
         fmin, fmax = 2/baseline, 48
     else:
         fmin, fmax = 2/baseline, 480
 
 print('Using baseline: %.5f, fmin: %.5f, fmax %.5f' %(baseline, fmin, fmax))
-
-if (opts.source_type == "catalog") and ("fermi" in catalog_file):
-    basefolder = os.path.join(basefolder,'%d' % Ncatindex)
 
 samples_per_peak = opts.samples_per_peak
 phase_bins, mag_bins = 20, 10
@@ -658,56 +671,45 @@ if opts.doRemoveTerrestrial:
 else:
     freqs_to_remove = None
 
-#for lightcurve in lightcurves:
-#    pgram = lombscargle(lightcurve[0],
-#                        np.ones(lightcurve[0].shape),
-#                        2*np.pi*freqs,
-#                        normalize=True)
-#    idx = np.where(pgram > np.max(pgram) * 0.2)[0]
-
-if opts.doGPU and (algorithm == "PDM"):
-    from cuvarbase.utils import weights
-    lightcurves_pdm = []
-    for lightcurve in lightcurves:
-        t, y, dy = lightcurve
-        lightcurves_pdm.append((t, y, weights(np.ones(dy.shape)), freqs))
-    lightcurves = lightcurves_pdm 
-
-P = (414.79153768 + 9*(0.75/1000))/86400.0
-freq = 1/P
-#freqs = np.append(freqs, freq)
-#freqs = freq*np.ones(freqs.shape)
-
-if opts.doNotPeriodFind:
-    periods_best = np.ones((len(lightcurves),1))
-    significances = np.ones((len(lightcurves),1))
-    pdots = np.ones((len(lightcurves),1))
-else:
-    print('Analyzing %d lightcurves...' % len(lightcurves))
-    start_time = time.time()
-    periods_best, significances, pdots = find_periods(algorithm, lightcurves, 
-                                                      freqs, 
-                                                      doGPU=opts.doGPU,
-                                                      doCPU=opts.doCPU,
-                                                      doSaveMemory=opts.doSaveMemory,
-                                                      doRemoveTerrestrial=opts.doRemoveTerrestrial,
-                                                      freqs_to_remove=freqs_to_remove,
-                                                      doUsePDot=opts.doUsePDot,
-                                                      doSingleTimeSegment=opts.doSingleTimeSegment,
-                                                      doParallel=opts.doParallel,
-                                                      Ncore=opts.Ncore)
-    end_time = time.time()
-    print('Lightcurve analysis took %.2f seconds' % (end_time - start_time))
-
-if opts.doLightcurveStats:
+periodic_stats_algorithms = {}
+for algorithm in algorithms:    
+    if opts.doGPU and (algorithm == "PDM"):
+        from cuvarbase.utils import weights
+        lightcurves_pdm = []
+        for lightcurve in lightcurves:
+            t, y, dy = lightcurve
+            lightcurves_pdm.append((t, y, weights(np.ones(dy.shape)), freqs))
+        lightcurves = lightcurves_pdm 
+    
+    if opts.doNotPeriodFind:
+        periods_best = np.ones((len(lightcurves),1))
+        significances = np.ones((len(lightcurves),1))
+        pdots = np.ones((len(lightcurves),1))
+    else:
+        print('Analyzing %d lightcurves...' % len(lightcurves))
+        start_time = time.time()
+        periods_best, significances, pdots = find_periods(algorithm, lightcurves, 
+                                                          freqs, 
+                                                          doGPU=opts.doGPU,
+                                                          doCPU=opts.doCPU,
+                                                          doSaveMemory=opts.doSaveMemory,
+                                                          doRemoveTerrestrial=opts.doRemoveTerrestrial,
+                                                          freqs_to_remove=freqs_to_remove,
+                                                          doUsePDot=opts.doUsePDot,
+                                                          doSingleTimeSegment=opts.doSingleTimeSegment,
+                                                          doParallel=opts.doParallel,
+                                                          Ncore=opts.Ncore)
+        end_time = time.time()
+        print('Lightcurve analysis took %.2f seconds' % (end_time - start_time))
+    
     print('Running lightcurve stats...')
     start_time = time.time()
 
     if opts.doParallel:
         from joblib import Parallel, delayed
-        stats = Parallel(n_jobs=opts.Ncore)(delayed(calc_stats)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,periods_best))
+        periodic_stats = Parallel(n_jobs=opts.Ncore)(delayed(calc_fourier_stats)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,periods_best))
     else:
-        stats = []
+        periodic_stats = []
         for ii,data in enumerate(lightcurves):
             period = periods_best[ii]
             if np.mod(ii,100) == 0:
@@ -715,67 +717,75 @@ if opts.doLightcurveStats:
             copy = np.ma.copy(data).T
             t, mag, magerr = copy[:,0], copy[:,1], copy[:,2]
 
-            stat = calc_stats(t, mag, magerr, period)
-            stats.append(stat)
+            periodic_stat = calc_fourier_stats(t, mag, magerr, period)
+            periodic_stats.append(periodic_stat)
     end_time = time.time()
     print('Lightcurve statistics took %.2f seconds' % (end_time - start_time))
-
-if not opts.sigthresh is None:
-    sigthresh = opts.sigthresh
-else:
-    if opts.doVariability:
-        sigthresh = 0.15
+    
+    if not opts.sigthresh is None:
+        sigthresh = opts.sigthresh
     else:
-        if algorithm == "LS":
-            sigthresh = 1e6
-        elif algorithm == "FFT":
-            sigthresh = 0
-        elif algorithm == "GCE":
-            sigthresh = 7
-        elif algorithm == "GCE_LS_AOV":
-            sigthresh = 10
+        if opts.doVariability:
+            sigthresh = 0.15
         else:
-            sigthresh = 7
-
-if opts.doSpectra:
-    lamostpage = "http://dr5.lamost.org/spectrum/png/"
-    lamostfits = "http://dr5.lamost.org/spectrum/fits/"
-
-    LAMOSTcat = os.path.join(starCatalogDir,'lamost.hdf5')
-    with h5py.File(LAMOSTcat, 'r') as f:
-        lamost_ra, lamost_dec = f['ra'][:], f['dec'][:]
-    LAMOSTidxcat = os.path.join(starCatalogDir,'lamost_indices.hdf5')
-    with h5py.File(LAMOSTidxcat, 'r') as f:
-        lamost_obsid = f['obsid'][:]
-        lamost_inverse = f['inverse'][:]
-
-    lamost = SkyCoord(ra=lamost_ra*u.degree, dec=lamost_dec*u.degree, frame='icrs')    
-
-print('Cataloging / Plotting lightcurves...')
-if opts.doSpectra:
-    data_out = {}
-
-if opts.doLightcurveStats:
+            if algorithm == "LS":
+                sigthresh = 1e6
+            elif algorithm == "FFT":
+                sigthresh = 0
+            elif algorithm == "GCE":
+                sigthresh = 7
+            elif algorithm == "GCE_LS_AOV":
+                sigthresh = 10
+            elif algorithm == "ECE":
+                sigthresh = 6
+            elif algorithm == "EAOV":
+                sigthresh = 15
+            elif algorithm == "ELS":
+                sigthresh = 15
+            else:
+                sigthresh = 7
+    
+    if opts.doSpectra:
+        lamostpage = "http://dr5.lamost.org/spectrum/png/"
+        lamostfits = "http://dr5.lamost.org/spectrum/fits/"
+    
+        LAMOSTcat = os.path.join(starCatalogDir,'lamost.hdf5')
+        with h5py.File(LAMOSTcat, 'r') as f:
+            lamost_ra, lamost_dec = f['ra'][:], f['dec'][:]
+        LAMOSTidxcat = os.path.join(starCatalogDir,'lamost_indices.hdf5')
+        with h5py.File(LAMOSTidxcat, 'r') as f:
+            lamost_obsid = f['obsid'][:]
+            lamost_inverse = f['inverse'][:]
+    
+        lamost = SkyCoord(ra=lamost_ra*u.degree, dec=lamost_dec*u.degree, frame='icrs')    
+    
+    print('Cataloging / Plotting lightcurves...')
+    if opts.doSpectra:
+        data_out = {}
+    
     str_stats = np.empty((0,2))
-    data_stats = np.empty((0,42))
-else:
-    str_stats = np.empty((0,2))
-    data_stats = np.empty((0,6))
-
-cnt = 0
-fid = open(catalogFile,'w')
-for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significance, pdot in zip(lightcurves,filters,ids,names,coordinates,absmags,bp_rps,periods_best,significances,pdots):
-    filt_str = "_".join([str(x) for x in filt])
-
-    if opts.doLightcurveStats:
+    data_stats = np.empty((0,25))
+    data_periodic_stats = np.empty((0,18))
+    
+    if baseline<10:
+        basefolder = os.path.join(outputDir,'%sHC'%algorithm)
+    else:
+        basefolder = os.path.join(outputDir,'%s'%algorithm)
+    if (opts.source_type == "catalog") and ("fermi" in catalog_file):
+        basefolder = os.path.join(basefolder,'%d' % Ncatindex)
+    
+    cnt = 0
+    fid = open(catalogFile,'w')
+    for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significance, pdot in zip(lightcurves,filters,ids,names,coordinates,absmags,bp_rps,periods_best,significances,pdots):
+        filt_str = "_".join([str(x) for x in filt])
+    
         str_stats = np.append(str_stats,
                               np.array([[np.string_(name),
                                          np.string_(filt_str)]]), axis=0)
-                                         
+                                        
         data_stats = np.append(data_stats,
                                np.array([[objid, coordinate[0],
-                                          coordinate[1], period, significance,
-                                          pdot,
+                                          coordinate[1],
                                           stats[cnt][0], stats[cnt][1],
                                           stats[cnt][2], stats[cnt][3],
                                           stats[cnt][4], stats[cnt][5],
@@ -786,279 +796,282 @@ for lightcurve, filt, objid, name, coordinate, absmag, bp_rp, period, significan
                                           stats[cnt][14], stats[cnt][15],
                                           stats[cnt][16], stats[cnt][17],
                                           stats[cnt][18], stats[cnt][19],
-                                          stats[cnt][20], stats[cnt][21],
-                                          stats[cnt][22], stats[cnt][23],
-                                          stats[cnt][24], stats[cnt][25],
-                                          stats[cnt][26], stats[cnt][27],
-                                          stats[cnt][28], stats[cnt][29],
-                                          stats[cnt][30], stats[cnt][31],
-                                          stats[cnt][32], stats[cnt][33],
-                                          stats[cnt][34], stats[cnt][35]]]),
+                                          stats[cnt][20], stats[cnt][21]]]),
                                axis=0)
-    else:
-        str_stats = np.append(str_stats,
-                              np.array([[np.string_(name),
-                                         np.string_(filt_str)]]), axis=0)
-        data_stats = np.append(data_stats,
-                               np.array([[objid, coordinate[0],
-                                          coordinate[1], period, significance,
-                                          pdot]]), axis=0)
 
-    if (period/(1.0/fmax)) <= 1.05:
-        print("%d %.5f %.5f %d: Period is within 5 per." % (objid, coordinate[0], coordinate[1], stats[cnt][0]))
-
-    if opts.doVariability:
-        significance = stats[cnt][9]        
-
-    if opts.doSpectra:
-        data_out[name] = {}
-        data_out[name]["name"] = name
-        data_out[name]["objid"] = objid
-        data_out[name]["RA"] = coordinate[0]
-        data_out[name]["Dec"] = coordinate[1]
-        data_out[name]["period"] = period
-        data_out[name]["significance"] = significance
-        data_out[name]["pdot"] = pdot
-        data_out[name]["filt"] = filt
-        if opts.doLightcurveStats:
-            data_out[name]["stats"] = stats[cnt]
-
-    if opts.doPlots and (significance>sigthresh):
-        if opts.doHCOnly and np.isclose(period, 1.0/fmin, rtol=1e-2):
-            print("Vetoing... period is 1/fmax")
-            continue
-
-        RA, Dec = coordinate
-        if opts.doObjIDFilenames:
-            figfile = "%d.png" % objid
-        else:
-            figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec,
-                                                      period, "".join(filt_str))
-
-            if opts.doNotPeriodFind:
-                thisfolder = 'noperiod'
-            else:
-                idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
-                thisfolder = folders[idx.astype(int)]
-                if thisfolder == None:
-                    continue
-
-        if opts.doGPU and (algorithm == "PDM"):
-            copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
-        else:
-            copy = np.ma.copy(lightcurve).T
-
-        if opts.doObjIDFilenames:
-            objid_str = str(objid)
-            folder = os.path.join(basefolder, objid_str[2], objid_str[3])
-        else:
-            nepoch = np.array(len(copy[:,0]))
-            idx2 = np.where((nepoch>=epoch_ranges[:-1]) & (nepoch<=epoch_ranges[1:]))[0][0]
-            if epoch_folders[idx2.astype(int)] == None:
-                continue
-
-            folder = os.path.join(basefolder,thisfolder,epoch_folders[idx2.astype(int)])
-        if not os.path.isdir(folder):
-            os.makedirs(folder)
-        pngfile = os.path.join(folder,figfile)
-
+        data_periodic_stats = np.append(data_periodic_stats,
+                               np.array([[objid,
+                                          period, significance,
+                                          pdot,
+                                          periodic_stats[cnt][0], periodic_stats[cnt][1],
+                                          periodic_stats[cnt][2], periodic_stats[cnt][3],
+                                          periodic_stats[cnt][4], periodic_stats[cnt][5],
+                                          periodic_stats[cnt][6], periodic_stats[cnt][7],
+                                          periodic_stats[cnt][8], periodic_stats[cnt][9],
+                                          periodic_stats[cnt][10], periodic_stats[cnt][11],
+                                          periodic_stats[cnt][12], periodic_stats[cnt][13]]]),
+                               axis=0)
+    
+        if opts.doPlots and ((period/(1.0/fmax)) <= 1.05):
+            print("%d %.5f %.5f %d: Period is within 5 per." % (objid, coordinate[0], coordinate[1], stats[cnt][0]))
+    
         if opts.doVariability:
-            phases = copy[:,0]
-        else:
-            if pdot == 0:
-                phases = np.mod(copy[:,0],2*period)/(2*period)
-            else:
-                time_vals = copy[:,0] - np.min(copy[:,0])
-                phases=np.mod((time_vals-(1.0/2.0)*(pdot/period)*(time_vals)**2),2*period)/(2*period)
-        magnitude, err = copy[:,1], copy[:,2]
-
-        spectral_data = {}
+            significance = stats[cnt][9]        
+    
         if opts.doSpectra:
-            coord = SkyCoord(ra=RA*u.degree, dec=Dec*u.degree, frame='icrs')
-            try:
-                xid = SDSS.query_region(coord, spectro=True)
-            except:
-                xid = None
-            if not xid is None:
-                try:
-                    spec = SDSS.get_spectra(matches=xid)[0]
-                except:
-                    spec = []
-                    pass
-                for ii, sp in enumerate(spec):
-                    try:
-                        sp.data["loglam"]
-                    except:
+            data_out[name] = {}
+            data_out[name]["name"] = name
+            data_out[name]["objid"] = objid
+            data_out[name]["RA"] = coordinate[0]
+            data_out[name]["Dec"] = coordinate[1]
+            data_out[name]["period"] = period
+            data_out[name]["significance"] = significance
+            data_out[name]["pdot"] = pdot
+            data_out[name]["filt"] = filt
+            data_out[name]["stats"] = stats[cnt]
+  
+        if opts.doPlots and (significance>sigthresh):
+            if opts.doHCOnly and np.isclose(period, 1.0/fmin, rtol=1e-2):
+                print("Vetoing... period is 1/fmax")
+                continue
+    
+            RA, Dec = coordinate
+            if opts.doObjIDFilenames:
+                figfile = "%d.png" % objid
+            else:
+                figfile = "%.10f_%.10f_%.10f_%.10f_%s.png"%(significance, RA, Dec,
+                                                          period, "".join(filt_str))
+    
+                if opts.doNotPeriodFind:
+                    thisfolder = 'noperiod'
+                else:
+                    idx = np.where((period>=period_ranges[:-1]) & (period<=period_ranges[1:]))[0][0]
+                    thisfolder = folders[idx.astype(int)]
+                    if thisfolder == None:
                         continue
-                    lam = 10**sp.data["loglam"]
-                    flux = sp.data["flux"]
-                    key = len(list(spectral_data.keys()))
-                    spectral_data[key] = {}
-                    spectral_data[key]["lambda"] = lam
-                    spectral_data[key]["flux"] = flux            
-
-            sep = coord.separation(lamost).deg
-            idx = np.argmin(sep)
-            if sep[idx] < 3.0/3600.0:
-                idy = np.where(idx == lamost_inverse)[0]
-                obsids = lamost_obsid[idy]
-                for obsid in obsids:
-                    requestpage = "%s/%d" % (lamostfits, obsid)
- 
-                    with tempfile.NamedTemporaryFile(mode='w') as f:
-                        wget_command = "wget %s -O %s" % (requestpage, f.name)
-                        os.system(wget_command)
-                        hdul = astropy.io.fits.open(f.name)
-        
-                    for ii, sp in enumerate(hdul):
-                        lam = sp.data[2,:]
-                        flux = sp.data[0,:]
+    
+            if opts.doGPU and (algorithm == "PDM"):
+                copy = np.ma.copy((lightcurve[0],lightcurve[1],lightcurve[2])).T
+            else:
+                copy = np.ma.copy(lightcurve).T
+    
+            if opts.doObjIDFilenames:
+                objid_str = str(objid)
+                folder = os.path.join(basefolder, objid_str[2], objid_str[3])
+            else:
+                nepoch = np.array(len(copy[:,0]))
+                idx2 = np.where((nepoch>=epoch_ranges[:-1]) & (nepoch<=epoch_ranges[1:]))[0][0]
+                if epoch_folders[idx2.astype(int)] == None:
+                    continue
+    
+                folder = os.path.join(basefolder,thisfolder,epoch_folders[idx2.astype(int)])
+            if not os.path.isdir(folder):
+                os.makedirs(folder)
+            pngfile = os.path.join(folder,figfile)
+    
+            if opts.doVariability:
+                phases = copy[:,0]
+            else:
+                if pdot == 0:
+                    phases = np.mod(copy[:,0],2*period)/(2*period)
+                else:
+                    time_vals = copy[:,0] - np.min(copy[:,0])
+                    phases=np.mod((time_vals-(1.0/2.0)*(pdot/period)*(time_vals)**2),2*period)/(2*period)
+            magnitude, err = copy[:,1], copy[:,2]
+    
+            spectral_data = {}
+            if opts.doSpectra:
+                coord = SkyCoord(ra=RA*u.degree, dec=Dec*u.degree, frame='icrs')
+                try:
+                    xid = SDSS.query_region(coord, spectro=True)
+                except:
+                    xid = None
+                if not xid is None:
+                    try:
+                        spec = SDSS.get_spectra(matches=xid)[0]
+                    except:
+                        spec = []
+                        pass
+                    for ii, sp in enumerate(spec):
+                        try:
+                            sp.data["loglam"]
+                        except:
+                            continue
+                        lam = 10**sp.data["loglam"]
+                        flux = sp.data["flux"]
                         key = len(list(spectral_data.keys()))
                         spectral_data[key] = {}
                         spectral_data[key]["lambda"] = lam
-                        spectral_data[key]["flux"] = flux
-
-        if len(spectral_data.keys()) > 0:
-            #fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(25,10))
-            fig = plt.figure(figsize=(25,10))
-            gs = fig.add_gridspec(nrows=3, ncols=6)
-            ax1 = fig.add_subplot(gs[:, 0:2])
-            ax2 = fig.add_subplot(gs[:, 2:4])
-            #ax3 = fig.add_subplot(gs[0, 2])
-        else:
-            fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
-        ax1.errorbar(phases, magnitude,err,ls='none',c='k')
-        period2=period
-        ymed = np.nanmedian(magnitude)
-        y10, y90 = np.nanpercentile(magnitude,10), np.nanpercentile(magnitude,90)
-        ystd = np.nanmedian(err)
-        ymin = y10 - 7*ystd
-        ymax = y90 + 7*ystd
-        ax1.set_ylim([ymin,ymax])
-        ax1.invert_yaxis()
-        asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
-        hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
-        if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
-            ax2.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
-                         c='r',zorder=1,fmt='o')
-        ax2.set_xlim([-1,4.0])
-        ax2.set_ylim([-5,18])
-        ax2.invert_yaxis()
-        fig.colorbar(hist2[3],ax=ax2)
-        nspec = len(spectral_data.keys())
-        npairs = 0
-        if nspec > 1:
-            bands = [[4750.0, 4950.0], [6475.0, 6650.0], [8450, 8700]]
-            npairs = int(nspec * (nspec-1)/2)
-            v_values = np.zeros((len(bands), npairs))
-            v_values_unc = np.zeros((len(bands), npairs))
-            data_out[name]["spectra"] = {}
-            for jj, band in enumerate(bands):
-                data_out[name]["spectra"][jj] = np.empty((0,3))
-
-                ax = fig.add_subplot(gs[jj, 4])
-                ax_ = fig.add_subplot(gs[jj, 5])
-                xmin, xmax = band[0], band[1]
-                ymin, ymax = np.inf, -np.inf
-                for key in spectral_data:
-                    idx = np.where( (spectral_data[key]["lambda"] >= xmin) &
-                                    (spectral_data[key]["lambda"] <= xmax))[0]
-                    wave = spectral_data[key]["lambda"][idx]
-                    myflux = spectral_data[key]["flux"][idx]
-                    # quick-and-dirty normalization
-                    myflux -= np.median(myflux)
-                    if len(myflux) == 0: continue
-                    myflux /= np.max(np.abs(myflux))
-                    y1 = np.nanpercentile(myflux,1)
-                    y99 = np.nanpercentile(myflux,99)
-                    ydiff = y99 - y1
-                    ymintmp = y1 - ydiff
-                    ymaxtmp = y99 + ydiff
-                    if ymin > ymintmp:
-                        ymin = ymintmp
-                    if ymaxtmp > ymax:
-                        ymax = ymaxtmp
-                    ax.plot(wave, myflux, '--')
-                correlation_funcs = correlate_spec(spectral_data, band = band)
-                # cross correlation
-                if correlation_funcs == {}:
-                    pass
-                else:
-                    if len(correlation_funcs) == 1:
-                        yheights = [0.5]
-                    else:
-                        yheights = np.linspace(0.25,0.75,len(correlation_funcs))
-                    for kk, key in enumerate(correlation_funcs):
-                        if not 'v_peak' in correlation_funcs[key]:
-                            continue
-                        vpeak = correlation_funcs[key]['v_peak']
-                        vpeak_unc = correlation_funcs[key]['v_peak_unc']
-                        Cpeak = correlation_funcs[key]['C_peak']
-                        ax_.plot(correlation_funcs[key]["velocity"], correlation_funcs[key]["correlation"])
-                        ax_.plot([vpeak, vpeak], [0, Cpeak], 'k--')
-                        ax_.text(250, yheights[kk], "v=%.0f +- %.0f"%(vpeak, vpeak_unc))
-                        v_values[jj][kk] = vpeak
-                        v_values_unc[jj][kk] = vpeak_unc
-                        data_out[name]["spectra"][jj] = np.vstack((data_out[name]["spectra"][jj], [vpeak, vpeak_unc, Cpeak]))
-
-                if np.isfinite(ymin) and np.isfinite(ymax):
-                    ax.set_ylim([ymin,ymax])
-                ax.set_xlim([xmin,xmax])
-                ax_.set_ylim([0,1])
-                ax_.set_xlim([-1000,1000])
-                if jj == len(bands)-1:
-                    ax.set_xlabel('Wavelength [A]')
-                    ax_.set_xlabel('Velocity [km/s]')
-                    adjust_subplots_band(ax, ax_)
-                else:
-                    ax_.set_xticklabels([])
-                if jj==1:
-                    new_tick_locations = np.array([-1000, -500, 0, 500, 1000])
-                    axmass = ax_.twiny()
-                    axmass.set_xlim(ax_.get_xlim())
-                    axmass.set_xticks(new_tick_locations)
-                    tick_labels = tick_function(new_tick_locations, period)
-                    tick_labels = ["{0:.0f}".format(float(x)) for x in tick_labels]
-                    axmass.set_xticklabels(tick_labels)
-                    axmass.set_xlabel("f($M$) ("+r'$M_\odot$'+')')
-        if npairs > 0:
-            # calculate mass functon
-            if npairs==1:
-                id_pair = 0
+                        spectral_data[key]["flux"] = flux            
+    
+                sep = coord.separation(lamost).deg
+                idx = np.argmin(sep)
+                if sep[idx] < 3.0/3600.0:
+                    idy = np.where(idx == lamost_inverse)[0]
+                    obsids = lamost_obsid[idy]
+                    for obsid in obsids:
+                        requestpage = "%s/%d" % (lamostfits, obsid)
+     
+                        with tempfile.NamedTemporaryFile(mode='w') as f:
+                            wget_command = "wget %s -O %s" % (requestpage, f.name)
+                            os.system(wget_command)
+                            hdul = astropy.io.fits.open(f.name)
+            
+                        for ii, sp in enumerate(hdul):
+                            lam = sp.data[2,:]
+                            flux = sp.data[0,:]
+                            key = len(list(spectral_data.keys()))
+                            spectral_data[key] = {}
+                            spectral_data[key]["lambda"] = lam
+                            spectral_data[key]["flux"] = flux
+    
+            if len(spectral_data.keys()) > 0:
+                #fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(25,10))
+                fig = plt.figure(figsize=(25,10))
+                gs = fig.add_gridspec(nrows=3, ncols=6)
+                ax1 = fig.add_subplot(gs[:, 0:2])
+                ax2 = fig.add_subplot(gs[:, 2:4])
+                #ax3 = fig.add_subplot(gs[0, 2])
             else:
-                # select a pair with:
-                # (1) reasonable variance among all band measurements
-                stds = np.std(v_values, axis=0)
-                if np.sum(stds<50)>=1:
-                    v_values = v_values[:, stds<50]
-                    v_values_unc = v_values_unc[:, stds<50]
-                # (2) largest (absolute) velosity variation
-                vsums = np.sum(abs(v_values), axis=0)
-                id_pair = np.where(vsums == max(vsums))[0][0]
-            v_adopt = np.median(v_values[:,id_pair])
-            id_band = np.where(v_values[:,id_pair]==v_adopt)[0][0]
-            v_adopt_unc = v_values_unc[id_band,id_pair]
-            K = abs(v_adopt/2.) # [km/s] assuming that the velocity variation is max and min in rv curve
-            K_unc = abs(v_adopt_unc/2.) # [km/s]
-            P = 2*period # [day] if ellipsodial modulation, amplitude are roughly the same, 
-                        # then the photometric period is probably half of the orbital period
-            fmass = (K * 100000)**3 * (P*86400) / (2*np.pi*const.G.cgs.value) / const.M_sun.cgs.value
-            fmass_unc = 3 * fmass / K * K_unc
-            data_out[name]["fmass"] = fmass
-            data_out[name]["fmass_unc"] = fmass_unc
-        if pdot == 0:
-            plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
-        else:
-            plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec)+"_"+str(pdot))
-        fig.savefig(pngfile, bbox_inches='tight')
-        plt.close()
+                fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
+            ax1.errorbar(phases, magnitude,err,ls='none',c='k')
+            period2=period
+            ymed = np.nanmedian(magnitude)
+            y10, y90 = np.nanpercentile(magnitude,10), np.nanpercentile(magnitude,90)
+            ystd = np.nanmedian(err)
+            ymin = y10 - 7*ystd
+            ymax = y90 + 7*ystd
+            ax1.set_ylim([ymin,ymax])
+            ax1.invert_yaxis()
+            asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
+            hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
+            if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
+                ax2.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
+                             c='r',zorder=1,fmt='o')
+            ax2.set_xlim([-1,4.0])
+            ax2.set_ylim([-5,18])
+            ax2.invert_yaxis()
+            fig.colorbar(hist2[3],ax=ax2)
+            nspec = len(spectral_data.keys())
+            npairs = 0
+            if nspec > 1:
+                bands = [[4750.0, 4950.0], [6475.0, 6650.0], [8450, 8700]]
+                npairs = int(nspec * (nspec-1)/2)
+                v_values = np.zeros((len(bands), npairs))
+                v_values_unc = np.zeros((len(bands), npairs))
+                data_out[name]["spectra"] = {}
+                for jj, band in enumerate(bands):
+                    data_out[name]["spectra"][jj] = np.empty((0,3))
+    
+                    ax = fig.add_subplot(gs[jj, 4])
+                    ax_ = fig.add_subplot(gs[jj, 5])
+                    xmin, xmax = band[0], band[1]
+                    ymin, ymax = np.inf, -np.inf
+                    for key in spectral_data:
+                        idx = np.where( (spectral_data[key]["lambda"] >= xmin) &
+                                        (spectral_data[key]["lambda"] <= xmax))[0]
+                        wave = spectral_data[key]["lambda"][idx]
+                        myflux = spectral_data[key]["flux"][idx]
+                        # quick-and-dirty normalization
+                        myflux -= np.median(myflux)
+                        if len(myflux) == 0: continue
+                        myflux /= np.max(np.abs(myflux))
+                        y1 = np.nanpercentile(myflux,1)
+                        y99 = np.nanpercentile(myflux,99)
+                        ydiff = y99 - y1
+                        ymintmp = y1 - ydiff
+                        ymaxtmp = y99 + ydiff
+                        if ymin > ymintmp:
+                            ymin = ymintmp
+                        if ymaxtmp > ymax:
+                            ymax = ymaxtmp
+                        ax.plot(wave, myflux, '--')
+                    correlation_funcs = correlate_spec(spectral_data, band = band)
+                    # cross correlation
+                    if correlation_funcs == {}:
+                        pass
+                    else:
+                        if len(correlation_funcs) == 1:
+                            yheights = [0.5]
+                        else:
+                            yheights = np.linspace(0.25,0.75,len(correlation_funcs))
+                        for kk, key in enumerate(correlation_funcs):
+                            if not 'v_peak' in correlation_funcs[key]:
+                                continue
+                            vpeak = correlation_funcs[key]['v_peak']
+                            vpeak_unc = correlation_funcs[key]['v_peak_unc']
+                            Cpeak = correlation_funcs[key]['C_peak']
+                            ax_.plot(correlation_funcs[key]["velocity"], correlation_funcs[key]["correlation"])
+                            ax_.plot([vpeak, vpeak], [0, Cpeak], 'k--')
+                            ax_.text(250, yheights[kk], "v=%.0f +- %.0f"%(vpeak, vpeak_unc))
+                            v_values[jj][kk] = vpeak
+                            v_values_unc[jj][kk] = vpeak_unc
+                            data_out[name]["spectra"][jj] = np.vstack((data_out[name]["spectra"][jj], [vpeak, vpeak_unc, Cpeak]))
+    
+                    if np.isfinite(ymin) and np.isfinite(ymax):
+                        ax.set_ylim([ymin,ymax])
+                    ax.set_xlim([xmin,xmax])
+                    ax_.set_ylim([0,1])
+                    ax_.set_xlim([-1000,1000])
+                    if jj == len(bands)-1:
+                        ax.set_xlabel('Wavelength [A]')
+                        ax_.set_xlabel('Velocity [km/s]')
+                        adjust_subplots_band(ax, ax_)
+                    else:
+                        ax_.set_xticklabels([])
+                    if jj==1:
+                        new_tick_locations = np.array([-1000, -500, 0, 500, 1000])
+                        axmass = ax_.twiny()
+                        axmass.set_xlim(ax_.get_xlim())
+                        axmass.set_xticks(new_tick_locations)
+                        tick_labels = tick_function(new_tick_locations, period)
+                        tick_labels = ["{0:.0f}".format(float(x)) for x in tick_labels]
+                        axmass.set_xticklabels(tick_labels)
+                        axmass.set_xlabel("f($M$) ("+r'$M_\odot$'+')')
+            if npairs > 0:
+                # calculate mass functon
+                if npairs==1:
+                    id_pair = 0
+                else:
+                    # select a pair with:
+                    # (1) reasonable variance among all band measurements
+                    stds = np.std(v_values, axis=0)
+                    if np.sum(stds<50)>=1:
+                        v_values = v_values[:, stds<50]
+                        v_values_unc = v_values_unc[:, stds<50]
+                    # (2) largest (absolute) velosity variation
+                    vsums = np.sum(abs(v_values), axis=0)
+                    id_pair = np.where(vsums == max(vsums))[0][0]
+                v_adopt = np.median(v_values[:,id_pair])
+                id_band = np.where(v_values[:,id_pair]==v_adopt)[0][0]
+                v_adopt_unc = v_values_unc[id_band,id_pair]
+                K = abs(v_adopt/2.) # [km/s] assuming that the velocity variation is max and min in rv curve
+                K_unc = abs(v_adopt_unc/2.) # [km/s]
+                P = 2*period # [day] if ellipsodial modulation, amplitude are roughly the same, 
+                            # then the photometric period is probably half of the orbital period
+                fmass = (K * 100000)**3 * (P*86400) / (2*np.pi*const.G.cgs.value) / const.M_sun.cgs.value
+                fmass_unc = 3 * fmass / K * K_unc
+                data_out[name]["fmass"] = fmass
+                data_out[name]["fmass_unc"] = fmass_unc
+            if pdot == 0:
+                plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec))
+            else:
+                plt.suptitle(str(period2)+"_"+str(RA)+"_"+str(Dec)+"_"+str(pdot))
+            fig.savefig(pngfile, bbox_inches='tight')
+            plt.close()
+    
+        cnt = cnt + 1
 
-    cnt = cnt + 1
+    periodic_stats_algorithms[algorithm] = data_periodic_stats
 
 with h5py.File(catalogFile, 'w') as hf:
     hf.create_dataset("names",  data=str_stats[:,0])
     hf.create_dataset("filters",  data=str_stats[:,1])
     hf.create_dataset("stats",  data=data_stats)
+
+    for algorithm in algorithms:
+        hf.create_dataset("stats_%s" % algorithm,
+                          data=periodic_stats_algorithms[algorithm])
 
 if opts.doSpectra:
     with open(spectraFile, 'wb') as handle:
