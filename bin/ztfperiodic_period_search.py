@@ -125,7 +125,7 @@ def parse_commandline():
     parser.add_option("--doObjIDFilenames",  action="store_true", default=False)
     parser.add_option("--doCheckLightcurves",  action="store_true", default=False)
 
-    parser.add_option("--samples_per_peak",default=3,type=int)
+    parser.add_option("--samples_per_peak",default=10,type=int)
 
     opts, args = parser.parse_args()
 
