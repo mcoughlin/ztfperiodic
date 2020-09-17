@@ -6,6 +6,7 @@ import optparse
 import copy
 import time
 import h5py
+import json
 from functools import reduce
 
 import numpy as np
@@ -26,10 +27,6 @@ from astropy.coordinates import Angle
 from astropy.io import ascii
 from astropy import units as u
 from astropy.coordinates import SkyCoord
-
-from astroquery.simbad import Simbad
-Simbad.ROW_LIMIT = -1
-Simbad.TIMEOUT = 300000
 
 from panoptes_client import Panoptes, Project, SubjectSet, Subject, Workflow
 
@@ -53,6 +50,7 @@ def parse_commandline():
     """
     parser = optparse.OptionParser()
     parser.add_option("--doPlots",  action="store_true", default=False)
+    parser.add_option("--doLCFile",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields_ids_DR2/catalog/compare/top_sources")
     #parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields_ids_DR2_ids_DR2/catalog/compare/rrlyr/")
@@ -92,6 +90,10 @@ outputDir = os.path.join(outputDir, intersectionType)
 plotDir = os.path.join(outputDir,'plots')
 if not os.path.isdir(plotDir):
     os.makedirs(plotDir)
+
+jsonDir = os.path.join(outputDir,'json')
+if not os.path.isdir(jsonDir):
+    os.makedirs(jsonDir)
 
 scriptpath = os.path.realpath(__file__)
 inputDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"input")
@@ -174,12 +176,14 @@ for ii, (index, row) in enumerate(df.iterrows()):
 
     objid, features = get_kowalski_features_objids([index], kow)
     period = features.period.values[0]
+    amp = features.f1_amp.values[0]
     lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline = get_kowalski_objids([index], kow)
     ra, dec = coordinates[0][0], coordinates[0][1]
 
     lightcurves_all = get_kowalski(ra, dec, kow,
                                    min_epochs=20)
     lightcurves_combined = combine_lcs(lightcurves_all)
+    key = list(lightcurves_combined.keys())[0] 
 
     hjd, magnitude, err = lightcurves[0]
     absmag, bp_rp = absmags[0], bp_rps[0]
@@ -191,6 +195,60 @@ for ii, (index, row) in enumerate(df.iterrows()):
         # distance in pc
         if Plx > 0 :
             d_pc = 1 / (Plx*1e-3)
+
+    if opts.doLCFile:
+        data_json = {}
+        data_json["data"] = {}
+        data_json["data"]["scatterPlot"] = {}
+        data_json["data"]["scatterPlot"]["data"] = []
+        data_json["data"]["scatterPlot"]["chartOptions"] = {"xAxisLabel": "Days", "yAxisLabel": "Brightness"}
+
+        data_json["data"]["barCharts"] = {}
+        data_json["data"]["barCharts"]["period"] = {}
+        data_json["data"]["barCharts"]["period"]["data"] = []
+        data_json["data"]["barCharts"]["period"]["chartOptions"] = {"xAxisLabel": "Period", "yAxisLabel": ""}
+        data_json["data"]["barCharts"]["amplitude"] = {}
+        data_json["data"]["barCharts"]["amplitude"]["data"] = []
+        data_json["data"]["barCharts"]["amplitude"]["chartOptions"] = {"xAxisLabel": "Amplitude", "yAxisLabel": ""}        
+
+        periods, amplitudes = [], []
+        for jj, (fid, color, symbol) in enumerate(zip(fids, colors, symbols)):
+            seriesData = []
+            for ii, key in enumerate(lightcurves_all.keys()):
+                lc = lightcurves_all[key]
+                if not lc["fid"][0] == fid: continue
+                idx = np.where(lc["fid"][0] == fids)[0]
+
+                for x, y, yerr in zip(lc["hjd"], lc["mag"], lc["magerr"]):
+                    data_single = {"x": x, "y": y, "yerr": yerr}
+                    seriesData.append(data_single)
+       
+            if len(seriesData) == 0: continue
+
+            if fid == 1:
+                label, color = "g-band", "drawing-green"
+            elif fid == 2:
+                label, color = "r-band", "drawing-red"
+            elif fid == 3:
+                label, color = "i-band", "drawing-black"
+
+            seriesOptions = {"color": color,
+                             "label": label,
+                             "period": period}
+            periodOptions = {"color": color,
+                             "label": label,
+                             "value": np.log10(period)}
+            amplitudeOptions = {"color": color,
+                                "label": label,
+                                "value": amp}
+
+            data_json["data"]["scatterPlot"]["data"].append({"seriesData": seriesData, "seriesOptions": seriesOptions})
+            data_json["data"]["barCharts"]["period"]["data"].append(periodOptions)
+            data_json["data"]["barCharts"]["amplitude"]["data"].append(amplitudeOptions)
+ 
+        photFile = os.path.join(jsonDir,'%d.json' % objid)
+        with open(photFile, 'w', encoding='utf-8') as f:
+            json.dump(data_json, f, ensure_ascii=False, indent=4)
 
     if opts.doPlots:
         fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
@@ -236,11 +294,38 @@ for ii, (index, row) in enumerate(df.iterrows()):
         fig.savefig(pngfile, bbox_inches='tight')
         plt.close()
 
+        fig = plt.figure(figsize=(10,10))
+        ax = plt.gca()
+        asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
+        hist2 = ax.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
+        if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
+            ax.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
+                        c='r',zorder=1,fmt='o')
+        ax.set_xlim([-1,4.0])
+        ax.set_ylim([-5,18])
+        ax.invert_yaxis()
+        cbar = fig.colorbar(hist2[3],ax=ax)
+        cbar.set_label('Object Count')
+        ax.set_xlabel('Gaia BP - RP')
+        ax.set_ylabel('Gaia $M_G$')
+
+        if (not d_pc is None) and (not gofAL is None):
+            ax.set_title("d = %d [pc], gof = %.1f"%(d_pc, gofAL), fontsize = fs)
+
+        plt.tight_layout()
+        pngfile_HR = os.path.join(plotDir,'%d_HR.png' % objid)
+        fig.savefig(pngfile_HR, bbox_inches='tight')
+        plt.close()
+
     objfid.write('%d %.10f %.10f %.10f\n' % (index, ra, dec, period))
     print('%d %.10f %.10f %.10f' % (index, ra, dec, period))
 
     if opts.doSubjectSet:
-        image_list.append(pngfile)
+        #image_list.append(pngfile)
+        image_list.append([{ "image/png": pngfile }, 
+                           { "application/json": photFile },
+                           { "image/png": pngfile_HR }])
+
         mdict = {'candidate': int(objid),
                  'ra': ra, 'dec': dec, 
                  'period': period}
@@ -248,8 +333,11 @@ for ii, (index, row) in enumerate(df.iterrows()):
 objfid.close()
 
 if opts.doSubjectSet:
-    ret = zoo.add_new_subject(image_list,
-                              metadata_list,
-                              subject_set_name=subject_set_name)
+    #ret = zoo.add_new_subject(image_list,
+    #                          metadata_list,
+    #                          subject_set_name=subject_set_name)
 
+    ret = zoo.add_new_subject_timeseries(image_list,
+                                         metadata_list,
+                                         subject_set_name=subject_set_name)
 
