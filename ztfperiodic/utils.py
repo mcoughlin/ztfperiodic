@@ -1336,7 +1336,49 @@ def get_featuresetnames(featuresetname):
     feature_set32 = ['Gaia_DR2__parallax_error', 'Gaia_DR2__pmra',
            'Gaia_DR2__pmra_error', 'Gaia_DR2__pmdec', 'Gaia_DR2__pmdec_error',
            'Gaia_DR2__astrometric_excess_noise']
-    
+   
+    phenomenological = ['dmdt', 'ad', 'chi2red', 'f1_a', 'f1_amp' ,'f1_b', 
+                        'f1_bic', 'f1_phi0', 'f1_power', 'f1_relamp1',
+                        'f1_relamp2', 'f1_relamp3', 'f1_relamp4',
+                        'f1_relphi1', 'f1_relphi2', 'f1_relphi3',
+                        'f1_relphi5', 'f60', 'f70', 'f80', 'f90',
+                        'inv_vonneumannratio', 'iqr', 'median',
+                        'median_abs_dev', 'norm_excess_var',
+                        'norm_peak_to_peak_amp', 'pdot', 'period',
+                        'roms', 'significance', 'skew', 'smallkurt',
+                        'stetson_j', 'stetson_k', 'sw', 'welch_i', 
+                        'wmean', 'wstd', 'n_ztf_alerts',
+                        'mean_ztf_alert_braai']
+    ontological = phenomenological + ['AllWISE__w1mpro',
+                                      'AllWISE__w1sigmpro',
+                                      'AllWISE__w2mpro',
+                                      'AllWISE__w2sigmpro',
+                                      'AllWISE__w3mpro',
+                                      'AllWISE__w3sigmpro',
+                                      'AllWISE__w4mpro',
+                                      'AllWISE__w4sigmpro',
+                                      'Gaia_DR2__phot_g_mean_mag',
+                                      'Gaia_DR2__phot_bp_mean_mag',
+                                      'Gaia_DR2__phot_rp_mean_mag',
+                                      'Gaia_DR2__parallax',
+                                      'Gaia_DR2__parallax_error',
+                                      'Gaia_DR2__pmra',
+                                      'Gaia_DR2__pmra_error',
+                                      'Gaia_DR2__pmdec',
+                                      'Gaia_DR2__pmdec_error',
+                                      'Gaia_DR2__astrometric_excess_noise',
+                                      'Gaia_DR2__phot_bp_rp_excess_factor',
+                                      'PS1_DR1__gMeanPSFMag',
+                                      'PS1_DR1__gMeanPSFMagErr',
+                                      'PS1_DR1__rMeanPSFMag',
+                                      'PS1_DR1__rMeanPSFMagErr',
+                                      'PS1_DR1__iMeanPSFMag',
+                                      'PS1_DR1__iMeanPSFMagErr',
+                                      'PS1_DR1__zMeanPSFMag',
+                                      'PS1_DR1__zMeanPSFMagErr',
+                                      'PS1_DR1__yMeanPSFMag',
+                                      'PS1_DR1__yMeanPSFMagErr'] 
+
     # Do b, d, e, f in that order 
     feature_set_b = feature_set11
     feature_set_c =  feature_set_b + feature_set12
@@ -1349,6 +1391,8 @@ def get_featuresetnames(featuresetname):
                         'd': feature_set_d,  # 41 features - 1 (n)
                         'e': feature_set_e,  # 64 features - 1 (n)
                         'f': feature_set_f,  # 70 features - 1 (n)
+                        'phenomenological': phenomenological,
+                        'ontological': ontological
                           }
 
     return featuresetnames[featuresetname]

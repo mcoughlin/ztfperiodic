@@ -220,7 +220,8 @@ for ii, (index, row) in enumerate(df.iterrows()):
                 idx = np.where(lc["fid"][0] == fids)[0]
 
                 for x, y, yerr in zip(lc["hjd"], lc["mag"], lc["magerr"]):
-                    data_single = {"x": x, "y": y, "yerr": yerr}
+                    data_single = {"x": x, "y": np.median(lc["mag"])-y,
+                                   "yerr": yerr}
                     seriesData.append(data_single)
        
             if len(seriesData) == 0: continue

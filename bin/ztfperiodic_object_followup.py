@@ -418,6 +418,8 @@ if opts.doPlots:
     ax = plt.subplot(111)
     plot_gaia_subplot(gaia, ax, inputDir, doTitle=False)
     plt.savefig(plotName, bbox_inches='tight')
+    plotName = os.path.join(path_out_dir,'gaia.png')
+    plt.savefig(plotName, bbox_inches='tight')
     plt.close()
 
 if not (opts.doCPU or opts.doGPU):
@@ -697,6 +699,8 @@ if opts.doPlots:
         ax.tick_params(axis='both', which='minor', labelsize=fs)
         plt.gca().invert_yaxis()
         plt.tight_layout()
+        plt.savefig(plotName)
+        plotName = os.path.join(path_out_dir,'phase_color.png')
         plt.savefig(plotName)
         plt.close()
 
