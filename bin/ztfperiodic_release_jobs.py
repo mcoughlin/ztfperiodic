@@ -26,14 +26,18 @@ def docondor(opts):
         run_time = lineSplit[4]
    
         jobid = float(lineSplit[0]) 
+        days, total_time = run_time.split("+")
+        run_time = TimeDelta(int(days)*u.day) + Time('2020-01-01 %s' % total_time, format='iso', scale='utc') - Time('2020-01-01 00:00:00', format='iso', scale='utc')
         if opts.doTimeLimit:
-            days, total_time = run_time.split("+")
-            run_time = TimeDelta(int(days)*u.day) + Time('2020-01-01 %s' % total_time, format='iso', scale='utc') - Time('2020-01-01 00:00:00', format='iso', scale='utc')
             if run_time > TimeDelta(opts.maxtime * u.hour): 
                 condor_command = "condor_rm %d"%(jobid)
                 os.system(condor_command)   
-    
-        if lineSplit[5] == opts.jobtype:
+        if opts.doMemoryLimit:
+            if opts.memory < float(lineSplit[7]):
+                condor_command = "condor_rm %d"%(jobid)
+                os.system(condor_command)
+
+        if lineSplit[5] in opts.jobtype.split(","):
             if opts.doMemory:
                 condor_command = "condor_qedit %d RequestMemory %d"%(jobid,opts.memory)
                 os.system(condor_command)
@@ -57,6 +61,7 @@ parser.add_option("--universe", type="int", default=12)
 parser.add_option("--doTimeLimit",  action="store_true", default=False)
 parser.add_option("-t", "--maxtime", type="float", default=3)
 parser.add_option("--doMemory",  action="store_true", default=False)
+parser.add_option("--doMemoryLimit",  action="store_true", default=False)
 parser.add_option("--doUniverse",  action="store_true", default=False)
 parser.add_option("--doRemove",  action="store_true", default=False)
 parser.add_option("--doRunContinuously",  action="store_true", default=False)
