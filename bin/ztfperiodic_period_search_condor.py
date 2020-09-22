@@ -61,7 +61,7 @@ def parse_commandline():
 
     parser.add_option("--doPercentile",  action="store_true", default=False)
     parser.add_option("--doParallel",  action="store_true", default=False)
-    parser.add_option("--",  action="store_true", default=False)
+    parser.add_option("--doPlots",  action="store_true", default=False)
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")

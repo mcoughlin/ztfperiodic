@@ -102,6 +102,38 @@ class ZooProject:
 
         subject_set.add(new_subjects)
 
+    def add_new_subject_timeseries(self, image_list, metadata_list, subject_set_name):
+        """
+        Add a subject and the metadata.  image_list and metadata_list must be
+        of equal length
+        :param image_list: list of images to be added
+        :param metadata_list: list of metadata to be added
+        :return:
+        """
+
+        # Start by making sure we have two equal length list
+        if len(image_list) != len(metadata_list):
+            print("Image list and metadata list do not match")
+
+
+        # Link to the subject set we want
+        subject_set = SubjectSet()
+        subject_set.links.project = self.project
+        subject_set.display_name = subject_set_name
+        subject_set.save()
+
+        # Go through the image and metadata list and add the items
+        new_subjects = []
+        for i in range(len(image_list)):
+            subject = Subject()
+            subject.links.project = self.project
+            subject.add_location(image_list[i])
+            subject.metadata.update(metadata_list[i])
+            subject.save()
+            new_subjects.append(subject)
+
+        subject_set.add(new_subjects)
+
     def remove_subject(self, subject_set_id, subject_list):
         """
 

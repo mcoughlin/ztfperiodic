@@ -88,7 +88,21 @@ logDir = os.path.join(condorDir,'logs')
 if not os.path.isdir(logDir):
     os.makedirs(logDir)
 
-modelFiles = glob.glob(os.path.join(modelPath, "d11*.%s.*model" % featuresetname))
+if algorithm == "dnn":
+    modelFiles = []
+    
+    if featuresetname == "ontological":
+        varclasses = ['puls', 'dscu', 'ceph', 'rrlyr', 'lpv', 'srv', 'bis', 'blyr', 'rscvn', 'agn', 'yso', 'wuma']
+    elif featuresetname == "phenomenological":
+        varclasses = ['vnv', 'pnp', 'i', 'e', 'ea', 'eb', 'ew', 'fla']
+    for varclass in varclasses:
+        for trainingset in ['d12', 'd11', 'd10']:
+            modelFile = glob.glob(os.path.join(modelPath, "%s*%s*h5" % (varclass, trainingset)))        
+            if len(modelFile) > 0:
+                modelFiles.append(modelFile[0])
+                break
+elif algorithm == "xgboost":
+    modelFiles = glob.glob(os.path.join(modelPath, "d11*.%s.*model" % featuresetname))
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 

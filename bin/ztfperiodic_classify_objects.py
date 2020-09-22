@@ -100,12 +100,33 @@ Ncatindex = opts.Ncatindex
 modelFiles = opts.modelFiles.split(",")
 dbname = opts.dbname
 
-modeltype = modelFiles[0].split("/")[-1].split(".")[-2]
-for modelFile in modelFiles:
-    modelname = modelFile.split("/")[-1].split(".")[-2]
-    if not modelname == modeltype:
-        print("model types differ... please run with same types")
-        exit(0)
+if algorithm == "xgboost":
+    modeltype = modelFiles[0].split("/")[-1].split(".")[-2]
+    for modelFile in modelFiles:
+        modelname = modelFile.split("/")[-1].split(".")[-2]
+        if not modelname == modeltype:
+            print("model types differ... please run with same types")
+            exit(0)
+elif algorithm == "dnn":
+    featuresetnames = {}
+    featuresetnames["ontological"] = ['puls', 'dscu', 'ceph', 'rrlyr', 'lpv', 'srv', 'bis', 'blyr', 'rscvn', 'agn', 'yso', 'wuma']
+    featuresetnames["phenomenological"] = ['vnv', 'pnp', 'i', 'e', 'ea', 'eb', 'ew', 'fla']
+
+    modelname = modelFiles[0].split("/")[-1].split(".")[0]
+    if modelname in featuresetnames["ontological"]:
+        modeltype = "ontological"
+    elif modelname in featuresetnames["phenomenological"]:
+        modeltype = "phenomenological"
+
+    for modelFile in modelFiles:
+        modelname = modelFile.split("/")[-1].split(".")[0]
+        if modelname in featuresetnames["ontological"]:
+            modeltype2 = "ontological"
+        elif modelname in featuresetnames["phenomenological"]:
+            modeltype2 = "phenomenological"
+        if not modeltype == modeltype2:
+            print("model types differ... please run with same types")
+            exit(0)
 
 basecatalogDir = os.path.join(outputDir,'catalog',algorithm)
 if (opts.source_type == "catalog") and ("fermi" in catalog_file):
