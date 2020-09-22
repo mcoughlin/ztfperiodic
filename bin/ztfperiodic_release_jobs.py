@@ -24,7 +24,8 @@ def docondor(opts):
         if lineSplit[0] in ["--","ID","Total"]: continue
         if lineSplit[1] == opts.user: continue
         run_time = lineSplit[4]
-    
+   
+        jobid = float(lineSplit[0]) 
         if opts.doTimeLimit:
             days, total_time = run_time.split("+")
             run_time = TimeDelta(int(days)*u.day) + Time('2020-01-01 %s' % total_time, format='iso', scale='utc') - Time('2020-01-01 00:00:00', format='iso', scale='utc')
@@ -33,7 +34,6 @@ def docondor(opts):
                 os.system(condor_command)   
     
         if lineSplit[5] == opts.jobtype:
-            jobid = float(lineSplit[0])
             if opts.doMemory:
                 condor_command = "condor_qedit %d RequestMemory %d"%(jobid,opts.memory)
                 os.system(condor_command)
