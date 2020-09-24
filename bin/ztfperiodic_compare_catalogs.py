@@ -19,7 +19,7 @@ from matplotlib.colors import LogNorm
 from matplotlib.colors import Normalize
 
 import astropy
-from astropy.table import Table, vstack
+from astropy.table import Table, vstack, hstack
 from astropy.coordinates import Angle
 from astropy.io import ascii
 from astropy import units as u
@@ -45,14 +45,19 @@ def parse_commandline():
     parser.add_option("--doField",  action="store_true", default=False)
     parser.add_option("-f","--field",default=853,type=int)
 
-    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/compare")
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3/catalog/compare")
+    parser.add_option("-c","--catalog",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3/catalog/ECE_ELS_EAOV")
+
     parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/LS")
     parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/CE")
    
     parser.add_option("--catalog_file",default="../catalogs/CRTS.dat")    
 
-    parser.add_option("--sig1",default=1e6,type=float)
-    parser.add_option("--sig2",default=7.0,type=float)    
+    parser.add_option("--algorithm1",default="ECE")
+    parser.add_option("--algorithm2",default="ELS")
+
+    parser.add_option("--sig1",default=7.0,type=float)
+    parser.add_option("--sig2",default=10.0,type=float)    
 
     parser.add_option("--crossmatch_distance",default=1.0,type=float)
 
@@ -152,7 +157,8 @@ def read_catalog(catalog_file):
     return tab
 
 def load_catalog(catalog,doFermi=False,doSimbad=False,
-                         doField=False,field=-1):
+                         doField=False,field=-1,
+                         algorithm='ECE'):
 
     customSimbad=Simbad() 
     customSimbad.add_votable_fields("otype(V)")
@@ -170,26 +176,19 @@ def load_catalog(catalog,doFermi=False,doSimbad=False,
         filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1] + \
                     sorted(glob.glob(os.path.join(catalog,"*.h5")))[::-1]
                      
-    #filenames = filenames[:100]
-    names = ["name", "objid", "ra", "dec", "period", "sig", "pdot", "filt",
-             "stats0", "stats1", "stats2", "stats3", "stats4",
-             "stats5", "stats6", "stats7", "stats8", "stats9",
-             "stats10", "stats11", "stats12", "stats13", "stats14",
-             "stats15", "stats16", "stats17", "stats18", "stats19",
-             "stats20", "stats21", "stats22", "stats23", "stats24",
-             "stats25", "stats26", "stats27", "stats28", "stats29",
-             "stats30", "stats31", "stats32", "stats33", "stats34",
-             "stats35"]
-
-    h5names = ["objid", "ra", "dec", "period", "sig", "pdot",
+    h5names = ["objid", "ra", "dec",
                "stats0", "stats1", "stats2", "stats3", "stats4",
                "stats5", "stats6", "stats7", "stats8", "stats9",
                "stats10", "stats11", "stats12", "stats13", "stats14",
                "stats15", "stats16", "stats17", "stats18", "stats19",
-               "stats20", "stats21", "stats22", "stats23", "stats24",
-               "stats25", "stats26", "stats27", "stats28", "stats29",
-               "stats30", "stats31", "stats32", "stats33", "stats34",
-               "stats35"]
+               "stats20", "stats21"] 
+
+    h5periodnames = ["objid", "period", "sig", "pdot", 
+                     "periodicstats0", "periodicstats1", "periodicstats2",
+                     "periodicstats3", "periodicstats4", "periodicstats5",
+                     "periodicstats6", "periodicstats7", "periodicstats8",
+                     "periodicstats9", "periodicstats10", "periodicstats11",
+                     "periodicstats12", "periodicstats13"]
 
     cnt = 0
     #filenames = filenames[:500]
@@ -200,19 +199,20 @@ def load_catalog(catalog,doFermi=False,doSimbad=False,
         filenameSplit = filename.split("/")
         catnum = filenameSplit[-1].replace(".dat","").replace(".h5","").split("_")[-1]
 
-        if "h5" in filename:
-            try:
-                with h5py.File(filename, 'r') as f:
-                    name = f['names'].value
-                    filters = f['filters'].value
-                    stats = f['stats'].value 
-            except:
-                continue
-            data_tmp = Table(rows=stats, names=h5names)
-            data_tmp['name'] = name
-            data_tmp['filt'] = filters 
-        else:
-            data_tmp = ascii.read(filename,names=names)
+        try:
+            with h5py.File(filename, 'r') as f:
+                name = f['names'].value
+                filters = f['filters'].value
+                stats = f['stats'].value 
+                periodic_stats = f['stats_%s' % algorithm].value
+        except:
+            continue
+        data_tmp = Table(rows=stats, names=h5names)
+        data_tmp['name'] = name
+        data_tmp['filt'] = filters
+        data_period_tmp = Table(rows=periodic_stats, names=h5periodnames)
+        data_period_tmp.remove_column('objid')
+        data_tmp = hstack([data_tmp, data_period_tmp], join_type='inner')
         if len(data_tmp) == 0: continue
 
         data_tmp['name'] = data_tmp['name'].astype(str)
@@ -269,10 +269,8 @@ def load_catalog(catalog,doFermi=False,doSimbad=False,
 
 # Parse command line
 opts = parse_commandline()
-
-catalog1 = opts.catalog1
-catalog2 = opts.catalog2
 outputDir = opts.outputDir
+catalog = opts.catalog
 
 if opts.doField:
     outputDir = os.path.join(outputDir,str(opts.field))
@@ -280,7 +278,7 @@ if opts.doField:
 if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
 
-name1, name2 = list(filter(None,catalog1.split("/")))[-1], list(filter(None,catalog2.split("/")))[-1]
+name1, name2 = opts.algorithm1, opts.algorithm2
 if opts.doCrossMatch:
     name2 = list(filter(None,opts.catalog_file.split("/")))[-1].replace(".dat","").replace(".hdf5","")
 
@@ -288,8 +286,9 @@ cat1file = os.path.join(outputDir,'catalog_%s.fits' % name1)
 cat2file = os.path.join(outputDir,'catalog_%s.fits' % name2)
 
 if not os.path.isfile(cat1file):
-    cat1 = load_catalog(catalog1,doFermi=opts.doFermi,doSimbad=opts.doSimbad,
-                                 doField=opts.doField,field=opts.field)
+    cat1 = load_catalog(catalog,doFermi=opts.doFermi,doSimbad=opts.doSimbad,
+                                doField=opts.doField,field=opts.field,
+                                algorithm=opts.algorithm1)
     cat1.write(cat1file, format='fits')
 else:
     cat1 = Table.read(cat1file, format='fits')
@@ -305,9 +304,10 @@ if opts.doCrossMatch:
         cat2 = Table.read(cat2file, format='fits')
 else:
     if not os.path.isfile(cat2file):
-        cat2 = load_catalog(catalog2,doFermi=opts.doFermi,
+        cat2 = load_catalog(catalog,doFermi=opts.doFermi,
                             doSimbad=opts.doSimbad,
-                            doField=opts.doField,field=opts.field)
+                            doField=opts.doField,field=opts.field,
+                            algorithm=opts.algorithm2)
         cat2.write(cat2file, format='fits')
     else:
         cat2 = Table.read(cat2file, format='fits')
@@ -317,6 +317,10 @@ else:
 
 catalog2 = SkyCoord(ra=cat2["ra"]*u.degree, dec=cat2["dec"]*u.degree, frame='icrs')
 idx,sep,_ = catalog1.match_to_catalog_sky(catalog2)
+
+outputDir = os.path.join(outputDir, '%s_%s' % (name1, name2))
+if not os.path.isdir(outputDir):
+    os.makedirs(outputDir)
 
 xs, ys, zs = [], [], []
 
@@ -441,30 +445,74 @@ if opts.doPlots:
         plt.close()
 
     else:
-        pdffile = os.path.join(outputDir,'periods.pdf')
-        cmap = cm.autumn
-    
+        xedges = np.linspace(1,100.0,100)
+        #yedges = np.linspace(4.0,40.0,50)
+        yedges = np.linspace(1,100.0,100)
+
+        H, xedges, yedges = np.histogram2d(cat1["sig"], cat2["sig"], bins=(xedges, yedges))
+        H = H.T  # Let each row list bins with common y range.
+        X, Y = np.meshgrid(xedges, yedges)
+        #H[H==0] = np.nan
+
+        cmap = matplotlib.cm.viridis
+        cmap.set_bad('white',0)
+ 
         fig = plt.figure(figsize=(10,10))
         ax=fig.add_subplot(1,1,1)
-        sc = plt.scatter(xs,ys,c=zs,vmin=0.0,vmax=1.0,cmap=cmap,s=20,alpha=0.5)
-        vals = np.linspace(np.min(xs), np.max(xs), 100)
+
+        c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm(),
+                           cmap=cmap)
+        cbar = plt.colorbar(c)
+        cbar.set_label('Counts')
+        #ax.set_xscale('log')
+        #ax.set_yscale('log')
+
+        vals = np.linspace(np.min(xedges), np.max(xedges), 100)
         plt.plot(vals, vals, 'k--')
-        ax.set_xscale('log')
-        ax.set_yscale('log')
-        cbar = plt.colorbar(sc)
-        cbar.set_label('min(%s/%s,%s/%s) significance' % (name1, name2, name2, name1))
-        plt.xlabel('%s Frequency [1/days]' % name1)
-        plt.ylabel('%s Frequency [1/days]' % name2)
+
+        plt.xlim([1, 100])
+        plt.ylim([1, 100])
+        plt.xlabel('%s Significance' % name1)
+        plt.ylabel('%s Significance' % name2)
+  
+        pdffile = os.path.join(outputDir,'sigs.pdf')
         fig.savefig(pdffile)
         plt.close()
-   
-        pdffile = os.path.join(outputDir,'periods.pdf')
-        cmap = cm.autumn
 
-        plt.xlabel('%s Frequency [1/days]' % name1)
-        plt.ylabel('%s Frequency [1/days]' % name2)
+        pdffile = os.path.join(outputDir,'periods.pdf')
+
+        xedges = np.logspace(np.log10(0.02),3.0,100)
+        #yedges = np.linspace(4.0,40.0,50)
+        yedges = np.logspace(np.log10(0.02),3.0,100)
+
+        H, xedges, yedges = np.histogram2d(cat1["period"], cat2["period"], bins=(xedges, yedges))
+        H = H.T  # Let each row list bins with common y range.
+        X, Y = np.meshgrid(xedges, yedges)
+        #H[H==0] = np.nan
+ 
+        fig = plt.figure(figsize=(10,10))
+        ax=fig.add_subplot(1,1,1)
+
+        c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm(),
+                           cmap=cmap)
+        cbar = plt.colorbar(c)
+        cbar.set_label('Counts')
+        ax.set_xscale('log')
+        ax.set_yscale('log')
+
+        vals = np.linspace(np.min(xedges), np.max(xedges), 100)
+        plt.plot(vals, vals, 'k--')
+
+        plt.xlim([0.01, 500])
+        plt.ylim([0.01, 500])
+        plt.xlabel('%s Period [days]' % name1)
+        plt.ylabel('%s Period [days]' % name2)
+
+        pdffile = os.path.join(outputDir,'periods.pdf')
         fig.savefig(pdffile)
-        plt.close() 
+        plt.close()
+
+        cmap = cm.autumn
 
         xedges = np.logspace(np.log10(0.02),3.0,100)
         #yedges = np.linspace(4.0,40.0,50)
@@ -478,7 +526,7 @@ if opts.doPlots:
         cmap = matplotlib.cm.viridis
         cmap.set_bad('white',0)
 
-        plotName = os.path.join(outputDir, "period_significance_1.pdf")
+        plotName = os.path.join(outputDir, "period_significance.pdf")
         fig = plt.figure(figsize=(10,8))
 
         gs = fig.add_gridspec(nrows=4, ncols=3, wspace=0.2, hspace=0.3)
