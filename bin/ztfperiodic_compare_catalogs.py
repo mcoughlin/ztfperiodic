@@ -259,7 +259,7 @@ def load_catalog(catalog,doFermi=False,doSimbad=False,
         else:
             data = vstack([data,data_tmp])
         cnt = cnt + 1
-
+ 
     sig = data["sig"]
     idx = np.arange(len(sig))/len(sig)
     sigsort = idx[np.argsort(sig)]
@@ -449,7 +449,7 @@ if opts.doPlots:
         #yedges = np.linspace(4.0,40.0,50)
         yedges = np.linspace(1,100.0,100)
 
-        H, xedges, yedges = np.histogram2d(cat1["sig"], cat2["sig"], bins=(xedges, yedges))
+        H, xedges, yedges = np.histogram2d(data_out[:,6],data_out[:,7], bins=(xedges, yedges))
         H = H.T  # Let each row list bins with common y range.
         X, Y = np.meshgrid(xedges, yedges)
         #H[H==0] = np.nan
@@ -485,7 +485,7 @@ if opts.doPlots:
         #yedges = np.linspace(4.0,40.0,50)
         yedges = np.logspace(np.log10(0.02),3.0,100)
 
-        H, xedges, yedges = np.histogram2d(cat1["period"], cat2["period"], bins=(xedges, yedges))
+        H, xedges, yedges = np.histogram2d(data_out[:,4],data_out[:,5], bins=(xedges, yedges))
         H = H.T  # Let each row list bins with common y range.
         X, Y = np.meshgrid(xedges, yedges)
         #H[H==0] = np.nan
