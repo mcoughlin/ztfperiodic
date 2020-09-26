@@ -170,6 +170,7 @@ if opts.lightcurve_source == "Kowalski":
         #fields = np.setdiff1d(fields,fields_complete)
 
         #fields = [700]
+        fields = np.arange(250,882)
 
         for field in fields:
             print('Running field %d' % field)
@@ -193,6 +194,7 @@ if opts.lightcurve_source == "Kowalski":
 
                         idsFile = os.path.join(idsDir,"%d_%d_%d.npy"%(field, ccd, quadrant))
                         if not os.path.isfile(idsFile):
+                            print(idsFile)
                             qu = {"query_type":"find",
                                   "query": {"catalog": 'ZTF_sources_20200401',
                                             "filter": {'field': {'$eq': int(field)},
@@ -201,7 +203,7 @@ if opts.lightcurve_source == "Kowalski":
                                                       },
                                             "projection": "{'_id': 1}"},
                                  }
-                            r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
+                            r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
                             objids = []
                             for obj in r['result_data']['query_result']:
                                 objids.append(obj['_id'])

@@ -1402,19 +1402,17 @@ def get_kowalski_features_ind(ra, dec, kow, radius = 5.0, oid = None,
                               featuresetname='f',
                               dbname='ZTF_source_features_20191101'):
 
+    start = time.time()
+
     featuresetnames = get_featuresetnames(featuresetname)
 
     qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { dbname: { "filter": "{}", "projection": "{}" } } }
 
-    start = time.time()
     r = database_query(kow, qu, nquery = 10)
-    end = time.time()
-    loadtime = end - start
 
     data = r["result_data"][dbname]
     key = data.keys()[0]
     data = data[key]
-    start = time.time()
 
     features = {}
     for datlist in data:
@@ -1433,10 +1431,15 @@ def get_kowalski_features_ind(ra, dec, kow, radius = 5.0, oid = None,
     df_features = pd.DataFrame.from_dict(features, orient='index', 
                                          columns=df_series.index)
 
+    end = time.time()
+    loadtime = end - start
+
     return df_features["ztf_id"], df_features[featuresetnames]
 
 def get_kowalski_features_objids(objids, kow, featuresetname='f',
                                  dbname='ZTF_source_features_20191101'):
+
+    start = time.time()
 
     featuresetnames = get_featuresetnames(featuresetname)
 
@@ -1469,6 +1472,11 @@ def get_kowalski_features_objids(objids, kow, featuresetname='f',
 
     df_features = pd.DataFrame.from_dict(features, orient='index',
                                          columns=df_series.index)
+
+    end = time.time()
+    loadtime = end - start
+
+    print('Loaded %d features in %.5f seconds' % (len(objids), loadtime))
 
     return df_features["ztf_id"], df_features[featuresetnames]
 
