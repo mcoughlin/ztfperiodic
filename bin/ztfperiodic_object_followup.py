@@ -35,6 +35,7 @@ from ztfperiodic import fdecomp
 from ztfperiodic.lcstats import calc_stats
 from ztfperiodic.utils import gaia_query
 from ztfperiodic.utils import ps1_query
+from ztfperiodic.utils import galex_query
 from ztfperiodic.utils import get_kowalski
 from ztfperiodic.utils import get_lightcurve
 from ztfperiodic.utils import combine_lcs
@@ -238,6 +239,11 @@ if opts.doPlots and len(list(spectral_data.keys()))>0:
 
 # Gaia and PS1 
 ps1 = ps1_query(opts.ra, opts.declination, 5/3600.0)
+if ps1:
+    print(ps1)
+galex = galex_query(opts.ra, opts.declination, 5/3600.0)
+if galex:
+    print(galex)
 
 if opts.lightcurve_source == "Kowalski":
     kow = Kowalski(username=opts.user, password=opts.pwd)
@@ -453,6 +459,14 @@ if opts.doPlots:
     for a, b, c in zip(hjd, mag, magerr):
         filed.write('%s %.10f %.10f\n' % (a, b, c))
     filed.close()
+
+    for ii, key in enumerate(lightcurves_all.keys()):
+        lc = lightcurves_all[key]
+        photFile = os.path.join(path_out_dir,'phot_%s.dat' % key)
+        filed = open(photFile,'w')
+        for a, b, c in zip(lc["hjd"], lc["mag"], lc["magerr"]):
+            filed.write('%s %.10f %.10f\n' % (a, b, c))
+        filed.close()
 
     plotName = os.path.join(path_out_dir,'phot.pdf')
     plt.figure(figsize=(12,8))
