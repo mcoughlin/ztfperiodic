@@ -63,6 +63,7 @@ def parse_commandline():
     parser.add_option("-w","--pwd")
     parser.add_option("-e","--email")
 
+    parser.add_option("-f","--filetype",default="slurm")
     parser.add_option("--queue_type",default="v100")
 
     opts, args = parser.parse_args()
@@ -145,6 +146,7 @@ if opts.lightcurve_source == "Kowalski":
         fields = np.setdiff1d(fields,fields_complete)
 
         fields = [400]
+        fields = np.arange(250,882)
 
         job_number = 0
         quadrantfile = os.path.join(qsubDir,'qsub.dat')
@@ -247,5 +249,5 @@ fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
 fid.write('cd $PBS_O_WORKDIR\n')
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('%s/ztfperiodic_job_submission.py --outputDir %s --doSubmit\n' % (dir_path, outputDir))
+        fid.write('%s/ztfperiodic_job_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, opts.filetype))
 fid.close()

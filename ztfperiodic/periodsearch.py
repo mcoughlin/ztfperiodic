@@ -7,12 +7,6 @@ import matplotlib.pyplot as plt
 
 import ztfperiodic.utils
 
-try:
-    from ztfperiodic.pyaov.pyaov import aovw, amhw
-except:
-    print('Install pyaov if you want AOV')
-    pass
-
 
 def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                  doGPU=False, doCPU=False, doSaveMemory=False,
