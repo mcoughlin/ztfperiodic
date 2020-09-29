@@ -31,7 +31,6 @@ def parse_commandline():
     parser.add_option("-b","--batch_size",default=1,type=int)
     parser.add_option("-a","--algorithm",default="CE")
 
-    parser.add_option("--doLightcurveStats",  action="store_true", default=False)
     parser.add_option("--doLongPeriod",  action="store_true", default=False)
     parser.add_option("--doCombineFilt",  action="store_true", default=False)
     parser.add_option("--doRemoveHC",  action="store_true", default=False)
@@ -89,8 +88,6 @@ else:
 extra_flags = []
 if opts.doLongPeriod:
     extra_flags.append("--doLongPeriod")
-if opts.doLightcurveStats:
-    extra_flags.append("--doLightcurveStats")
 if opts.doCombineFilt:
     extra_flags.append("--doCombineFilt")
 if opts.doRemoveHC:

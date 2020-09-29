@@ -31,7 +31,6 @@ def parse_commandline():
     parser.add_option("-b","--batch_size",default=1,type=int)
     parser.add_option("-a","--algorithm",default="CE")
 
-    parser.add_option("--doLightcurveStats",  action="store_true", default=False)
     parser.add_option("--doLongPeriod",  action="store_true", default=False)
     parser.add_option("--doCombineFilt",  action="store_true", default=False)
     parser.add_option("--doRemoveHC",  action="store_true", default=False)
@@ -48,8 +47,17 @@ def parse_commandline():
     parser.add_option("--Ncatalog",default=13.0,type=int)
     parser.add_option("--Nmax",default=1000.0,type=int)
 
+    parser.add_option("--doCrossMatch",  action="store_true", default=False)
+
     parser.add_option("--qid",default=None,type=int)
     parser.add_option("--fid",default=None,type=int)
+
+    parser.add_option("--doDocker",  action="store_true", default=False)
+    parser.add_option("--doRsyncFiles",  action="store_true", default=False)
+
+    parser.add_option("--doPercentile",  action="store_true", default=False)
+    parser.add_option("--doParallel",  action="store_true", default=False)
+    parser.add_option("--doPlots",  action="store_true", default=False)
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
@@ -78,8 +86,6 @@ else:
 extra_flags = []
 if opts.doLongPeriod:
     extra_flags.append("--doLongPeriod")
-if opts.doLightcurveStats:
-    extra_flags.append("--doLightcurveStats")
 if opts.doCombineFilt:
     extra_flags.append("--doCombineFilt")
 if opts.doRemoveHC:
@@ -93,6 +99,16 @@ if opts.doSpectra:
 if opts.doVariability:
     extra_flags.append("--doVariability")
     extra_flags.append("--doNotPeriodFind")
+if opts.doRsyncFiles:
+    extra_flags.append("--doRsyncFiles")
+if opts.doCrossMatch:
+    extra_flags.append("--doCrossMatch")
+if opts.doPercentile:
+    extra_flags.append("--doPercentile")
+if opts.doParallel:
+    extra_flags.append("--doParallel")
+if opts.doPlots:
+    extra_flags.append("--doPlots")
 extra_flags = " ".join(extra_flags)
 
 matchfileDir = opts.matchfileDir
@@ -106,6 +122,10 @@ catalogDir = os.path.join(outputDir,'catalog',algorithm)
 qsubDir = os.path.join(outputDir,'qsub')
 if not os.path.isdir(qsubDir):
     os.makedirs(qsubDir)
+
+idsDir = os.path.join(qsubDir,'ids')
+if not os.path.isdir(idsDir):
+    os.makedirs(idsDir)
 
 if opts.doQuadrantScale:
     kow = Kowalski(username=opts.user, password=opts.pwd)
@@ -124,6 +144,8 @@ if opts.lightcurve_source == "Kowalski":
         fields = np.arange(1600,1700)
         fields = np.setdiff1d(fields,fields_complete)
 
+        fields = [400]
+
         job_number = 0
         quadrantfile = os.path.join(qsubDir,'qsub.dat')
         fid = open(quadrantfile,'w')
@@ -134,7 +156,7 @@ if opts.lightcurve_source == "Kowalski":
                     if opts.doQuadrantScale:
                         qu = {"query_type":"count_documents",
                               "query": {
-                                  "catalog": 'ZTF_sources_20191101',
+                                  "catalog": 'ZTF_sources_20200401',
                                   "filter": {'field': {'$eq': int(field)},
                                              'ccd': {'$eq': int(ccd)},
                                              'quad': {'$eq': int(quadrant)}
@@ -148,6 +170,22 @@ if opts.lightcurve_source == "Kowalski":
 
                         Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
 
+                        idsFile = os.path.join(idsDir,"%d_%d_%d.npy"%(field, ccd, quadrant))
+                        if not os.path.isfile(idsFile):
+                            print(idsFile)
+                            qu = {"query_type":"find",
+                                  "query": {"catalog": 'ZTF_sources_20200401',
+                                            "filter": {'field': {'$eq': int(field)},
+                                                       'ccd': {'$eq': int(ccd)},
+                                                       'quad': {'$eq': int(quadrant)}
+                                                      },
+                                            "projection": "{'_id': 1}"},
+                                 }
+                            r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
+                            objids = []
+                            for obj in r['result_data']['query_result']:
+                                objids.append(obj['_id'])
+                            np.save(idsFile, objids)
                     
                     for ii in range(Ncatalog):
                         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant, ii))
@@ -187,7 +225,7 @@ fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
 fid.write('cd $PBS_O_WORKDIR\n')
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type quadrant --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,opts.Ncatalog,algorithm,extra_flags))
+        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type quadrant --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,algorithm,extra_flags))
     elif opts.source_type == "catalog":
         fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,algorithm,extra_flags))
 elif opts.lightcurve_source == "matchfiles":
