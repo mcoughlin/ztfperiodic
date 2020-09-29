@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os, sys
+import time
 import glob
 import optparse
 
@@ -34,6 +35,8 @@ def parse_commandline():
 
 def filter_completed(quad_out, catalogDir):
 
+    start_time = time.time()
+
     njobs, ncols = quad_out.shape
     tbd = []
     for ii, row in enumerate(quad_out):
@@ -43,6 +46,10 @@ def filter_completed(quad_out, catalogDir):
         if not os.path.isfile(catalogFile):
             tbd.append(ii)
     quad_out = quad_out[tbd,:]
+
+    end_time = time.time()
+    print('Checking completed jobs took %.2f seconds' % (end_time - start_time))
+
     return quad_out
 
 # Parse command line
