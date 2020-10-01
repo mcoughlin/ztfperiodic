@@ -3,7 +3,6 @@
 
 from panoptes_client import Panoptes, Project, SubjectSet, Subject, Workflow, Classification
 import pandas as pd
-from pandas.io.json import json
 import datetime
 import math
 

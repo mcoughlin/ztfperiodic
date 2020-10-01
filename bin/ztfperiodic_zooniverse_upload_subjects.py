@@ -51,6 +51,7 @@ def parse_commandline():
     parser = optparse.OptionParser()
     parser.add_option("--doPlots",  action="store_true", default=False)
     parser.add_option("--doLCFile",  action="store_true", default=False)
+    parser.add_option("--doFakeData",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields_ids_DR2/catalog/compare/top_sources")
     #parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields_ids_DR2_ids_DR2/catalog/compare/rrlyr/")
@@ -117,6 +118,8 @@ while cnt < nquery:
 if cnt == nquery:
     raise Exception('Kowalski connection failed...')
 
+print(kow)
+
 if opts.doSubjectSet:
     zoo = ZooProject(username=opts.zooniverse_user,
                      password=opts.zooniverse_pwd,
@@ -174,16 +177,45 @@ for ii, (index, row) in enumerate(df.iterrows()):
     if np.mod(ii,100) == 0:
         print('Loading %d/%d'%(ii,len(df)))
 
-    objid, features = get_kowalski_features_objids([index], kow)
-    period = features.period.values[0]
-    amp = features.f1_amp.values[0]
-    lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline = get_kowalski_objids([index], kow)
-    ra, dec = coordinates[0][0], coordinates[0][1]
+    if opts.doFakeData:
+        nsample = 100
+        objid = index
+        ra, dec = 10.0, 60.0
+        period, amp = 0.5, 1.0
+        lightcurves_all = {}
+        lightcurves, absmags, bp_rps = [], [], []
+        for fid in fids:
+            lc = {}
+            lc["name"] = bands[fid]
+            lc["hjd"] = np.random.uniform(low=0, high=365, size=(nsample,))
+            lc["mag"] = np.random.uniform(low=18, high=19, size=(nsample,))
+            lc["magerr"] = np.random.uniform(low=0.01, high=0.1, size=(nsample,))           
+            lc["fid"] = fid*np.ones(lc["hjd"].shape)
+            lc["ra"] = ra*np.ones(lc["hjd"].shape)
+            lc["dec"] = dec*np.ones(lc["hjd"].shape)
+            lc["absmag"] = [np.nan, np.nan, np.nan]
+            lc["bp_rp"] = np.nan
+            lc["parallax"] = np.nan
 
-    lightcurves_all = get_kowalski(ra, dec, kow,
-                                   min_epochs=20)
-    lightcurves_combined = combine_lcs(lightcurves_all)
-    key = list(lightcurves_combined.keys())[0] 
+            lightcurves_all[fid] = lc
+            lightcurves.append([lc["hjd"], lc["mag"], lc["magerr"]])
+            absmags.append(lc["absmag"])
+            bp_rps.append(lc["bp_rp"])
+ 
+        lightcurves_combined = combine_lcs(lightcurves_all)
+        key = list(lightcurves_combined.keys())[0]
+
+    else:
+        objid, features = get_kowalski_features_objids([index], kow)
+        period = features.period.values[0]
+        amp = features.f1_amp.values[0]
+        lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline = get_kowalski_objids([index], kow)
+        ra, dec = coordinates[0][0], coordinates[0][1]
+
+        lightcurves_all = get_kowalski(ra, dec, kow,
+                                       min_epochs=20)
+        lightcurves_combined = combine_lcs(lightcurves_all)
+        key = list(lightcurves_combined.keys())[0] 
 
     hjd, magnitude, err = lightcurves[0]
     absmag, bp_rp = absmags[0], bp_rps[0]
@@ -323,9 +355,9 @@ for ii, (index, row) in enumerate(df.iterrows()):
 
     if opts.doSubjectSet:
         #image_list.append(pngfile)
-        image_list.append([{ "image/png": pngfile }, 
-                           { "application/json": photFile },
-                           { "image/png": pngfile_HR }])
+        image_list.append({"image/png": pngfile, 
+                           "application/json": photFile,
+                           "image/png": pngfile_HR})
 
         mdict = {'candidate': int(objid),
                  'ra': ra, 'dec': dec, 

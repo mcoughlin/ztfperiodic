@@ -226,19 +226,19 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
     tmax = Time('2020-01-01T00:00:00', format='isot', scale='utc').jd
 
     #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20191101": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
-    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20200401": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } }
+    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20200401": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } } }
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
     end = time.time()
     loadtime = end - start
 
-    if not "result_data" in r:
+    if not "data" in r:
         print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec)) 
         return {}
 
     key1, key2, key3 = 'ZTF_sources_20200401', 'Gaia_DR2', 'ZTF_alerts'
-    data1, data2, data3 = r["result_data"][key1], r["result_data"][key2], r["result_data"][key3]
+    data1, data2, data3 = r["data"][key1], r["data"][key2], r["data"][key3]
     key = list(data1.keys())[0]
     data = data1[key]
     key = list(data2.keys())[0]
@@ -520,11 +520,11 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
          }
     r = database_query(kow, qu, nquery = 10)
 
-    if not "result_data" in r:
+    if not "data" in r:
         print("Query for objid %d failed... continuing."%(objid))
         return []
 
-    datas = r["result_data"]["query_result"]
+    datas = r["data"]
 
     for ii, data in enumerate(datas):
 
@@ -533,6 +533,7 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
         filt = data["filter"]
         data = data["data"]
         for dic in data:
+
             if not dic["programid"] in program_ids: continue
             if (dic["programid"]==1) and (dic["hjd"] > tmax): continue
             if not dic["catflags"] == 0: continue
@@ -609,16 +610,16 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
         nlightcurves = 1
 
         radius = 5
-        qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(np.median(ra),np.median(dec)), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"} } }
+        qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": {'test': [np.median(ra),np.median(dec)]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"} } }}
         r = database_query(kow, qu, nquery = 10)
-  
+
         coords = SkyCoord(ra=np.median(ra)*u.degree, 
                           dec=np.median(dec)*u.degree, frame='icrs')
 
         absmag, bp_rp = [np.nan, np.nan, np.nan], np.nan
-        if "result_data" in r:
+        if "data" in r:
             key2 = 'Gaia_DR2'
-            data2 = r["result_data"][key2]
+            data2 = r["data"][key2]
             key = list(data2.keys())[0]
             data2 = data2[key]
             cat2 = get_catalog(data2)
@@ -627,6 +628,7 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
                 dat2 = data2[idx]
             else:
                 dat2 = {}
+
             if not "parallax" in dat2:
                 parallax, parallaxerr = None, None
             else:
@@ -1132,7 +1134,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
     end = time.time()
     loadtime = end - start
 
-    if not "result_data" in r:
+    if not "data" in r:
         print("Query for field: %d, CCD: %d, quadrant %d failed... returning."%(field, ccd, quadrant))
         return [], [], [], []
 
@@ -1146,7 +1148,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
         gmags, gerrs = gerr['Mag'], gerr['Err']
         rmags, rerrs = rerr['Mag'], rerr['Err']
 
-    nlightcurves = r['result_data']['query_result']
+    nlightcurves = r['data']
     batch_size = np.ceil(nlightcurves/num_batches).astype(int)
 
     baseline=0
@@ -1163,14 +1165,14 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
         qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
         r = database_query(kow, qu, nquery = 10)
 
-        if not "result_data" in r:
+        if not "data" in r:
             print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
             continue
 
         #qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].find_one({})"}
         #r = kow.query(query=qu)
 
-        datas = r["result_data"]["query_result"]
+        datas = r["data"]
 
         if doHCOnly:
             tt = np.empty((0,1))
@@ -1436,11 +1438,11 @@ def get_kowalski_features_ind(ra, dec, kow, radius = 5.0, oid = None,
 
     featuresetnames = get_featuresetnames(featuresetname)
 
-    qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { dbname: { "filter": "{}", "projection": "{}" } } }
+    qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": { "test": [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { dbname: { "filter": "{}", "projection": "{}" } } } }
 
     r = database_query(kow, qu, nquery = 10)
 
-    data = r["result_data"][dbname]
+    data = r["data"][dbname]
     key = data.keys()[0]
     data = data[key]
 
@@ -1485,13 +1487,13 @@ def get_kowalski_features_objids(objids, kow, featuresetname='f',
              }
         r = database_query(kow, qu, nquery = 10)
 
-        if not "result_data" in r:
+        if not "data" in r:
             print("Query for objid %d failed... continuing."%(objid))
             continue
  
-        if len(r["result_data"]["query_result"]) == 0: continue
+        if len(r["data"]) == 0: continue
 
-        datlist = r["result_data"]["query_result"][0]
+        datlist = r["data"][0]
         datlist["ztf_id"] = datlist["_id"]
         del datlist["_id"]
         df_series = pd.Series(datlist).fillna(0)
@@ -1527,13 +1529,13 @@ def get_kowalski_classifications_objids(objids, kow,
              }
         r = database_query(kow, qu, nquery = 10)
 
-        if not "result_data" in r:
+        if not "data" in r:
             print("Query for objid %d failed... continuing."%(objid))
             continue
 
-        if len(r["result_data"]["query_result"]) == 0: continue
+        if len(r["data"]) == 0: continue
 
-        datlist = r["result_data"]["query_result"][0]
+        datlist = r["data"][0]
 
         datas = {}
         for datkey in datlist.keys():
@@ -1570,11 +1572,11 @@ def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f',
     #end = time.time()
     #loadtime = end - start
 
-    #if not "result_data" in r:
+    #if not "data" in r:
     #    print("Query for batch %d failed... returning."%(nb))
     #    return [], [], [], []
 
-    #nlightcurves = r['result_data']['query_result']
+    #nlightcurves = r['data']['query_result']
 
     if dbname == 'ZTF_source_features_20191101_20_fields':
         nlightcurves = 34681547
@@ -1608,14 +1610,14 @@ def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f',
         loadtime = end - start
         print("Feature query: %.5f seconds" % loadtime)
 
-        if not "result_data" in r:
+        if not "data" in r:
             print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
             continue
 
         #qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].find_one({})"}
         #r = kow.query(query=qu)
 
-        datas = r["result_data"]["query_result"]
+        datas = r["data"]
         start = time.time()
         df_features = pd.DataFrame(datas).fillna(0)
         df_features.rename(columns={"_id": "ztf_id"}, inplace=True)
@@ -1913,7 +1915,7 @@ def database_query(kow, qu, nquery = 5):
     cnt = 0
     while cnt < nquery:
         r = kow.query(query=qu)
-        if (r is not None) and ("result_data" in r):
+        if (r is not None) and ("data" in r):
             break
         time.sleep(5)        
         cnt = cnt + 1

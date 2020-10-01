@@ -12,6 +12,7 @@ import numpy as np
 import h5py
 import glob
 import pickle
+import json
 
 import matplotlib
 matplotlib.use('Agg')
@@ -109,8 +110,10 @@ def parse_commandline():
     parser.add_option("--doFeatures", action="store_true", default=False)
 
     parser.add_option("-m","--modelPath",default="/home/michael.coughlin/ZTF/ZTFVariability/pipeline/saved_models/")
-    parser.add_option("-f","--featuresetname",default="b")
+    parser.add_option("-f","--featuresetname",default="f")
     parser.add_option("--classification_algorithm",default="xgboost")
+
+    parser.add_option("--doLCFile",  action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
@@ -258,14 +261,14 @@ if opts.lightcurve_source == "Kowalski":
                                                   opts.declination, kow,
                                                   oid=opts.objid,
                                                   featuresetname=featuresetname)
-
-        modelFiles = glob.glob(os.path.join(modelPath, "d11*.%s.*model" % featuresetname))
-        for modelFile in modelFiles:
-            modelName = modelFile.replace(".model","").split("/")[-1]
-            pred = classify(classification_algorithm, features.to_numpy(),
-                            modelFile=modelFile)
-            for objid, pr in zip(ids,pred):
-                print("%d %s %.5f" % (objid, modelName, pr))
+        if len(features) > 0:
+            modelFiles = glob.glob(os.path.join(modelPath, "d11*.%s.*model" % featuresetname))
+            for modelFile in modelFiles:
+                modelName = modelFile.replace(".model","").split("/")[-1]
+                pred = classify(classification_algorithm, features.to_numpy(),
+                                modelFile=modelFile)
+                for objid, pr in zip(ids,pred):
+                    print("%d %s %.5f" % (objid, modelName, pr))
 
     if len(lightcurves_all.keys()) == 0:
         print("No objects... sorry.")
@@ -407,8 +410,6 @@ elif opts.lightcurve_source == "pickle":
     else:
         T0 = hjd[0]
 
-    print(np.min(hjd), np.max(hjd))
-
     lightcurve = {'hjd': hjd, 'mag': mag, 'magerr': magerr, 'fid': fid}
     lightcurves_all = {'test': lightcurve}
 
@@ -442,6 +443,72 @@ if opts.doPhase:
 else:
     period = data_out["period"]
 
+if opts.doLCFile:
+    colors = ['g','r','y']
+    symbols = ['x', 'o', '^']
+    filts = [1,2,3]
+    bands = {1: 'g', 2: 'r', 3: 'i'}
+
+    data_json = {}
+    data_json["data"] = {}
+    data_json["data"]["scatterPlot"] = {}
+    data_json["data"]["scatterPlot"]["data"] = []
+    data_json["data"]["scatterPlot"]["chartOptions"] = {"xAxisLabel": "Days", "yAxisLabel": "Brightness"}
+
+    data_json["data"]["barCharts"] = {}
+    data_json["data"]["barCharts"]["period"] = {}
+    data_json["data"]["barCharts"]["period"]["data"] = []
+    data_json["data"]["barCharts"]["period"]["chartOptions"] = {"xAxisLabel": "Period", "yAxisLabel": ""}
+    data_json["data"]["barCharts"]["amplitude"] = {}
+    data_json["data"]["barCharts"]["amplitude"]["data"] = []
+    data_json["data"]["barCharts"]["amplitude"]["chartOptions"] = {"xAxisLabel": "Amplitude", "yAxisLabel": ""}
+
+    periods, amplitudes = [], []
+    for jj, (filt, color, symbol) in enumerate(zip(filts, colors, symbols)):
+        seriesData = []
+        period, amp = np.nan, np.nan
+        for ii, key in enumerate(lightcurves_all.keys()):
+
+            lc = lightcurves_all[key]
+            if not lc["fid"][0] == filt: continue
+
+            for x, y, yerr in zip(lc["hjd"], lc["mag"], lc["magerr"]):
+                data_single = {"x": x, "y": np.median(lc["mag"])-y,
+                               "yerr": yerr}
+                seriesData.append(data_single)
+
+            try:
+                feat = features.loc[key]
+                period = feat.period
+                amp = feat.f1_amp
+            except:
+                pass
+
+        if len(seriesData) == 0: continue
+        if filt == 1:
+            label, color = "g-band", "drawing-green"
+        elif filt == 2:
+            label, color = "r-band", "drawing-red"
+        elif filt == 3:
+            label, color = "i-band", "drawing-black"
+
+        seriesOptions = {"color": color,
+                         "label": label,
+                         "period": period}
+        periodOptions = {"color": color,
+                         "label": label,
+                         "value": np.log10(period)}
+        amplitudeOptions = {"color": color,
+                            "label": label,
+                            "value": amp}
+
+        data_json["data"]["scatterPlot"]["data"].append({"seriesData": seriesData, "seriesOptions": seriesOptions})
+        data_json["data"]["barCharts"]["period"]["data"].append(periodOptions)
+        data_json["data"]["barCharts"]["amplitude"]["data"].append(amplitudeOptions)
+
+    photFile = os.path.join(path_out_dir,'lc.json')
+    with open(photFile, 'w', encoding='utf-8') as f:
+        json.dump(data_json, f, ensure_ascii=False, indent=4)
 
 if opts.doFourierDecomposition:
     for ii, key in enumerate(lightcurves_all.keys()):
@@ -541,9 +608,10 @@ if opts.doPlots:
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14,5))
 
     newphase = (hjd-hjd[0])/(period)%2
-    ixg = fid==1
-    ixr = fid==2
-    ixy = fid==3
+    ixg = np.where(fid==1)[0]
+    ixr = np.where(fid==2)[0]
+    ixy = np.where(fid==3)[0]
+
     ax1.errorbar(newphase[ixg], mag[ixg], yerr=magerr[ixg], fmt='go')
     ax1.errorbar(newphase[ixr], mag[ixr], yerr=magerr[ixr], fmt='ro')
     ax1.errorbar(newphase[ixy], mag[ixy], yerr=magerr[ixy], fmt='yo')
