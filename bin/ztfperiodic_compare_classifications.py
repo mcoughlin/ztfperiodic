@@ -8,6 +8,9 @@ import time
 import h5py
 from functools import reduce
 
+from joblib import Parallel, delayed
+from tqdm import tqdm
+
 import numpy as np
 import pandas as pd
 
@@ -33,6 +36,24 @@ Simbad.TIMEOUT = 300000
 
 from ztfperiodic.utils import convert_to_hex
 
+
+class ProgressParallel(Parallel):
+    def __init__(self, use_tqdm=True, total=None, *args, **kwargs):
+        self._use_tqdm = use_tqdm
+        self._total = total
+        super().__init__(*args, **kwargs)
+
+    def __call__(self, *args, **kwargs):
+        with tqdm(disable=not self._use_tqdm, total=self._total) as self._pbar:
+            return Parallel.__call__(self, *args, **kwargs)
+
+    def print_progress(self):
+        if self._total is None:
+            self._pbar.total = self.n_dispatched_tasks
+        self._pbar.n = self.n_completed_tasks
+        self._pbar.refresh()
+
+
 def parse_commandline():
     """
     Parse the options given on the command-line.
@@ -51,42 +72,52 @@ def parse_commandline():
     parser.add_option("--catalog_min",type=int,default=0)
     parser.add_option("--catalog_max",type=int,default=100000)
 
+    parser.add_option("--doParallel",  action="store_true", default=False)
+    parser.add_option("-n","--Ncore",default=8,type=int)
+
     opts, args = parser.parse_args()
 
     return opts
 
-def load_catalog(catalog, catalog_min=0, catalog_max=100000):
+def load_h5(filename):
+
+    h5names = ["objid", "prob"]
+    try:
+        with h5py.File(filename, 'r') as f:
+            preds = f['preds'][()]
+    except:
+        return []
+    data_tmp = Table(rows=preds, names=h5names)
+    if len(data_tmp) == 0:
+        return []
+    else:
+        return data_tmp
+
+def load_catalog(catalog, catalog_min=0, catalog_max=100000,
+                 doParallel=False, Ncore=8):
 
     filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1] + \
                 sorted(glob.glob(os.path.join(catalog,"*.h5")))[::-1]
-                     
-    h5names = ["objid", "prob"]
 
-    cnt = 0
-    #filenames = filenames[:500]
+    idx = []
     for ii, filename in enumerate(filenames):
-        if np.mod(ii,100) == 0:
-            print('Loading file %d/%d' % (ii, len(filenames)))
-
         filenameSplit = filename.split("/")
         catnum = int(filenameSplit[-1].replace(".dat","").replace(".h5","").split("_")[-1])
 
         if (catnum < catalog_min) or (catnum > catalog_max):
             continue
 
-        try:
-            with h5py.File(filename, 'r') as f:
-                preds = f['preds'].value
-        except:
-            continue
-        data_tmp = Table(rows=preds, names=h5names)
-        if len(data_tmp) == 0: continue
+        idx.append(ii)
+    filenames = [filenames[ii] for ii in idx]
 
-        if cnt == 0:
-            data = copy.copy(data_tmp)
-        else:
-            data = vstack([data,data_tmp])
-        cnt = cnt + 1
+    if doParallel:
+        data_all = ProgressParallel(n_jobs=Ncore,use_tqdm=True,total=len(filenames))(delayed(load_h5)(filename) for filename in filenames)
+    else:
+        data_all = []
+        for ii, filename in enumerate(filenames):
+            data_tmp = load_h5(filename)
+            data_all.append(data_tmp)
+    data = vstack(data_all)
 
     return data
 
@@ -119,7 +150,8 @@ for catalogPath in catalogPaths:
 
     if not os.path.isfile(cat1file):
         cat1 = load_catalog(catalogPath, catalog_min=catalog_min,
-                            catalog_max=catalog_max)
+                            catalog_max=catalog_max, 
+                            doParallel=opts.doParallel, Ncore=opts.Ncore)
         cat1.write(cat1file, format='fits')
     else:
         cat1 = Table.read(cat1file, format='fits')
