@@ -184,8 +184,8 @@ if opts.lightcurve_source == "Kowalski":
                                        }
                              }
                         r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
-                        if not "result_data" in r: continue
-                        nlightcurves = r['result_data']['query_result']
+                        if not "data" in r: continue
+                        nlightcurves = r['data']
 
                         Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
 
