@@ -286,7 +286,7 @@
                         }
                     ],
                     "seriesOptions": {
-                        "color": "drawing-green",
+                        "color": "#2ECC71",
                         "label": "g-band",
                         "period": NaN
                     }
@@ -915,7 +915,7 @@
                         }
                     ],
                     "seriesOptions": {
-                        "color": "drawing-red",
+                        "color": "#C70039",
                         "label": "r-band",
                         "period": NaN
                     }
@@ -930,12 +930,12 @@
             "period": {
                 "data": [
                     {
-                        "color": "drawing-green",
+                        "color": "#2ECC71",
                         "label": "g-band",
                         "value": NaN
                     },
                     {
-                        "color": "drawing-red",
+                        "color": "#C70039",
                         "label": "r-band",
                         "value": NaN
                     }
@@ -948,12 +948,12 @@
             "amplitude": {
                 "data": [
                     {
-                        "color": "drawing-green",
+                        "color": "#2ECC71",
                         "label": "g-band",
                         "value": NaN
                     },
                     {
-                        "color": "drawing-red",
+                        "color": "#C70039",
                         "label": "r-band",
                         "value": NaN
                     }

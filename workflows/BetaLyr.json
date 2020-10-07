@@ -11,7 +11,7 @@
                         }
                     ],
                     "seriesOptions": {
-                        "color": "drawing-green",
+                        "color": "#2ECC71",
                         "label": "g-band",
                         "period": NaN
                     }
@@ -2460,7 +2460,7 @@
                         }
                     ],
                     "seriesOptions": {
-                        "color": "drawing-red",
+                        "color": "#C70039",
                         "label": "r-band",
                         "period": 0.20602147078320796
                     }
@@ -2614,7 +2614,7 @@
                         }
                     ],
                     "seriesOptions": {
-                        "color": "drawing-black",
+                        "color": "#D3D3D3",
                         "label": "i-band",
                         "period": NaN
                     }
@@ -2629,17 +2629,17 @@
             "period": {
                 "data": [
                     {
-                        "color": "drawing-green",
+                        "color": "#2ECC71",
                         "label": "g-band",
                         "value": NaN
                     },
                     {
-                        "color": "drawing-red",
+                        "color": "#C70039",
                         "label": "r-band",
                         "value": -0.6860875167339394
                     },
                     {
-                        "color": "drawing-black",
+                        "color": "#D3D3D3",
                         "label": "i-band",
                         "value": NaN
                     }
@@ -2652,17 +2652,17 @@
             "amplitude": {
                 "data": [
                     {
-                        "color": "drawing-green",
+                        "color": "#2ECC71",
                         "label": "g-band",
                         "value": NaN
                     },
                     {
-                        "color": "drawing-red",
+                        "color": "#C70039",
                         "label": "r-band",
                         "value": 0.13426158515863515
                     },
                     {
-                        "color": "drawing-black",
+                        "color": "#D3D3D3",
                         "label": "i-band",
                         "value": NaN
                     }

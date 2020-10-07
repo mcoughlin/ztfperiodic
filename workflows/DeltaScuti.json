@@ -3865,6 +3865,11 @@
                             "yerr": 0.04468612937997871
                         },
                         {
+                            "x": 2459129.6842258563,
+                            "y": 0.008922285579249234,
+                            "yerr": 0.03121256346871225
+                        },
+                        {
                             "x": 2458429.651563004,
                             "y": -0.027185628911997384,
                             "yerr": 0.043631161531257984
@@ -4611,7 +4616,7 @@
                         }
                     ],
                     "seriesOptions": {
-                        "color": "drawing-green",
+                        "color": "#2ECC71",
                         "label": "g-band",
                         "period": 0.05317407414428215
                     }
@@ -9350,7 +9355,7 @@
                         }
                     ],
                     "seriesOptions": {
-                        "color": "drawing-red",
+                        "color": "#C70039",
                         "label": "r-band",
                         "period": 0.05317381848082681
                     }
@@ -9639,7 +9644,7 @@
                         }
                     ],
                     "seriesOptions": {
-                        "color": "drawing-black",
+                        "color": "#D3D3D3",
                         "label": "i-band",
                         "period": 0.05317490966275459
                     }
@@ -9654,17 +9659,17 @@
             "period": {
                 "data": [
                     {
-                        "color": "drawing-green",
+                        "color": "#2ECC71",
                         "label": "g-band",
                         "value": -1.274300063202946
                     },
                     {
-                        "color": "drawing-red",
+                        "color": "#C70039",
                         "label": "r-band",
                         "value": -1.2743021513163095
                     },
                     {
-                        "color": "drawing-black",
+                        "color": "#D3D3D3",
                         "label": "i-band",
                         "value": -1.274293239234364
                     }
@@ -9677,17 +9682,17 @@
             "amplitude": {
                 "data": [
                     {
-                        "color": "drawing-green",
+                        "color": "#2ECC71",
                         "label": "g-band",
                         "value": 0.31127118220946054
                     },
                     {
-                        "color": "drawing-red",
+                        "color": "#C70039",
                         "label": "r-band",
                         "value": 0.2142016387845337
                     },
                     {
-                        "color": "drawing-black",
+                        "color": "#D3D3D3",
                         "label": "i-band",
                         "value": 0.16784428624614675
                     }
