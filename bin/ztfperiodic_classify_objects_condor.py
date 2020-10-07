@@ -151,6 +151,7 @@ if opts.lightcurve_source == "Kowalski":
                     continue
 
                 modelFiles_tmp.append(modelFile)
+            if len(modelFiles_tmp) == 0: continue
 
             if opts.doDocker:
                 fid1.write('nvidia-docker run --runtime=nvidia python-ztfperiodic --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type quadrant --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doPlots %s\n'%(outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, extra_flags))
@@ -200,7 +201,7 @@ if opts.lightcurve_source == "Kowalski":
     elif opts.source_type == "catalog":
         fid.write('arguments = --outputDir %s --user %s --pwd %s -l Kowalski --source_type catalog --catalog_file %s --doPlots --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --algorithm %s --dbname %s --modelFiles $(modelFiles)\n'%(outputDir,opts.user,opts.pwd,opts.catalog_file,opts.algorithm,dbname))
 fid.write('requirements = OpSys == "LINUX"\n');
-fid.write('request_memory = 8192\n');
+fid.write('request_memory = 16384\n');
 fid.write('request_cpus = 1\n');
 fid.write('accounting_group = ligo.dev.o2.burst.allsky.stamp\n');
 fid.write('notification = never\n');

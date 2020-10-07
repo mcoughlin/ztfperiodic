@@ -69,7 +69,7 @@ def parse_commandline():
     parser.add_option("--doSubjectSet",  action="store_true", default=False)
     parser.add_option("--zooniverse_user")
     parser.add_option("--zooniverse_pwd")
-    parser.add_option("--zooniverse_id",default=13032,type=int)
+    parser.add_option("--zooniverse_id",default=4878,type=int)
 
     parser.add_option("-N","--Nexamples",default=10,type=int)
 
@@ -85,7 +85,13 @@ catalogPath = opts.catalogPath
 differencePath = opts.differencePath   
 intersectionPath = opts.intersectionPath
 
-intersectionType = intersectionPath.split("/")[-1].replace(".h5","")
+if ".h5" in catalogPath:
+    intersectionType = intersectionPath.split("/")[-1].replace(".h5","")
+elif ".fits" in catalogPath:
+    intersectionType = intersectionPath.split("/")[-1].replace(".fits","")
+elif ".csv" in catalogPath:
+    intersectionType = catalogPath.split("/")[-1].replace(".csv","")
+
 outputDir = os.path.join(outputDir, intersectionType)
 
 plotDir = os.path.join(outputDir,'plots')
@@ -118,8 +124,6 @@ while cnt < nquery:
 if cnt == nquery:
     raise Exception('Kowalski connection failed...')
 
-print(kow)
-
 if opts.doSubjectSet:
     zoo = ZooProject(username=opts.zooniverse_user,
                      password=opts.zooniverse_pwd,
@@ -131,6 +135,26 @@ elif ".fits" in catalogPath:
     tab = Table.read(catalogPath, format='fits')
     df = tab.to_pandas()
     df.set_index('objid',inplace=True)
+elif ".csv" in catalogPath:
+    tab = Table.read(catalogPath, format='csv')
+
+    objids = []
+    for row in tab:
+        lightcurves_all = get_kowalski(row["RA"], row["Dec"], kow,
+                                       min_epochs=20)
+        nmax, key_to_keep = -1, -1
+        for ii, key in enumerate(lightcurves_all.keys()):
+            lc = lightcurves_all[key]
+            if len(lc["fid"]) > nmax:
+                nmax, key_to_keep = len(lc["fid"]), key
+        objids.append(int(key_to_keep))
+    objids = np.array(objids)
+    tab["objid"] = objids
+    tab.add_index('objid')
+    idx = np.where(objids>0)[0]
+    tab = tab.iloc[idx]
+
+    df = tab.to_pandas()
 
 if opts.doDifference:
     differenceFiles = differencePath.split(",")
@@ -154,13 +178,14 @@ if opts.doIntersection:
         idx = df1.index.intersection(df.index)
         df1 = df1.loc[idx]
 
-col = df1.columns[0]
-idx = np.argsort(df1[col])[::-1]
-idx = np.array(idx).astype(int)[:opts.Nexamples]
+if opts.doIntersection:
+    col = df1.columns[0]
+    idx = np.argsort(df1[col])[::-1]
+    idx = np.array(idx).astype(int)[:opts.Nexamples]
 
-idy = df.index.intersection(df1.iloc[idx].index)
-df = df.loc[idy]
-df1 = df1.iloc[idx]
+    idy = df.index.intersection(df1.iloc[idx].index)
+    df = df.loc[idy]
+    df1 = df1.iloc[idx]
 
 fs = 24
 colors = ['g','r','y']
@@ -207,6 +232,9 @@ for ii, (index, row) in enumerate(df.iterrows()):
 
     else:
         objid, features = get_kowalski_features_objids([index], kow)
+        if len(features) == 0:
+            continue
+
         period = features.period.values[0]
         amp = features.f1_amp.values[0]
         lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline = get_kowalski_objids([index], kow)
@@ -246,6 +274,7 @@ for ii, (index, row) in enumerate(df.iterrows()):
         periods, amplitudes = [], []
         for jj, (fid, color, symbol) in enumerate(zip(fids, colors, symbols)):
             seriesData = []
+            nmax, period_tmp, amp_tmp = -1, period, amp
             for ii, key in enumerate(lightcurves_all.keys()):
                 lc = lightcurves_all[key]
                 if not lc["fid"][0] == fid: continue
@@ -256,24 +285,33 @@ for ii, (index, row) in enumerate(df.iterrows()):
                                    "yerr": yerr}
                     seriesData.append(data_single)
        
+                tmp, features = get_kowalski_features_objids([int(key)], kow)
+                if len(features) == 0:
+                    continue
+
+                if len(lc["fid"]) > nmax:
+                    nmax = len(lc["fid"])
+                    period_tmp = features.period.values[0]
+                    amp_tmp = features.f1_amp.values[0]
+
             if len(seriesData) == 0: continue
 
             if fid == 1:
-                label, color = "g-band", "drawing-green"
+                label, color = "g-band", "#2ECC71"
             elif fid == 2:
-                label, color = "r-band", "drawing-red"
+                label, color = "r-band", "#C70039"
             elif fid == 3:
-                label, color = "i-band", "drawing-black"
+                label, color = "i-band", "#D3D3D3"
 
             seriesOptions = {"color": color,
                              "label": label,
-                             "period": period}
+                             "period": period_tmp}
             periodOptions = {"color": color,
                              "label": label,
-                             "value": np.log10(period)}
+                             "value": np.log10(period_tmp)}
             amplitudeOptions = {"color": color,
                                 "label": label,
-                                "value": amp}
+                                "value": amp_tmp}
 
             data_json["data"]["scatterPlot"]["data"].append({"seriesData": seriesData, "seriesOptions": seriesOptions})
             data_json["data"]["barCharts"]["period"]["data"].append(periodOptions)
@@ -355,9 +393,9 @@ for ii, (index, row) in enumerate(df.iterrows()):
 
     if opts.doSubjectSet:
         #image_list.append(pngfile)
-        image_list.append({"image/png": pngfile, 
-                           "application/json": photFile,
-                           "image/png": pngfile_HR})
+        image_list.append({"image_png_1": pngfile, 
+                           "application_json": photFile,
+                           "image_png_2": pngfile_HR})
 
         mdict = {'candidate': int(objid),
                  'ra': ra, 'dec': dec, 
