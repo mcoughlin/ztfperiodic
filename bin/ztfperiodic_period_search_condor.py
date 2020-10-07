@@ -118,7 +118,7 @@ outputDir = opts.outputDir
 batch_size = opts.batch_size
 algorithm = opts.algorithm
 
-catalogDir = os.path.join(outputDir,'catalog',algorithm)
+catalogDir = os.path.join(outputDir,'catalog',algorithm.replace(",","_"))
 
 condorDir = os.path.join(outputDir,'condor')
 if not os.path.isdir(condorDir):
@@ -167,7 +167,8 @@ if opts.lightcurve_source == "Kowalski":
         #fields = np.setdiff1d(fields,fields_complete)
 
         #fields = [700]
-        fields = np.arange(250,882)
+        #fields = np.arange(250,882)
+        fields = np.arange(250,300)
 
         for field in fields:
             print('Running field %d' % field)
@@ -184,8 +185,8 @@ if opts.lightcurve_source == "Kowalski":
                                        }
                              }
                         r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
-                        if not "result_data" in r: continue
-                        nlightcurves = r['result_data']['query_result']
+                        if not "data" in r: continue
+                        nlightcurves = r['data']
 
                         Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
 
