@@ -486,11 +486,11 @@ if opts.doLCFile:
 
         if len(seriesData) == 0: continue
         if filt == 1:
-            label, color = "g-band", "#2ECC71"
+            label, color = "g-band", "#66CDAA"
         elif filt == 2:
-            label, color = "r-band", "#C70039"
+            label, color = "r-band", "#DC143C"
         elif filt == 3:
-            label, color = "i-band", "#D3D3D3"
+            label, color = "i-band", "#DAA520"
 
         seriesOptions = {"color": color,
                          "label": label,

@@ -112,6 +112,9 @@ def load_catalog(catalog, catalog_min=0, catalog_max=100000,
         idx.append(ii)
     filenames = [filenames[ii] for ii in idx]
 
+    if len(filenames) == 0:
+        return []
+
     if doParallel:
         data_all = ProgressParallel(n_jobs=Ncore,use_tqdm=True,total=len(filenames))(delayed(load_h5)(filename) for filename in filenames)
     else:
@@ -119,7 +122,11 @@ def load_catalog(catalog, catalog_min=0, catalog_max=100000,
         for ii, filename in enumerate(filenames):
             data_tmp = load_h5(filename)
             data_all.append(data_tmp)
-    data = vstack(data_all)
+
+    if len(data_all) == 0:
+        data = []
+    else:
+        data = vstack(data_all)
 
     return data
 
@@ -136,13 +143,27 @@ catalog_split = opts.catalog_split
 catalogs = np.arange(catalog_min, catalog_max, catalog_split)
 catalogs = np.append(catalogs, catalog_max)
 
+mergedDir = os.path.join(baseoutputDir, 'merged')
+if not os.path.isdir(mergedDir):
+    os.makedirs(mergedDir)
+
 for ii in range(len(catalogs)-1):
     catalog_min, catalog_max = catalogs[ii], catalogs[ii+1]
 
     outputDir = os.path.join(baseoutputDir, '%d_%d' % (catalog_min, catalog_max))
     if not os.path.isdir(outputDir):
         os.makedirs(outputDir)
-    
+  
+    mergedtmp = os.path.join(outputDir,'catalog.h5')
+    mergedfile = os.path.join(mergedDir,'%d_%d.h5' % (catalog_min, catalog_max))
+
+    if os.path.isfile(mergedtmp):
+        mv_command = "mv %s %s" % (mergedtmp, mergedfile)
+        os.system(mv_command)
+
+    if os.path.isfile(mergedfile):
+        continue 
+
     plotDir = os.path.join(outputDir, 'plots')
     if not os.path.isdir(plotDir):
         os.makedirs(plotDir)
@@ -161,6 +182,8 @@ for ii in range(len(catalogs)-1):
             cat1 = load_catalog(catalogPath, catalog_min=catalog_min,
                                 catalog_max=catalog_max, 
                                 doParallel=opts.doParallel, Ncore=opts.Ncore)
+            if len(cat1) == 0: continue
+  
             df = cat1.to_pandas()
             df.rename(columns={"prob": modelName}, inplace=True)
             df.set_index('objid', inplace=True)
@@ -186,16 +209,17 @@ for ii in range(len(catalogs)-1):
             plt.ylabel('Counts')
             fig.savefig(pdffile)
             plt.close()
-    
-    cat1file = os.path.join(outputDir,'catalog.h5')
-    if not os.path.isfile(cat1file):
+
+    if len(dictlist) == 0: continue   
+ 
+    if not os.path.isfile(mergedfile):
         # Merge the DataFrames
         df_merged = reduce(lambda  left,right: pd.merge(left,right, how='outer',
                                                         left_index=True,
                                                         right_index=True),
                            dictlist)
-        df_merged.to_hdf(cat1file, key='df_merged', mode='w')
+        df_merged.to_hdf(mergedfile, key='df_merged', mode='w')
     else:
-        df_merged = pd.read_hdf(cat1file)
+        df_merged = pd.read_hdf(mergedfile)
    
     #print(tabulate(df_merged, headers='keys')) 

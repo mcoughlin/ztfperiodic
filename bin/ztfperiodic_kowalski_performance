@@ -6,6 +6,7 @@ import optparse
 import tables
 import pandas as pd
 import numpy as np
+from astropy.time import Time
 
 import matplotlib
 matplotlib.use('Agg')
@@ -21,7 +22,8 @@ def parse_commandline():
     """
     parser = optparse.OptionParser()
 
-    parser.add_option("-c","--condorDir",default="/home/michael.coughlin/ZTF/output_quadrants_20191018/condor/")
+    parser.add_option("-c","--condorDir",default="/home/michael.coughlin/ZTF/output_ontological_ids_DR2/condor/")
+    parser.add_option("-r","--runtype",default="periods")
     parser.add_option("--doScaling",  action="store_true", default=False)
 
     opts, args = parser.parse_args()
@@ -41,32 +43,63 @@ logsDir = os.path.join(opts.condorDir,"logs")
 if not os.path.isfile(pcklFile):
     logfiles = glob.glob(os.path.join(logsDir,"*out*"))
     analysis_times, kowalski_times, objects = [], [], []
-    data_out = np.empty((0,6))
-    #logfiles = logfiles[:1000]
-    for ii, logfile in enumerate(logfiles):
-        if np.mod(ii,100) == 0:
-            print('Loading %d/%d' % (ii, len(logfiles)))
-    
-        try:
-            lines = [line.rstrip('\n') for line in open(logfile)]
-        except:
-            continue
-     
-        data = np.array([np.nan, np.nan, np.nan, np.nan, np.nan, ii])
-        for line in lines:
-            lineSplit = list(filter(None,line.split(" ")))
-            if "Number of lightcurves" in line:
-                data[0] = int(lineSplit[-1])
-            elif "Loaded" in line:
-                data[2] = int(lineSplit[1])
-                data[3] = float(lineSplit[-2])
-            elif "Lightcurve analysis" in line:
-                data[1] = float(lineSplit[-2])        
-            elif "Lightcurve statistics" in line:
-                data[4] = float(lineSplit[-2])   
 
-                data_out = np.append(data_out,np.atleast_2d(data), axis=0)
-                data = np.array([np.nan, np.nan, np.nan, np.nan, np.nan, ii])
+    if opts.runtype == "periods":
+        data_out = np.empty((0,6))
+        #logfiles = logfiles[:1000]
+        for ii, logfile in enumerate(logfiles):
+            num = int(logfile.split("/")[-1].split(".")[-1])
+
+            if np.mod(ii,100) == 0:
+                print('Loading %d/%d' % (ii, len(logfiles)))
+        
+            try:
+                lines = [line.rstrip('\n') for line in open(logfile)]
+            except:
+                continue
+         
+            data = np.array([np.nan, np.nan, np.nan, np.nan, np.nan, num])
+            for line in lines:
+                lineSplit = list(filter(None,line.split(" ")))
+                if "Number of lightcurves" in line:
+                    data[0] = int(lineSplit[-1])
+                elif "Loaded" in line:
+                    data[2] = int(lineSplit[1])
+                    data[3] = float(lineSplit[-2])
+                elif "Lightcurve analysis" in line:
+                    data[1] = float(lineSplit[-2])        
+                elif "Lightcurve statistics" in line:
+                    data[4] = float(lineSplit[-2])   
+    
+                    data_out = np.append(data_out,np.atleast_2d(data), axis=0)
+                    data = np.array([np.nan, np.nan, np.nan, np.nan, np.nan, num])
+
+    elif opts.runtype == "features":
+        data_out = np.empty((0,5))
+        #logfiles = logfiles[:1000]
+        for ii, logfile in enumerate(logfiles):
+            num = int(logfile.split("/")[-1].split(".")[-1])
+            tm = os.path.getctime(logfile)
+            t = Time(tm, format='unix', scale='utc')
+
+            if np.mod(ii,100) == 0:
+                print('Loading %d/%d' % (ii, len(logfiles)))
+ 
+            try:
+                lines = [line.rstrip('\n') for line in open(logfile)]
+            except:
+                continue
+ 
+            data = np.array([np.nan, np.nan, np.nan, num, t.mjd])
+            for line in lines:
+                lineSplit = list(filter(None,line.split(" ")))
+                if "Loaded" in line:
+                    data[0] = int(lineSplit[1])
+                    data[2] = float(lineSplit[-2])
+                elif "Lightcurve analysis" in line:
+                    data[1] = float(lineSplit[-2])
+                    data_out = np.append(data_out,np.atleast_2d(data), axis=0)
+                    data = np.array([np.nan, np.nan, np.nan, num, t.mjd])
 
     f = open(pcklFile, 'wb')
     pickle.dump((data_out), f)
@@ -75,91 +108,138 @@ if not os.path.isfile(pcklFile):
 with open(pcklFile, 'rb') as handle:
     data_out = pickle.load(handle)
 
-xedges = np.logspace(1,3,50)
-yedges = np.logspace(2,4,50)
+if opts.runtype == "periods":
 
-H, xedges, yedges = np.histogram2d(data_out[:,3], data_out[:,2], bins=(xedges, yedges))
-H = H.T  # Let each row list bins with common y range.
-X, Y = np.meshgrid(xedges, yedges)
-H[H==0] = 1e-5
+    xedges = np.logspace(1,3,50)
+    yedges = np.logspace(2,4,50)
+    
+    H, xedges, yedges = np.histogram2d(data_out[:,3], data_out[:,2], bins=(xedges, yedges))
+    H = H.T  # Let each row list bins with common y range.
+    X, Y = np.meshgrid(xedges, yedges)
+    H[H==0] = 1e-5
+    
+    plotName = os.path.join(outputDir, "kowalski.pdf")
+    plt.figure(figsize=(12,8))
+    ax = plt.gca()
+    c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm())
+    plt.ylabel('Number of objects')
+    plt.xlabel('Load Time [s]')
+    cbar = plt.colorbar(c)
+    cbar.set_label('Counts')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    #ax.set_xticks([10,100,1000])
+    #plt.xlim([1,1000])
+    #plt.ylim([100,10000])
+    #ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    
+    plt.savefig(plotName, bbox_inches='tight')
+    plt.close()
+    
+    xedges = np.logspace(-1,3.0,50)
+    yedges = np.logspace(2,4,50)
+    
+    idx = np.where(~np.isnan(data_out[:,0]))[0]
+    H, xedges, yedges = np.histogram2d(data_out[idx,1], data_out[idx,0], bins=(xedges, yedges))
+    H = H.T  # Let each row list bins with common y range.
+    X, Y = np.meshgrid(xedges, yedges)
+    H[H==0] = 1e-5
+    
+    plotName = os.path.join(outputDir, "period_finding.pdf")
+    plt.figure(figsize=(12,8))
+    ax = plt.gca()
+    c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm())
+    plt.xlabel('Analysis Time [s]')
+    plt.ylabel('Number of objects')
+    cbar = plt.colorbar(c)
+    cbar.set_label('Counts')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    plt.xlim([1,1000])
+    plt.ylim([100,10000])
+    #ax.set_xticks([0.1,1,10])
+    #ax.set_yticks([10,100,1000])
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    
+    plt.savefig(plotName, bbox_inches='tight')
+    plt.close()
+    
+    xedges = np.logspace(-1,3.0,50)
+    yedges = np.logspace(2,4,50)
+    
+    idx = np.where(~np.isnan(data_out[:,0]))[0]
+    H, xedges, yedges = np.histogram2d(data_out[idx,4], data_out[idx,0], bins=(xedges, yedges))
+    H = H.T  # Let each row list bins with common y range.
+    X, Y = np.meshgrid(xedges, yedges)
+    H[H==0] = 1e-5
+    
+    plotName = os.path.join(outputDir, "statistics.pdf")
+    plt.figure(figsize=(12,8))
+    ax = plt.gca()
+    c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm())
+    plt.xlabel('Analysis Time [s]')
+    plt.ylabel('Number of objects')
+    cbar = plt.colorbar(c)
+    cbar.set_label('Counts')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    plt.xlim([1,1000])
+    plt.ylim([100,10000])
+    #ax.set_xticks([0.1,1,10])
+    #ax.set_yticks([10,100,1000])
+    ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    
+    plt.savefig(plotName, bbox_inches='tight')
+    plt.close()
 
-plotName = os.path.join(outputDir, "kowalski.pdf")
-plt.figure(figsize=(12,8))
-ax = plt.gca()
-c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm())
-plt.ylabel('Number of objects')
-plt.xlabel('Load Time [s]')
-cbar = plt.colorbar(c)
-cbar.set_label('Counts')
-ax.set_xscale('log')
-ax.set_yscale('log')
-#ax.set_xticks([10,100,1000])
-#plt.xlim([1,1000])
-#plt.ylim([100,10000])
-#ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+elif opts.runtype == "features":
 
-plt.savefig(plotName, bbox_inches='tight')
-plt.close()
+    bins = np.logspace(-3,0,50)
+    hist, bin_edges = np.histogram(data_out[:,2]/data_out[:,0], bins=bins)
+    bins = (bin_edges[1:] + bin_edges[:-1])/2.0
+ 
+    plotName = os.path.join(outputDir, "classification.pdf")
+    plt.figure(figsize=(12,8))
+    ax = plt.gca()
 
-xedges = np.logspace(-1,3.0,50)
-yedges = np.logspace(2,4,50)
+    bins = np.logspace(-3,0,50)
+    hist, bin_edges = np.histogram(data_out[:,2]/data_out[:,0], bins=bins)
+    bins = (bin_edges[1:] + bin_edges[:-1])/2.0
+    plt.plot(bins, hist, color = 'k', linestyle='-', drawstyle='steps',
+             label='Kowalski Time')
 
-idx = np.where(~np.isnan(data_out[:,0]))[0]
-H, xedges, yedges = np.histogram2d(data_out[idx,1], data_out[idx,0], bins=(xedges, yedges))
-H = H.T  # Let each row list bins with common y range.
-X, Y = np.meshgrid(xedges, yedges)
-H[H==0] = 1e-5
+    bins = np.logspace(-3,-1,50)
+    hist, bin_edges = np.histogram(data_out[:,1]/data_out[:,0], bins=bins)
+    bins = (bin_edges[1:] + bin_edges[:-1])/2.0
+    plt.plot(bins, hist, color = 'r', linestyle='--', drawstyle='steps',
+             label='Classification Time')
 
-plotName = os.path.join(outputDir, "period_finding.pdf")
-plt.figure(figsize=(12,8))
-ax = plt.gca()
-c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm())
-plt.xlabel('Analysis Time [s]')
-plt.ylabel('Number of objects')
-cbar = plt.colorbar(c)
-cbar.set_label('Counts')
-ax.set_xscale('log')
-ax.set_yscale('log')
-plt.xlim([1,1000])
-plt.ylim([100,10000])
-#ax.set_xticks([0.1,1,10])
-#ax.set_yticks([10,100,1000])
-ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    plt.legend()
+    plt.xlabel('Time / Object [s]')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    plt.savefig(plotName, bbox_inches='tight')
+    plt.close()
 
-plt.savefig(plotName, bbox_inches='tight')
-plt.close()
+    T0 = np.min(data_out[:,4])
 
-xedges = np.logspace(-1,3.0,50)
-yedges = np.logspace(2,4,50)
+    plotName = os.path.join(outputDir, "classification_vs_time.pdf")
+    plt.figure(figsize=(12,8))
+    ax = plt.gca()
 
-idx = np.where(~np.isnan(data_out[:,0]))[0]
-H, xedges, yedges = np.histogram2d(data_out[idx,4], data_out[idx,0], bins=(xedges, yedges))
-H = H.T  # Let each row list bins with common y range.
-X, Y = np.meshgrid(xedges, yedges)
-H[H==0] = 1e-5
-
-plotName = os.path.join(outputDir, "statistics.pdf")
-plt.figure(figsize=(12,8))
-ax = plt.gca()
-c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm())
-plt.xlabel('Analysis Time [s]')
-plt.ylabel('Number of objects')
-cbar = plt.colorbar(c)
-cbar.set_label('Counts')
-ax.set_xscale('log')
-ax.set_yscale('log')
-plt.xlim([1,1000])
-plt.ylim([100,10000])
-#ax.set_xticks([0.1,1,10])
-#ax.set_yticks([10,100,1000])
-ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-
-plt.savefig(plotName, bbox_inches='tight')
-plt.close()
+    plt.plot(data_out[:,4]-T0, data_out[:,2]/data_out[:,0], 'kx', label='Kowalski Time')
+    plt.plot(data_out[:,4]-T0, data_out[:,1]/data_out[:,0], 'r*', label='Classification Time')
+    plt.legend()
+    plt.xlabel('Days since %s' % (Time(T0, format='mjd').isot))
+    plt.ylabel('Time / Object [s]')
+    #ax.invert_xaxis()
+    ax.set_yscale('log')
+    plt.savefig(plotName, bbox_inches='tight')
+    plt.close()
 
 if opts.doScaling:
     

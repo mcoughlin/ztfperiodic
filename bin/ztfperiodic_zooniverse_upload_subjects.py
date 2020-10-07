@@ -280,6 +280,8 @@ for ii, (index, row) in enumerate(df.iterrows()):
                 if not lc["fid"][0] == fid: continue
                 idx = np.where(lc["fid"][0] == fids)[0]
 
+                t0 = lc["hjd"] - Time('2018-01-01T00:00:00', 
+                                      format='isot', scale='utc').jd
                 for x, y, yerr in zip(lc["hjd"], lc["mag"], lc["magerr"]):
                     data_single = {"x": x, "y": np.median(lc["mag"])-y,
                                    "yerr": yerr}
@@ -292,16 +294,17 @@ for ii, (index, row) in enumerate(df.iterrows()):
                 if len(lc["fid"]) > nmax:
                     nmax = len(lc["fid"])
                     period_tmp = features.period.values[0]
-                    amp_tmp = features.f1_amp.values[0]
+                    #amp_tmp = features.f1_amp.values[0]
+                    amp_tmp = np.diff(np.percentile(lc["mag"], (2.5,97.5)))
 
             if len(seriesData) == 0: continue
 
             if fid == 1:
-                label, color = "g-band", "#2ECC71"
+                label, color = "g-band", "#66CDAA"
             elif fid == 2:
-                label, color = "r-band", "#C70039"
+                label, color = "r-band", "#DC143C"
             elif fid == 3:
-                label, color = "i-band", "#D3D3D3"
+                label, color = "i-band", "#DAA520"
 
             seriesOptions = {"color": color,
                              "label": label,

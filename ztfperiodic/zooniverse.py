@@ -126,7 +126,9 @@ class ZooProject:
         for i in range(len(image_list)):
             subject = Subject()
             subject.links.project = self.project
-            subject.add_location(image_list[i])
+            for key in image_list[i].keys():
+                media_file = image_list[i][key]
+                subject.add_location(media_file)
             subject.metadata.update(metadata_list[i])
             subject.save()
             new_subjects.append(subject)
