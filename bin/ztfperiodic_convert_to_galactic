@@ -1,0 +1,49 @@
+
+import os, sys, optparse, shutil, time
+import glob
+import numpy as np
+from matplotlib import pyplot as plt
+import matplotlib.patches as patches
+
+import astropy.table
+from astropy import units as u
+from astropy.coordinates import SkyCoord
+from astropy.coordinates import EarthLocation
+from astropy.coordinates import Angle
+from astropy.coordinates import Galactic
+from astropy.table import Table, unique
+from astropy.time import Time
+from astropy.io import fits
+from astropy.io import ascii
+
+def parse_commandline():
+    """
+    Parse the options given on the command-line.
+    """
+    parser = optparse.OptionParser()
+    parser.add_option("-c","--catalog",default="/home/michael.coughlin/ZTF/output_phenomenological_ids_DR2/catalog/compare/przemek/info/objs_OTHER.dat")
+
+    opts, args = parser.parse_args()
+
+    return opts
+
+# Parse command line
+opts = parse_commandline()
+
+data_out = Table.read(opts.catalog, format='ascii',
+                      names=('objid', 'ra', 'dec', 'period'))
+ra_dec = ["%.3f_%.3f" % (row["ra"], row["dec"]) for row in data_out]
+data_out["ra_dec"] = ra_dec
+data_out = unique(data_out, keys=['ra_dec'])
+
+for row in data_out:
+    objid = row["objid"]
+    ra, dec, period = row["ra"], row["dec"], row["period"]
+
+    ang = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
+    l, b = ang.galactic.l.deg, ang.galactic.b.deg
+
+    if l > 180: continue
+    print(ra, dec, l, b)
+
+

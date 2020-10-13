@@ -274,6 +274,8 @@ for ii, (index, row) in enumerate(df.iterrows()):
 
         periods, amplitudes = [], []
         for jj, (fid, color, symbol) in enumerate(zip(fids, colors, symbols)):
+            if fid == 3: continue
+
             seriesData = []
             nmax, period_tmp, amp_tmp = -1, period, amp
             for ii, key in enumerate(lightcurves_all.keys()):
