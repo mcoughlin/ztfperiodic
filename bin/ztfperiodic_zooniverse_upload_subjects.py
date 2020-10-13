@@ -23,6 +23,7 @@ from matplotlib.colors import Normalize
 
 import astropy
 from astropy.table import Table, vstack
+from astropy.time import Time
 from astropy.coordinates import Angle
 from astropy.io import ascii
 from astropy import units as u
@@ -295,16 +296,16 @@ for ii, (index, row) in enumerate(df.iterrows()):
                     nmax = len(lc["fid"])
                     period_tmp = features.period.values[0]
                     #amp_tmp = features.f1_amp.values[0]
-                    amp_tmp = np.diff(np.percentile(lc["mag"], (2.5,97.5)))
+                    amp_tmp = np.diff(np.percentile(lc["mag"], (2.5,97.5)))[0]
 
             if len(seriesData) == 0: continue
 
             if fid == 1:
-                label, color = "g-band", "#66CDAA"
+                label, color = "g", "#66CDAA"
             elif fid == 2:
-                label, color = "r-band", "#DC143C"
+                label, color = "r", "#DC143C"
             elif fid == 3:
-                label, color = "i-band", "#DAA520"
+                label, color = "i", "#DAA520"
 
             seriesOptions = {"color": color,
                              "label": label,

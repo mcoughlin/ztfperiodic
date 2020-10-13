@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
 from matplotlib.colors import Normalize
+import matplotlib.patches as patches
 
 import astropy
 from astropy.table import Table, vstack, hstack
@@ -29,6 +30,7 @@ from astroquery.simbad import Simbad
 Simbad.ROW_LIMIT = -1
 Simbad.TIMEOUT = 300000
 
+from ztfperiodic.utils import angular_distance
 from ztfperiodic.utils import convert_to_hex
 
 def parse_commandline():
@@ -40,6 +42,7 @@ def parse_commandline():
     parser.add_option("--doFermi",  action="store_true", default=False)
     parser.add_option("--doSimbad",  action="store_true", default=False)
     parser.add_option("--doCrossMatch",  action="store_true", default=False)
+    parser.add_option("--doObjectFile",  action="store_true", default=False)
     parser.add_option("--doVariability",  action="store_true", default=False)
 
     parser.add_option("--doField",  action="store_true", default=False)
@@ -50,8 +53,9 @@ def parse_commandline():
 
     parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/LS")
     parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/CE")
-   
-    parser.add_option("--catalog_file",default="../catalogs/CRTS.dat")    
+
+    parser.add_option("--object_file",default="/home/michael.coughlin/ZTF/output_phenomenological_ids_DR2/catalog/compare/bw/info/objs.dat")   
+    parser.add_option("--catalog_file",default="../catalogs/fermi.dat")    
 
     parser.add_option("--algorithm1",default="ECE")
     parser.add_option("--algorithm2",default="ELS")
@@ -125,6 +129,11 @@ def read_catalog(catalog_file):
         ras, decs, errs = np.array(ras), np.array(decs), np.array(errs)
         if ("fermi" in catalog_file):
             amaj, amin, phi = np.array(amaj), np.array(amin), np.array(phi)
+
+        columns = ["name", "ra", "dec", "amaj", "amin", "phi"]
+        tab = Table([names, ras, decs, amaj, amin, phi],
+                    names=columns)
+
     elif ".hdf5" in catalog_file:
         with h5py.File(catalog_file, 'r') as f:
             ras, decs = f['ra'][:], f['dec'][:]
@@ -148,11 +157,11 @@ def read_catalog(catalog_file):
             names.append(objname)
         names = np.array(names)
 
-    columns = ["name", "ra", "dec", "period", "classification",
-               "mag"]
-    tab = Table([names, ras, decs, periods, classifications,
-                 mags],
-                names=columns)
+        columns = ["name", "ra", "dec", "period", "classification",
+                   "mag"]
+        tab = Table([names, ras, decs, periods, classifications,
+                     mags],
+                     names=columns)
 
     return tab
 
@@ -285,15 +294,19 @@ if opts.doCrossMatch:
 cat1file = os.path.join(outputDir,'catalog_%s.fits' % name1)
 cat2file = os.path.join(outputDir,'catalog_%s.fits' % name2)
 
-if not os.path.isfile(cat1file):
-    cat1 = load_catalog(catalog,doFermi=opts.doFermi,doSimbad=opts.doSimbad,
-                                doField=opts.doField,field=opts.field,
-                                algorithm=opts.algorithm1)
-    cat1.write(cat1file, format='fits')
+if opts.doObjectFile:
+    cat1 = Table.read(opts.object_file, format='ascii',
+                      names=['objid', 'ra', 'dec', 'period'])
 else:
-    cat1 = Table.read(cat1file, format='fits')
-idx1 = np.where(cat1["sig"] >= opts.sig1)[0]
-print('Keeping %.5f %% of objects in catalog 1' % (100*len(idx1)/len(cat1)))
+    if not os.path.isfile(cat1file):
+        cat1 = load_catalog(catalog,doFermi=opts.doFermi,doSimbad=opts.doSimbad,
+                                    doField=opts.doField,field=opts.field,
+                                    algorithm=opts.algorithm1)
+        cat1.write(cat1file, format='fits')
+    else:
+        cat1 = Table.read(cat1file, format='fits')
+    idx1 = np.where(cat1["sig"] >= opts.sig1)[0]
+    print('Keeping %.5f %% of objects in catalog 1' % (100*len(idx1)/len(cat1)))
 catalog1 = SkyCoord(ra=cat1["ra"]*u.degree, dec=cat1["dec"]*u.degree, frame='icrs')
 
 if opts.doCrossMatch:
@@ -314,6 +327,21 @@ else:
 
     idx2 = np.where(cat2["sig"] >= opts.sig2)[0]
     print('Keeping %.5f %% of objects in catalog 2' % (100*len(idx2)/len(cat2)))
+
+if opts.doCrossMatch:
+    for row2 in cat2:
+        dist = angular_distance(row2["ra"], row2["dec"], cat1["ra"], cat1["dec"])
+        ellipse = patches.Ellipse((row2["ra"], row2["dec"]),
+                                  row2["amaj"], row2["amin"],
+                                  angle=row2["phi"])
+        idx = np.where(dist <= row2["amaj"])[0]
+        if len(idx) == 0: continue
+        print('For source %s' % row2["name"])
+        for jj in idx:
+            if not ellipse.contains_point((cat1["ra"][jj],cat1["dec"][jj])):
+                continue
+            print(cat1["objid"][jj], cat1["ra"][jj], cat1["dec"][jj])
+
 
 catalog2 = SkyCoord(ra=cat2["ra"]*u.degree, dec=cat2["dec"]*u.degree, frame='icrs')
 idx,sep,_ = catalog1.match_to_catalog_sky(catalog2)
