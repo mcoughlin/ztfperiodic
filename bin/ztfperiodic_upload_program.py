@@ -170,7 +170,50 @@ def save_source(zvmarshal, source, zvm_program_id, verbose = False,
             # set labels
             if (classification is not None) and (not classification == "OTHER"):
                 labels = []
-                if classification in ["EA", "EB", "EW"]:
+                if classification == "OTHER": 
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'variable',
+                                   'value': 0.0})
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'periodic',
+                                   'value': 0.0})
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'eclipsing',
+                                   'value': 0.0})
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'EA',
+                                   'value': 0.0})
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'EB',
+                                   'value': 0.0})
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'EW',
+                                   'value': 0.0})
+                    labels.append({'type': 'intrinsic',
+                                   'label': "binary star",
+                                   'value': 0.0})
+                    labels.append({'type': 'intrinsic',
+                                   'label': "detached eclipsing MS-MS",
+                                   'value': 0.0})
+                    labels.append({'type': 'intrinsic',
+                                   'label': "Beta Lyr",
+                                   'value': 0.0})
+                    labels.append({'type': 'intrinsic',
+                                   'label': "W Uma",
+                                   'value': 0.0})
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'sawtooth',
+                                   'value': 0.0})
+                    labels.append({'type': 'pulsator',
+                                   'label': 'sawtooth',
+                                   'value': 0.0})
+                    labels.append({'type': 'intrinsic',
+                                   'label': "RR Lyrae",
+                                   'value': 0.0})
+                    labels.append({'type': 'intrinsic',
+                                   'label': "Delta Scu",
+                                   'value': 0.0})
+                elif classification in ["EA", "EB", "EW"]:
                     labels.append({'type': 'phenomenological',
                                    'label': 'variable',
                                    'value': 1.0})
@@ -359,9 +402,9 @@ for ii, (objid, period) in enumerate(zip(objids, periods)):
     if np.isnan(source['period']) and (period > 0):
         source['period'] = period  
 
-    fid.write('%d %.10f %.10f %.10f\n' % (objid, source['ra'], source['dec'],
+    if classifications[ii] == "OTHER":
+        fid.write('%d %.10f %.10f %.10f\n' % (objid, source['ra'], source['dec'],
                                           source['period'])) 
-
     
     if opts.doUpload:
         if classifications is not None: 

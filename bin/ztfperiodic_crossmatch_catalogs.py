@@ -90,10 +90,10 @@ def read_catalog(catalog_file):
                 names.append(lineSplit[0])
                 ras.append(float(lineSplit[1]))
                 decs.append(float(lineSplit[2]))
-                err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)
+                err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)/3600.0
                 errs.append(err)
-                amaj.append(float(lineSplit[3]))
-                amin.append(float(lineSplit[4]))
+                amaj.append(float(lineSplit[3])/3600.0)
+                amin.append(float(lineSplit[4])/3600.0)
                 phi.append(float(lineSplit[5]))
             elif ("swift" in catalog_file) or ("xmm" in catalog_file):
                 names.append(lineSplit[0])
@@ -135,15 +135,40 @@ names_2, ras_2, decs_2, errs_2, amaj_2, amin_2, phi_2 = read_catalog(opts.catalo
 
 idxs = []
 idys = []
-for ii, (name, ra, dec, err, amaj, amin, phi) in enumerate(zip(names_1, ras_1, decs_1, errs_1, amaj_1, amin_1, phi_1)):
-    dist = angular_distance(ra, dec, ras_2, decs_2)
-    ellipse = patches.Ellipse((ra, dec), amaj, amin, angle=phi)
-    idx = np.where(dist <= amaj)[0]
-    for jj in idx:
-        if not ellipse.contains_point((ras_2[jj],decs_2[jj])):
-            continue
-        idxs.append(jj)
-        idys.append(ii)
+
+if not amaj_1 is None:
+    for ii, (name, ra, dec, err, amaj, amin, phi) in enumerate(zip(names_1, ras_1, decs_1, errs_1, amaj_1, amin_1, phi_1)):
+
+        # 1 degree
+        if amaj >= 30/60: continue
+
+        if np.mod(ii,100) == 0:
+            print('%d/ %d' % (ii, len(ras_1)))
+
+        dist = angular_distance(ra, dec, ras_2, decs_2)
+        ellipse = patches.Ellipse((ra, dec), 2*amaj, 2*amin, angle=phi)
+        idx = np.where(dist <= 2*amaj)[0]
+        for jj in idx:
+            if not ellipse.contains_point((ras_2[jj],decs_2[jj])):
+                continue
+            idxs.append(jj)
+            idys.append(ii)
+
+            print(name, ra, dec, names_2[jj], ras_2[jj], decs_2[jj])
+
+else:
+    for ii, (name, ra, dec, err) in enumerate(zip(names_1, ras_1, decs_1, errs_1)):
+        if np.mod(ii,100) == 0:
+            print('%d/ %d' % (ii, len(ras_1)))
+
+        dist = angular_distance(ra, dec, ras_2, decs_2)
+        idx = np.where(dist <= err/3600.0)[0]
+        for jj in idx:
+            idxs.append(jj)
+            idys.append(ii)
+
+            print(name, ra, dec, names_2[jj], ras_2[jj], decs_2[jj])
+
 idxs = np.unique(idxs)
 
 lines = [line.rstrip('\n') for line in open(opts.catalog_file_2)]
