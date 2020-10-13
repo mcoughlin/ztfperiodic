@@ -93,7 +93,7 @@ def get_source(ztf_id):
             ]
         }
     }
-    sources = kow.query(q).get("result_data", dict()).get("query_result", dict())
+    sources = kow.query(q).get("data", dict())
     if len(sources) > 0:
         source = sources[0]
         if len(source['period']) > 0:
@@ -105,10 +105,12 @@ def get_source(ztf_id):
 
     return source
 
-def save_source(zvmarshal, source, zvm_program_id, verbose = False):
+def save_source(zvmarshal, source, zvm_program_id, verbose = False,
+                classification = None):
 
     for ii in range(3):
-        try:
+        if True:
+        #try:
             # see if there is a saved source to merge with
             q = {"query_type": "cone_search",
                  "object_coordinates": {
@@ -164,31 +166,76 @@ def save_source(zvmarshal, source, zvm_program_id, verbose = False):
                                             'period': source['period'],
                                             'period_unit': 'Days'})
 
-                # add classifications:
-                # set labels
-                # labels = []
-                # if verbose:
-                #     print(row['variable'], row['non-variable'])
-                # if row['variable'] > 0:
-                #     labels.append({'type': 'phenomenological',
-                #                    'label': 'variable',
-                #                    'value': row['variable']})
-                # if row['non-variable'] > 0:
-                #     labels.append({'type': 'phenomenological',
-                #                    'label': 'non-variable',
-                #                    'value': row['non-variable']})
-                #
-                # r = z.api(endpoint=f'sources/{source_id}', method='post',
-                #           data={'source_id': source_id, 'action': 'set_labels',
-                #                 'labels': labels})
-
+            # add classifications:
+            # set labels
+            if (classification is not None) and (not classification == "OTHER"):
+                labels = []
+                if classification in ["EA", "EB", "EW"]:
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'variable',
+                                   'value': 1.0})
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'periodic',
+                                   'value': 1.0})
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'eclipsing',
+                                   'value': 1.0})     
+                    labels.append({'type': 'phenomenological',
+                                   'label': classification,
+                                   'value': 1.0})
+                    labels.append({'type': 'intrinsic',
+                                   'label': "binary star",
+                                   'value': 1.0})
+                    if classification == "EA":
+                        labels.append({'type': 'intrinsic',
+                                       'label': "detached eclipsing MS-MS",
+                                       'value': 1.0})
+                    elif classification == "EB":
+                        labels.append({'type': 'intrinsic',
+                                       'label': "Beta Lyr",
+                                       'value': 1.0})
+                    elif classification == "EW":
+                        labels.append({'type': 'intrinsic',
+                                       'label': "W Uma",
+                                       'value': 1.0})
+                elif classification in ["RR","DSCT"]:
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'variable',
+                                   'value': 1.0})
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'periodic',
+                                   'value': 1.0})
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'sawtooth',
+                                   'value': 1.0})
+                    labels.append({'type': 'pulsator',
+                                   'label': 'sawtooth',
+                                   'value': 1.0})
+                    if classification == "RR":
+                        labels.append({'type': 'intrinsic',
+                                       'label': "RR Lyrae",
+                                       'value': 1.0})
+                    elif classification == "DSCT":
+                        labels.append({'type': 'intrinsic',
+                                       'label': "Delta Scu",
+                                       'value': 1.0})
+                elif classification in ["BOGUS"]:
+                    labels.append({'type': 'phenomenological',
+                                   'label': 'bogus',
+                                   'value': 1.0})
+ 
+                r = zvmarshal.api(endpoint=f'sources/{source_id}',
+                                  method='post',
+                                  data={'source_id': source_id,
+                                        'action': 'set_labels',
+                                        'labels': labels})
             break
-        except Exception as e:
-            if verbose:
-                print(e)
-                _err = traceback.format_exc()
-                print(_err)
-            continue
+        #except Exception as e:
+        #    if verbose:
+        #        print(e)
+        #        _err = traceback.format_exc()
+        #        print(_err)
+        #    continue
 
 # Parse command line
 opts = parse_commandline()
@@ -249,13 +296,20 @@ print('Using program ID: %d' % (zvm_program_id))
 
 objids = []
 periods = []
+classifications = None
 
 compareFile = os.path.join(outputDir,'catalog.dat')
 if os.path.isfile(compareFile):
-    data_out = np.loadtxt(compareFile)
+    try:
+        data_out = np.loadtxt(compareFile)
+        objids = data_out[:,1]
+        periods = data_out[:,4]
+    except:
+        data_out = Table.read(compareFile, format='ascii',
+                              names=('objids', 'periods', 'classifications'))
 
-    objids = data_out[:,1]
-    periods = data_out[:,4]
+        objids, periods = data_out["objids"].tolist(), data_out["periods"].tolist()
+        classifications = data_out["classifications"].tolist()
 
 else:
     filenames = glob.glob(os.path.join(plotDir,'*.png'))
@@ -289,11 +343,13 @@ objids = np.array(objids)
 periods = np.array(periods)
 idx = np.argsort(objids)
 objids, periods = objids[idx], periods[idx]
+if classifications is not None:
+    classifications = [classifications[ii] for ii in idx]
 
 fid = open(os.path.join(infoDir, 'objs.dat'), 'w')
 
 for ii, (objid, period) in enumerate(zip(objids, periods)):
-    if np.mod(ii, 10) == 0:
+    if np.mod(ii, 50) == 0:
         print('Pushed %d/%d' % (ii, len(objids)))
 
     source = get_source(int(objid))
@@ -306,7 +362,12 @@ for ii, (objid, period) in enumerate(zip(objids, periods)):
     fid.write('%d %.10f %.10f %.10f\n' % (objid, source['ra'], source['dec'],
                                           source['period'])) 
 
-    if opts.doUpload: 
-        save_source(zvmarshal, source, zvm_program_id, verbose = True)   
+    
+    if opts.doUpload:
+        if classifications is not None: 
+            save_source(zvmarshal, source, zvm_program_id, verbose = True,
+                        classification = classifications[ii])   
+        else:
+            save_source(zvmarshal, source, zvm_program_id, verbose = True)
 
 fid.close() 

@@ -253,7 +253,8 @@ if opts.lightcurve_source == "Kowalski":
     lightcurves_all = get_kowalski(opts.ra, opts.declination, kow, 
                                    oid=opts.objid,
                                    program_ids=program_ids,
-                                   min_epochs=min_epochs)
+                                   min_epochs=min_epochs,
+                                   radius = 2.0)
     lightcurves_combined = combine_lcs(lightcurves_all)
 
     if opts.doFeatures:
@@ -510,6 +511,18 @@ if opts.doLCFile:
     with open(photFile, 'w', encoding='utf-8') as f:
         json.dump(data_json, f, ensure_ascii=False, indent=4)
 
+    for jj, (filt, color, symbol) in enumerate(zip(filts, colors, symbols)):
+        photFile = os.path.join(path_out_dir,'phot_%s.dat' % filt)
+        filed = open(photFile,'w')
+        for ii, key in enumerate(lightcurves_all.keys()):
+
+            lc = lightcurves_all[key]
+            if not lc["fid"][0] == filt: continue
+
+            for x, y, yerr in zip(lc["hjd"], lc["mag"], lc["magerr"]):
+                filed.write('%s %.10f %.10f\n' % (x, y, yerr))
+        filed.close()
+
 if opts.doFourierDecomposition:
     for ii, key in enumerate(lightcurves_all.keys()):
         lc = lightcurves_all[key]
@@ -526,14 +539,6 @@ if opts.doPlots:
     for a, b, c in zip(hjd, mag, magerr):
         filed.write('%s %.10f %.10f\n' % (a, b, c))
     filed.close()
-
-    for ii, key in enumerate(lightcurves_all.keys()):
-        lc = lightcurves_all[key]
-        photFile = os.path.join(path_out_dir,'phot_%s.dat' % key)
-        filed = open(photFile,'w')
-        for a, b, c in zip(lc["hjd"], lc["mag"], lc["magerr"]):
-            filed.write('%s %.10f %.10f\n' % (a, b, c))
-        filed.close()
 
     plotName = os.path.join(path_out_dir,'phot.pdf')
     plt.figure(figsize=(12,8))
