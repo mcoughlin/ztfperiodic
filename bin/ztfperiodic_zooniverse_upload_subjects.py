@@ -337,7 +337,7 @@ for ii, (index, row) in enumerate(df.iterrows()):
                     nmax = len(lc["fid"])
                     period_tmp = features.period.values[0]
                     #amp_tmp = features.f1_amp.values[0]
-                    amp_tmp = np.diff(np.percentile(lc["mag"], (2.5,97.5)))[0]
+                    amp_tmp = np.diff(np.percentile(lc["mag"], (5,95)))[0]
 
             if len(seriesData) == 0: continue
 
