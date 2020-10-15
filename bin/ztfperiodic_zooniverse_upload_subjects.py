@@ -49,7 +49,7 @@ color_dict = {'blue': '#217CA3',
               'shawdow': '#211F30'}
 
 density_cmap = LinearSegmentedColormap.from_list(
-        "density_cmap", [color_dict['mustard'], (1, 1, 1, 0)]).reversed()
+        "density_cmap", [color_dict['blue'], (1, 1, 1, 0)]).reversed()
 
 n = 255
 minTrunk = 0.35
@@ -400,7 +400,7 @@ for ii, (index, row) in enumerate(df.iterrows()):
         if not np.isnan(bp_rp[0]) or not np.isnan(absmag[0]):
             for c_num in range(6):
             
-                cont_color = color_dict['blue'] + '{:d}'.format(99 - 10*c_num)
+                cont_color = color_dict['mustard'] + '{:d}'.format(99 - 10*c_num)
                 top_ellipse = arc_patch((bp_rp[0],absmag[0]), 
                                               bp_rp[1]*(c_num+1)/2, 
                                               absmag[2]*(c_num+1)/2, 
@@ -446,7 +446,7 @@ for ii, (index, row) in enumerate(df.iterrows()):
         if not np.isnan(bp_rp[0]) or not np.isnan(absmag[0]):
             for c_num in range(6):
             
-                cont_color = color_dict['blue'] + '{:d}'.format(99 - 10*c_num)
+                cont_color = color_dict['mustard'] + '{:d}'.format(99 - 10*c_num)
                 top_ellipse = arc_patch((bp_rp[0],absmag[0]), 
                                               bp_rp[1]*(c_num+1)/2, 
                                               absmag[2]*(c_num+1)/2, 
