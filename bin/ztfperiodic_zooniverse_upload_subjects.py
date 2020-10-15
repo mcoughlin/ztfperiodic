@@ -395,7 +395,8 @@ for ii, (index, row) in enumerate(df.iterrows()):
         ax2.imshow(counts.T, interpolation='nearest', origin='lower', 
                   cmap = trunc_cmap, norm=LogNorm(), 
                   extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], 
-                  aspect=xextent/yextent)        
+                  aspect=xextent/yextent,
+                  zorder=-100)        
  
         if not np.isnan(bp_rp[0]) or not np.isnan(absmag[0]):
             for c_num in range(6):
