@@ -19,6 +19,7 @@ matplotlib.rc('font', **font)
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import LogNorm, Normalize, LinearSegmentedColormap
+from matplotlib.ticker import MultipleLocator
 
 import astropy
 from astropy.table import Table, vstack
@@ -475,6 +476,14 @@ for ii, (index, row) in enumerate(df.iterrows()):
         ax2.set_xlim([-1,5.0])
         ax2.set_ylim([-5,18])
         ax2.invert_yaxis()
+    	ax2.set_yticklabels([])
+    	ax2.set_xticklabels([])
+    	ax2.tick_params(which="both", top=True, right=True)
+    	ax2.yaxis.set_major_locator(MultipleLocator(4))
+    	ax2.yaxis.set_minor_locator(MultipleLocator(2))
+    	ax2.xaxis.set_major_locator(MultipleLocator(1))
+    	ax2.xaxis.set_minor_locator(MultipleLocator(0.5))
+        
 		ax2.set_ylabel(r'Luminosity $\;\longrightarrow$', fontsize=16)
 		ax2.set_xlabel(r'$\;\longleftarrow$ Temperature', fontsize=16)
 
@@ -546,6 +555,13 @@ for ii, (index, row) in enumerate(df.iterrows()):
         ax.set_xlim([-1,5.0])
         ax.set_ylim([-5,18])
         ax.invert_yaxis()
+    	ax.set_yticklabels([])
+    	ax.set_xticklabels([])
+    	ax.tick_params(which="both", top=True, right=True)
+    	ax.yaxis.set_major_locator(MultipleLocator(4))
+    	ax.yaxis.set_minor_locator(MultipleLocator(2))
+    	ax.xaxis.set_major_locator(MultipleLocator(1))
+    	ax.xaxis.set_minor_locator(MultipleLocator(0.5))
 		ax.set_ylabel(r'Luminosity $\;\longrightarrow$', fontsize=16)
 		ax.set_xlabel(r'$\;\longleftarrow$ Temperature', fontsize=16)
 
