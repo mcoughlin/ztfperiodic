@@ -226,7 +226,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
     tmax = Time('2020-01-01T00:00:00', format='isot', scale='utc').jd
 
     #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20191101": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
-    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20200401": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } } }
+    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20200401": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_g_mean_mag_err': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } } }
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
@@ -313,6 +313,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
                 lightcurves[objid]["parallax"] = np.nan
             else:     
                 dat2 = data2[ii]
+
                 if not "parallax" in dat2:
                     parallax, parallaxerr = None, None
                 else:
@@ -332,19 +333,29 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
                 else:
                     rp_mag = dat2["phot_rp_mean_mag"]
 
-                if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None)):
+                if not "phot_bp_mean_flux_over_error" in dat2:
+                    bp_mean_flux_over_error = None
+                else:
+                    bp_mean_flux_over_error = dat2["phot_bp_mean_flux_over_error"]
+
+                if not "phot_rp_mean_flux_over_error" in dat2:
+                    rp_mean_flux_over_error = None
+                else:
+                    rp_mean_flux_over_error = dat2["phot_rp_mean_flux_over_error"]
+
+                if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None) or (rp_mean_flux_over_error is None) or (rp_mean_flux_over_error is None)):
                     lightcurves[objid]["absmag"] = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
-                    lightcurves[objid]["bp_rp"] = bp_mag-rp_mag
+                    lightcurves[objid]["bp_rp"] = [bp_mag-rp_mag, 2.5/np.log(10) * np.hypot(1/bp_mean_flux_over_error, 1/rp_mean_flux_over_error)] 
                     lightcurves[objid]["parallax"] = parallax    
 
             if not "absmag" in lightcurves[objid]:
                 lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
-                lightcurves[objid]["bp_rp"] = np.nan
+                lightcurves[objid]["bp_rp"] = [np.nan, np.nan]
                 lightcurves[objid]["parallax"] = np.nan
     else:
         for objid in objids:
             lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
-            lightcurves[objid]["bp_rp"] = np.nan
+            lightcurves[objid]["bp_rp"] = [np.nan, np.nan]
             lightcurves[objid]["parallax"] = np.nan
 
     # storage for outputdata
@@ -610,7 +621,8 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
         nlightcurves = 1
 
         radius = 5
-        qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": {'test': [np.median(ra),np.median(dec)]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'ra': 1, 'dec': 1}"} } }}
+        qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": {'test': [np.median(ra),np.median(dec)]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"} } }}
+
         r = database_query(kow, qu, nquery = 10)
 
         coords = SkyCoord(ra=np.median(ra)*u.degree, 
@@ -648,9 +660,19 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
             else:
                 rp_mag = dat2["phot_rp_mean_mag"]
 
-            if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None)):
+            if not "phot_bp_mean_flux_over_error" in dat2:
+                bp_mean_flux_over_error = None
+            else:
+                bp_mean_flux_over_error = dat2["phot_bp_mean_flux_over_error"]
+
+            if not "phot_rp_mean_flux_over_error" in dat2:
+                rp_mean_flux_over_error = None
+            else:
+                rp_mean_flux_over_error = dat2["phot_rp_mean_flux_over_error"]
+
+            if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None) or (rp_mean_flux_over_error is None) or (rp_mean_flux_over_error is None)):
                 absmag = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
-                bp_rp = bp_mag-rp_mag
+                bp_rp = [bp_mag-rp_mag, 2.5/np.log(10) * np.hypot(1/bp_mean_flux_over_error, 1/rp_mean_flux_over_error)]
 
         for jj in range(nlightcurves):
             coordinate=(np.median(ra),np.median(dec))
@@ -1508,7 +1530,8 @@ def get_kowalski_features_objids(objids, kow, featuresetname='f',
     end = time.time()
     loadtime = end - start
 
-    print('Loaded %d features in %.5f seconds' % (len(objids), loadtime))
+    if len(objids) > 1:
+        print('Loaded %d features in %.5f seconds' % (len(objids), loadtime))
 
     return df_features["ztf_id"], df_features[featuresetnames]
 

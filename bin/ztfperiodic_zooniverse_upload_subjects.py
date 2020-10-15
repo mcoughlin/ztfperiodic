@@ -18,6 +18,7 @@ font = {'size'   : 22}
 matplotlib.rc('font', **font)
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import matplotlib.patches as patches
 from matplotlib.colors import LogNorm, Normalize, LinearSegmentedColormap
 from matplotlib.ticker import MultipleLocator
 
@@ -58,7 +59,7 @@ def arc_patch(xy, width, height, theta1 = 0, theta2 = 180, resolution=50,
     points = np.vstack((width*np.cos(theta)  + xy[0], 
                         height*np.sin(theta) + xy[1]))
     # build the polygon and add it to the axes
-    poly = mpatches.Polygon(points.T, closed=True, **kwargs)
+    poly = patches.Polygon(points.T, closed=True, **kwargs)
 
     return poly
 
@@ -220,6 +221,7 @@ bands = {1: 'g', 2: 'r', 3: 'i'}
 
 if opts.doSubjectSet:
    image_list, metadata_list, subject_set_name = [], [], intersectionType 
+   subject_set_name = "labeling_guide_2"
 
 objfile = os.path.join(plotDir, 'objids.dat')
 objfid = open(objfile, 'w')
@@ -307,9 +309,9 @@ for ii, (index, row) in enumerate(df.iterrows()):
                 if not lc["fid"][0] == fid: continue
                 idx = np.where(lc["fid"][0] == fids)[0]
 
-                t0 = lc["hjd"] - Time('2018-01-01T00:00:00', 
+                tt = lc["hjd"] - Time('2018-01-01T00:00:00',
                                       format='isot', scale='utc').jd
-                for x, y, yerr in zip(lc["hjd"], lc["mag"], lc["magerr"]):
+                for x, y, yerr in zip(tt, lc["mag"], lc["magerr"]):
                     data_single = {"x": x, "y": np.median(lc["mag"])-y,
                                    "yerr": yerr}
                     seriesData.append(data_single)
@@ -418,56 +420,55 @@ for ii, (index, row) in enumerate(df.iterrows()):
         # fig.savefig(pngfile_HR, bbox_inches='tight')
         # plt.close()
 
-        bp_rp_unc = 0.15
         plt.axes(ax2)
         hist2 = ax2.hist2d(bprpWD, absmagWD, bins=250, 
                            zorder=-1, norm=LogNorm(),
                            cmap=density_cmap)
  
-        if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
-        	right_ellipse_32 = arc_patch((bp_rp,absmag[0]), 
-                                         bp_rp_unc*3.1, 
-                                         absmag[1]*1.05, 
+        if not np.isnan(bp_rp[0]) or not np.isnan(absmag[0]):
+            right_ellipse_32 = arc_patch((bp_rp[0],absmag[0]), 
+                                          bp_rp[1]*3.1, 
+                                          absmag[1]*1.05, 
+                                          color = color_dict['blue'])
+            ax2.add_artist(right_ellipse_32)
+            left_ellipse_32 = arc_patch((bp_rp[0],absmag[0]), 
+                                         bp_rp[1]*3.1, 
+                                         absmag[2]*1.05,
+                                         theta1 = 180, theta2 = 360, 
                                          color = color_dict['blue'])
-        	ax2.add_artist(right_ellipse_32)
-        	left_ellipse_32 = arc_patch((bp_rp,absmag[0]), 
-                                        bp_rp_unc*3.1, 
-                                        absmag[2]*1.05,
-                                        theta1 = 180, theta2 = 360, 
-                                        color = color_dict['blue'])
             ax2.add_artist(left_ellipse_32)
 
-        	right_ellipse_3 = arc_patch((bp_rp,absmag[0]), 
-                                         bp_rp_unc*3, 
+            right_ellipse_3 = arc_patch((bp_rp[0],absmag[0]), 
+                                         bp_rp[1]*3, 
                                          absmag[1]*3, 
                                          color = color_dict['blue'] + '40')
-        	ax2.add_artist(right_ellipse_3)
-        	left_ellipse_3 = arc_patch((bp_rp,absmag[0]), 
-                                        bp_rp_unc*3, 
+            ax2.add_artist(right_ellipse_3)
+            left_ellipse_3 = arc_patch((bp_rp[0],absmag[0]), 
+                                        bp_rp[1]*3, 
                                         absmag[2]*3,
                                         theta1 = 180, theta2 = 360, 
                                         color = color_dict['blue'] + '40')
             ax2.add_artist(left_ellipse_3)
 
-        	right_ellipse_2 = arc_patch((bp_rp,absmag[0]), 
-                                         bp_rp_unc*2, 
+            right_ellipse_2 = arc_patch((bp_rp[0],absmag[0]), 
+                                         bp_rp[1]*2, 
                                          absmag[1]*2, 
                                          color = color_dict['blue'] + '60')
-        	ax2.add_artist(right_ellipse_2)
-        	left_ellipse_2 = arc_patch((bp_rp,absmag[0]), 
-                                        bp_rp_unc*2, 
+            ax2.add_artist(right_ellipse_2)
+            left_ellipse_2 = arc_patch((bp_rp[0],absmag[0]), 
+                                        bp_rp[1]*2, 
                                         absmag[2]*2,
                                         theta1 = 180, theta2 = 360, 
                                         color = color_dict['blue'] + '60')
             ax2.add_artist(left_ellipse_2)
 
-        	right_ellipse_1 = arc_patch((bp_rp,absmag[0]), 
-                                         bp_rp_unc*1, 
+            right_ellipse_1 = arc_patch((bp_rp[0],absmag[0]), 
+                                         bp_rp[1]*1, 
                                          absmag[1]*1, 
                                          color = color_dict['blue'] + '90')
-        	ax2.add_artist(right_ellipse_1)
-        	left_ellipse_1 = arc_patch((bp_rp,absmag[0]), 
-                                        bp_rp_unc*1, 
+            ax2.add_artist(right_ellipse_1)
+            left_ellipse_1 = arc_patch((bp_rp[0],absmag[0]), 
+                                        bp_rp[1]*1, 
                                         absmag[2]*1,
                                         theta1 = 180, theta2 = 360, 
                                         color = color_dict['blue'] + '90')
@@ -476,16 +477,16 @@ for ii, (index, row) in enumerate(df.iterrows()):
         ax2.set_xlim([-1,5.0])
         ax2.set_ylim([-5,18])
         ax2.invert_yaxis()
-    	ax2.set_yticklabels([])
-    	ax2.set_xticklabels([])
-    	ax2.tick_params(which="both", top=True, right=True)
-    	ax2.yaxis.set_major_locator(MultipleLocator(4))
-    	ax2.yaxis.set_minor_locator(MultipleLocator(2))
-    	ax2.xaxis.set_major_locator(MultipleLocator(1))
-    	ax2.xaxis.set_minor_locator(MultipleLocator(0.5))
+        ax2.set_yticklabels([])
+        ax2.set_xticklabels([])
+        ax2.tick_params(which="both", top=True, right=True)
+        ax2.yaxis.set_major_locator(MultipleLocator(4))
+        ax2.yaxis.set_minor_locator(MultipleLocator(2))
+        ax2.xaxis.set_major_locator(MultipleLocator(1))
+        ax2.xaxis.set_minor_locator(MultipleLocator(0.5))
         
-		ax2.set_ylabel(r'Luminosity $\;\longrightarrow$', fontsize=16)
-		ax2.set_xlabel(r'$\;\longleftarrow$ Temperature', fontsize=16)
+        ax2.set_ylabel(r'Luminosity $\;\longrightarrow$', fontsize=16)
+        ax2.set_xlabel(r'$\;\longleftarrow$ Temperature', fontsize=16)
 
         plt.tight_layout()
         pngfile = os.path.join(plotDir,'%d.png' % objid)
@@ -495,81 +496,77 @@ for ii, (index, row) in enumerate(df.iterrows()):
         fig = plt.figure(figsize=(10,10))
         ax = plt.gca()
 
-
-
-
         asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
         hist2 = ax.hist2d(bprpWD, absmagWD, bins=250, 
                            zorder=-1, norm=LogNorm(),
                            cmap=density_cmap)
  
-        if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
-        	right_ellipse_32 = arc_patch((bp_rp,absmag[0]), 
-                                         bp_rp_unc*3.1, 
-                                         absmag[1]*1.05, 
+        if not np.isnan(bp_rp[0]) or not np.isnan(absmag[0]):
+            right_ellipse_32 = arc_patch((bp_rp[0],absmag[0]),
+                                          bp_rp[1]*3.1,
+                                          absmag[1]*1.05,
+                                          color = color_dict['blue'])
+            ax.add_artist(right_ellipse_32)
+            left_ellipse_32 = arc_patch((bp_rp[0],absmag[0]),
+                                         bp_rp[1]*3.1,
+                                         absmag[2]*1.05,
+                                         theta1 = 180, theta2 = 360,
                                          color = color_dict['blue'])
-        	ax.add_artist(right_ellipse_32)
-        	left_ellipse_32 = arc_patch((bp_rp,absmag[0]), 
-                                        bp_rp_unc*3.1, 
-                                        absmag[2]*1.05,
-                                        theta1 = 180, theta2 = 360, 
-                                        color = color_dict['blue'])
             ax.add_artist(left_ellipse_32)
 
-        	right_ellipse_3 = arc_patch((bp_rp,absmag[0]), 
-                                         bp_rp_unc*3, 
-                                         absmag[1]*3, 
+            right_ellipse_3 = arc_patch((bp_rp[0],absmag[0]),
+                                         bp_rp[1]*3,
+                                         absmag[1]*3,
                                          color = color_dict['blue'] + '40')
-        	ax.add_artist(right_ellipse_3)
-        	left_ellipse_3 = arc_patch((bp_rp,absmag[0]), 
-                                        bp_rp_unc*3, 
+            ax.add_artist(right_ellipse_3)
+            left_ellipse_3 = arc_patch((bp_rp[0],absmag[0]),
+                                        bp_rp[1]*3,
                                         absmag[2]*3,
-                                        theta1 = 180, theta2 = 360, 
+                                        theta1 = 180, theta2 = 360,
                                         color = color_dict['blue'] + '40')
             ax.add_artist(left_ellipse_3)
 
-        	right_ellipse_2 = arc_patch((bp_rp,absmag[0]), 
-                                         bp_rp_unc*2, 
-                                         absmag[1]*2, 
+            right_ellipse_2 = arc_patch((bp_rp[0],absmag[0]),
+                                         bp_rp[1]*2,
+                                         absmag[1]*2,
                                          color = color_dict['blue'] + '60')
-        	ax.add_artist(right_ellipse_2)
-        	left_ellipse_2 = arc_patch((bp_rp,absmag[0]), 
-                                        bp_rp_unc*2, 
+            ax.add_artist(right_ellipse_2)
+            left_ellipse_2 = arc_patch((bp_rp[0],absmag[0]),
+                                        bp_rp[1]*2,
                                         absmag[2]*2,
-                                        theta1 = 180, theta2 = 360, 
+                                        theta1 = 180, theta2 = 360,
                                         color = color_dict['blue'] + '60')
             ax.add_artist(left_ellipse_2)
 
-        	right_ellipse_1 = arc_patch((bp_rp,absmag[0]), 
-                                         bp_rp_unc*1, 
-                                         absmag[1]*1, 
+            right_ellipse_1 = arc_patch((bp_rp[0],absmag[0]),
+                                         bp_rp[1]*1,
+                                         absmag[1]*1,
                                          color = color_dict['blue'] + '90')
-        	ax.add_artist(right_ellipse_1)
-        	left_ellipse_1 = arc_patch((bp_rp,absmag[0]), 
-                                        bp_rp_unc*1, 
+            ax.add_artist(right_ellipse_1)
+            left_ellipse_1 = arc_patch((bp_rp[0],absmag[0]),
+                                        bp_rp[1]*1,
                                         absmag[2]*1,
-                                        theta1 = 180, theta2 = 360, 
+                                        theta1 = 180, theta2 = 360,
                                         color = color_dict['blue'] + '90')
             ax.add_artist(left_ellipse_1)
 
         ax.set_xlim([-1,5.0])
         ax.set_ylim([-5,18])
         ax.invert_yaxis()
-    	ax.set_yticklabels([])
-    	ax.set_xticklabels([])
-    	ax.tick_params(which="both", top=True, right=True)
-    	ax.yaxis.set_major_locator(MultipleLocator(4))
-    	ax.yaxis.set_minor_locator(MultipleLocator(2))
-    	ax.xaxis.set_major_locator(MultipleLocator(1))
-    	ax.xaxis.set_minor_locator(MultipleLocator(0.5))
-		ax.set_ylabel(r'Luminosity $\;\longrightarrow$', fontsize=16)
-		ax.set_xlabel(r'$\;\longleftarrow$ Temperature', fontsize=16)
+        ax.set_yticklabels([])
+        ax.set_xticklabels([])
+        ax.tick_params(which="both", top=True, right=True)
+        ax.yaxis.set_major_locator(MultipleLocator(4))
+        ax.yaxis.set_minor_locator(MultipleLocator(2))
+        ax.xaxis.set_major_locator(MultipleLocator(1))
+        ax.xaxis.set_minor_locator(MultipleLocator(0.5))
+        ax.set_ylabel(r'Luminosity $\;\longrightarrow$', fontsize=16)
+        ax.set_xlabel(r'$\;\longleftarrow$ Temperature', fontsize=16)
 
         plt.tight_layout()
         pngfile_HR = os.path.join(plotDir,'%d_HR.png' % objid)
         fig.savefig(pngfile_HR, bbox_inches='tight')
         plt.close()
-
 
     objfid.write('%d %.10f %.10f %.10f\n' % (index, ra, dec, period))
     print('%d %.10f %.10f %.10f' % (index, ra, dec, period))
