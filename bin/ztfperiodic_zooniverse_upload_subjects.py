@@ -52,10 +52,10 @@ density_cmap = LinearSegmentedColormap.from_list(
         "density_cmap", [color_dict['mustard'], (1, 1, 1, 0)]).reversed()
 
 n = 255
-minTrunk = 0.3
+minTrunk = 0.35
 maxTrunk = 1.0
 trunc_cmap = LinearSegmentedColormap.from_list(
-         'trunc(density_cmap,0.3,1)',
+         'trunc(density_cmap,0.35,1)',
          density_cmap(np.linspace(minTrunk, maxTrunk, n)))
 
 def arc_patch(xy, width, height, theta1 = 0, theta2 = 180, resolution=50, 
@@ -144,11 +144,11 @@ with h5py.File(WDcat, 'r') as f:
     parallax = f['parallax'][:]
 absmagWD=gmag+5*(np.log10(np.abs(parallax))-2)
 
-gaiaData = fits.getdata(inputDir + "1537388362145O-result.fits")
-gaiaData = gaiaData[np.where(gaiaData["parallax"] > 0)]
-gaiaDist = 1/(gaiaData["parallax"][np.where(gaiaData["parallax"])]/1000)
-absoluteGBand = gaiaData["phot_g_mean_mag"] - (5 * np.log10(gaiaDist/10))
-BminusR = np.asarray(gaiaData["phot_bp_mean_mag"]-gaiaData["phot_rp_mean_mag"])
+HRcat = os.path.join(inputDir,'GaiaHR.h5')
+with h5py.File(HRcat,'r') as f: 
+    counts = h5f['counts'][:]
+    xedges = h5f['xedges'][:]
+    yedges = h5f['yedges'][:]
 
 kow = []
 nquery = 10
@@ -389,9 +389,13 @@ for ii, (index, row) in enumerate(df.iterrows()):
         plt.title("Period = %.3f days"%period, fontsize = fs)
 
         plt.axes(ax2)
-        hist2 = ax2.hist2d(BminusR, absoluteGBand, bins=500, 
-                           zorder=-100, norm=LogNorm(),
-                           cmap=trunc_cmap)
+
+        xextent = xedges[-1] - xedges[0]
+        yextent = yedges[-1] - yedges[0]
+        ax2.imshow(counts.T, interpolation='nearest', origin='lower', 
+                  cmap = trunc_cmap, norm=LogNorm(), 
+                  extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], 
+                  aspect=xextent/yextent)        
  
         if not np.isnan(bp_rp[0]) or not np.isnan(absmag[0]):
             for c_num in range(6):
@@ -434,9 +438,10 @@ for ii, (index, row) in enumerate(df.iterrows()):
         fig = plt.figure(figsize=(10,10))
         ax = plt.gca()
 
-        hist2 = ax2.hist2d(BminusR, absoluteGBand, bins=500, 
-                           zorder=-100, norm=LogNorm(),
-                           cmap=trunc_cmap)
+        ax.imshow(counts.T, interpolation='nearest', origin='lower', 
+                  cmap = trunc_cmap, norm=LogNorm(), 
+                  extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]], 
+                  aspect=xextent/yextent)        
  
         if not np.isnan(bp_rp[0]) or not np.isnan(absmag[0]):
             for c_num in range(6):
