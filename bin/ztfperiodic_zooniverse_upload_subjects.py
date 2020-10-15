@@ -146,9 +146,9 @@ absmagWD=gmag+5*(np.log10(np.abs(parallax))-2)
 
 HRcat = os.path.join(inputDir,'GaiaHR.h5')
 with h5py.File(HRcat,'r') as f: 
-    counts = h5f['counts'][:]
-    xedges = h5f['xedges'][:]
-    yedges = h5f['yedges'][:]
+    counts = f['counts'][:]
+    xedges = f['xedges'][:]
+    yedges = f['yedges'][:]
 
 kow = []
 nquery = 10
@@ -306,10 +306,10 @@ for ii, (index, row) in enumerate(df.iterrows()):
         data_json["data"]["barCharts"] = {}
         data_json["data"]["barCharts"]["period"] = {}
         data_json["data"]["barCharts"]["period"]["data"] = []
-        data_json["data"]["barCharts"]["period"]["chartOptions"] = {"xAxisLabel": "Period", "yAxisLabel": ""}
+        data_json["data"]["barCharts"]["period"]["chartOptions"] = {"xAxisLabel": "log Period", "yAxisLabel": "", "yAxisDomain": [-2.5, 3]}
         data_json["data"]["barCharts"]["amplitude"] = {}
         data_json["data"]["barCharts"]["amplitude"]["data"] = []
-        data_json["data"]["barCharts"]["amplitude"]["chartOptions"] = {"xAxisLabel": "Amplitude", "yAxisLabel": ""}        
+        data_json["data"]["barCharts"]["amplitude"]["chartOptions"] = {"xAxisLabel": "Amplitude", "yAxisLabel": "", "yAxisDomain": [0, 3]}
 
         periods, amplitudes = [], []
         for jj, (fid, color, symbol) in enumerate(zip(fids, colors, symbols)):
