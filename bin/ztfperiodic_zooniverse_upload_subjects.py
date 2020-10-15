@@ -18,8 +18,8 @@ font = {'size'   : 22}
 matplotlib.rc('font', **font)
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-from matplotlib.colors import LogNorm
-from matplotlib.colors import Normalize
+from matplotlib.colors import LogNorm, Normalize, LinearSegmentedColormap
+from matplotlib.ticker import MultipleLocator
 
 import astropy
 from astropy.table import Table, vstack
@@ -39,6 +39,30 @@ from ztfperiodic.utils import get_kowalski_objids
 from ztfperiodic.utils import gaia_query
 from ztfperiodic.utils import combine_lcs
 from ztfperiodic.zooniverse import ZooProject
+
+
+# HR plot options
+color_dict = {'blue': '#217CA3',
+              'mustard': '#E29930',
+              'asphalt': '#32384D',
+              'shawdow': '#211F30'}
+
+density_cmap = LinearSegmentedColormap.from_list(
+        "density_cmap", [color_dict['mustard'], (1, 1, 1, 0)])
+
+def arc_patch(xy, width, height, theta1 = 0, theta2 = 180, resolution=50, 
+              **kwargs):
+
+    # generate the points
+    theta = np.linspace(np.radians(theta1), np.radians(theta2), resolution)
+    points = np.vstack((width*np.cos(theta)  + xy[0], 
+                        height*np.sin(theta) + xy[1]))
+    # build the polygon and add it to the axes
+    poly = mpatches.Polygon(points.T, closed=True, **kwargs)
+
+    return poly
+
+
 
 try:
     from penquins import Kowalski
@@ -349,22 +373,119 @@ for ii, (index, row) in enumerate(df.iterrows()):
         ax1.invert_yaxis()
         plt.title("Period = %.3f days"%period, fontsize = fs)
 
+        # plt.axes(ax2)
+        # asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
+        # hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
+        # if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
+        #     ax2.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
+        #                  c='r',zorder=1,fmt='o')
+        # ax2.set_xlim([-1,4.0])
+        # ax2.set_ylim([-5,18])
+        # ax2.invert_yaxis()
+        # cbar = fig.colorbar(hist2[3],ax=ax2)
+        # cbar.set_label('Object Count')
+        # ax2.set_xlabel('Gaia BP - RP')
+        # ax2.set_ylabel('Gaia $M_G$')
+        #
+        # if (not d_pc is None) and (not gofAL is None):
+        #     ax2.set_title("d = %d [pc], gof = %.1f"%(d_pc, gofAL), fontsize = fs)
+        #
+        # plt.tight_layout()
+        # pngfile = os.path.join(plotDir,'%d.png' % objid)
+        # fig.savefig(pngfile, bbox_inches='tight')
+        # plt.close()
+        #
+        # fig = plt.figure(figsize=(10,10))
+        # ax = plt.gca()
+        # asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
+        # hist2 = ax.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
+        # if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
+        #     ax.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
+        #                 c='r',zorder=1,fmt='o')
+        # ax.set_xlim([-1,4.0])
+        # ax.set_ylim([-5,18])
+        # ax.invert_yaxis()
+        # cbar = fig.colorbar(hist2[3],ax=ax)
+        # cbar.set_label('Object Count')
+        # ax.set_xlabel('Gaia BP - RP')
+        # ax.set_ylabel('Gaia $M_G$')
+        #
+        # if (not d_pc is None) and (not gofAL is None):
+        #     ax.set_title("d = %d [pc], gof = %.1f"%(d_pc, gofAL), fontsize = fs)
+        #
+        # plt.tight_layout()
+        # pngfile_HR = os.path.join(plotDir,'%d_HR.png' % objid)
+        # fig.savefig(pngfile_HR, bbox_inches='tight')
+        # plt.close()
+
+        bp_rp_unc = 0.15
         plt.axes(ax2)
-        asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
-        hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
+        hist2 = ax2.hist2d(bprpWD, absmagWD, bins=250, 
+                           zorder=-1, norm=LogNorm(),
+                           cmap=density_cmap)
+ 
         if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
-            ax2.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
-                         c='r',zorder=1,fmt='o')
-        ax2.set_xlim([-1,4.0])
+        	right_ellipse_32 = arc_patch((bp_rp,absmag[0]), 
+                                         bp_rp_unc*3.1, 
+                                         absmag[1]*1.05, 
+                                         color = color_dict['blue'])
+        	ax2.add_artist(right_ellipse_32)
+        	left_ellipse_32 = arc_patch((bp_rp,absmag[0]), 
+                                        bp_rp_unc*3.1, 
+                                        absmag[2]*1.05,
+                                        theta1 = 180, theta2 = 360, 
+                                        color = color_dict['blue'])
+            ax2.add_artist(left_ellipse_32)
+
+        	right_ellipse_3 = arc_patch((bp_rp,absmag[0]), 
+                                         bp_rp_unc*3, 
+                                         absmag[1]*3, 
+                                         color = color_dict['blue'] + '40')
+        	ax2.add_artist(right_ellipse_3)
+        	left_ellipse_3 = arc_patch((bp_rp,absmag[0]), 
+                                        bp_rp_unc*3, 
+                                        absmag[2]*3,
+                                        theta1 = 180, theta2 = 360, 
+                                        color = color_dict['blue'] + '40')
+            ax2.add_artist(left_ellipse_3)
+
+        	right_ellipse_2 = arc_patch((bp_rp,absmag[0]), 
+                                         bp_rp_unc*2, 
+                                         absmag[1]*2, 
+                                         color = color_dict['blue'] + '60')
+        	ax2.add_artist(right_ellipse_2)
+        	left_ellipse_2 = arc_patch((bp_rp,absmag[0]), 
+                                        bp_rp_unc*2, 
+                                        absmag[2]*2,
+                                        theta1 = 180, theta2 = 360, 
+                                        color = color_dict['blue'] + '60')
+            ax2.add_artist(left_ellipse_2)
+
+        	right_ellipse_1 = arc_patch((bp_rp,absmag[0]), 
+                                         bp_rp_unc*1, 
+                                         absmag[1]*1, 
+                                         color = color_dict['blue'] + '90')
+        	ax2.add_artist(right_ellipse_1)
+        	left_ellipse_1 = arc_patch((bp_rp,absmag[0]), 
+                                        bp_rp_unc*1, 
+                                        absmag[2]*1,
+                                        theta1 = 180, theta2 = 360, 
+                                        color = color_dict['blue'] + '90')
+            ax2.add_artist(left_ellipse_1)
+
+        ax2.set_xlim([-1,5.0])
         ax2.set_ylim([-5,18])
         ax2.invert_yaxis()
-        cbar = fig.colorbar(hist2[3],ax=ax2)
-        cbar.set_label('Object Count')
-        ax2.set_xlabel('Gaia BP - RP')
-        ax2.set_ylabel('Gaia $M_G$')
-
-        if (not d_pc is None) and (not gofAL is None):
-            ax2.set_title("d = %d [pc], gof = %.1f"%(d_pc, gofAL), fontsize = fs)
+    	ax2.set_yticklabels([])
+    	ax2.set_xticklabels([])
+    	ax2.tick_params(which="both", top=True, right=True)
+    	ax2.yaxis.set_major_locator(MultipleLocator(4))
+    	ax2.yaxis.set_minor_locator(MultipleLocator(2))
+    	ax2.xaxis.set_major_locator(MultipleLocator(1))
+    	ax2.xaxis.set_minor_locator(MultipleLocator(0.5))
+        
+		ax2.set_ylabel(r'Luminosity $\;\longrightarrow$', fontsize=16)
+		ax2.set_xlabel(r'$\;\longleftarrow$ Temperature', fontsize=16)
 
         plt.tight_layout()
         pngfile = os.path.join(plotDir,'%d.png' % objid)
@@ -373,26 +494,82 @@ for ii, (index, row) in enumerate(df.iterrows()):
 
         fig = plt.figure(figsize=(10,10))
         ax = plt.gca()
+
+
+
+
         asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
-        hist2 = ax.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
+        hist2 = ax.hist2d(bprpWD, absmagWD, bins=250, 
+                           zorder=-1, norm=LogNorm(),
+                           cmap=density_cmap)
+ 
         if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
-            ax.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
-                        c='r',zorder=1,fmt='o')
-        ax.set_xlim([-1,4.0])
+        	right_ellipse_32 = arc_patch((bp_rp,absmag[0]), 
+                                         bp_rp_unc*3.1, 
+                                         absmag[1]*1.05, 
+                                         color = color_dict['blue'])
+        	ax.add_artist(right_ellipse_32)
+        	left_ellipse_32 = arc_patch((bp_rp,absmag[0]), 
+                                        bp_rp_unc*3.1, 
+                                        absmag[2]*1.05,
+                                        theta1 = 180, theta2 = 360, 
+                                        color = color_dict['blue'])
+            ax.add_artist(left_ellipse_32)
+
+        	right_ellipse_3 = arc_patch((bp_rp,absmag[0]), 
+                                         bp_rp_unc*3, 
+                                         absmag[1]*3, 
+                                         color = color_dict['blue'] + '40')
+        	ax.add_artist(right_ellipse_3)
+        	left_ellipse_3 = arc_patch((bp_rp,absmag[0]), 
+                                        bp_rp_unc*3, 
+                                        absmag[2]*3,
+                                        theta1 = 180, theta2 = 360, 
+                                        color = color_dict['blue'] + '40')
+            ax.add_artist(left_ellipse_3)
+
+        	right_ellipse_2 = arc_patch((bp_rp,absmag[0]), 
+                                         bp_rp_unc*2, 
+                                         absmag[1]*2, 
+                                         color = color_dict['blue'] + '60')
+        	ax.add_artist(right_ellipse_2)
+        	left_ellipse_2 = arc_patch((bp_rp,absmag[0]), 
+                                        bp_rp_unc*2, 
+                                        absmag[2]*2,
+                                        theta1 = 180, theta2 = 360, 
+                                        color = color_dict['blue'] + '60')
+            ax.add_artist(left_ellipse_2)
+
+        	right_ellipse_1 = arc_patch((bp_rp,absmag[0]), 
+                                         bp_rp_unc*1, 
+                                         absmag[1]*1, 
+                                         color = color_dict['blue'] + '90')
+        	ax.add_artist(right_ellipse_1)
+        	left_ellipse_1 = arc_patch((bp_rp,absmag[0]), 
+                                        bp_rp_unc*1, 
+                                        absmag[2]*1,
+                                        theta1 = 180, theta2 = 360, 
+                                        color = color_dict['blue'] + '90')
+            ax.add_artist(left_ellipse_1)
+
+        ax.set_xlim([-1,5.0])
         ax.set_ylim([-5,18])
         ax.invert_yaxis()
-        cbar = fig.colorbar(hist2[3],ax=ax)
-        cbar.set_label('Object Count')
-        ax.set_xlabel('Gaia BP - RP')
-        ax.set_ylabel('Gaia $M_G$')
-
-        if (not d_pc is None) and (not gofAL is None):
-            ax.set_title("d = %d [pc], gof = %.1f"%(d_pc, gofAL), fontsize = fs)
+    	ax.set_yticklabels([])
+    	ax.set_xticklabels([])
+    	ax.tick_params(which="both", top=True, right=True)
+    	ax.yaxis.set_major_locator(MultipleLocator(4))
+    	ax.yaxis.set_minor_locator(MultipleLocator(2))
+    	ax.xaxis.set_major_locator(MultipleLocator(1))
+    	ax.xaxis.set_minor_locator(MultipleLocator(0.5))
+		ax.set_ylabel(r'Luminosity $\;\longrightarrow$', fontsize=16)
+		ax.set_xlabel(r'$\;\longleftarrow$ Temperature', fontsize=16)
 
         plt.tight_layout()
         pngfile_HR = os.path.join(plotDir,'%d_HR.png' % objid)
         fig.savefig(pngfile_HR, bbox_inches='tight')
         plt.close()
+
 
     objfid.write('%d %.10f %.10f %.10f\n' % (index, ra, dec, period))
     print('%d %.10f %.10f %.10f' % (index, ra, dec, period))
