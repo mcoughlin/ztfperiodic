@@ -85,5 +85,6 @@ lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline = get_k
 
 ra, dec = coordinates[0][0], coordinates[0][1]
 print(ra, dec)
+print(period)
 
 

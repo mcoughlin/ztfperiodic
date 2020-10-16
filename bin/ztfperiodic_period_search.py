@@ -342,7 +342,7 @@ if opts.lightcurve_source == "Kowalski":
                 amaj, amin, phi = [], [], []
             for line in lines:
                 lineSplit = list(filter(None,line.split(" ")))
-                if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file):
+                if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file) or ("lamost_mira" in catalog_file):
                     ra_hex, dec_hex = convert_to_hex(float(lineSplit[0])*24/360.0,delimiter=''), convert_to_hex(float(lineSplit[1]),delimiter='')
                     if dec_hex[0] == "-":
                         objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
@@ -945,8 +945,8 @@ for algorithm in algorithms:
             ax1.invert_yaxis()
             asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
             hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
-            if not np.isnan(bp_rp) or not np.isnan(absmag[0]):
-                ax2.errorbar(bp_rp,absmag[0],yerr=asymmetric_error,
+            if not np.isnan(bp_rp[0]) or not np.isnan(absmag[0]):
+                ax2.errorbar(bp_rp[0],absmag[0],yerr=asymmetric_error,
                              c='r',zorder=1,fmt='o')
             ax2.set_xlim([-1,4.0])
             ax2.set_ylim([-5,18])
