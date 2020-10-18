@@ -178,7 +178,7 @@ elif ".csv" in catalogPath:
     tab = Table.read(catalogPath, format='csv')
 
     objids = []
-    for row in tab:
+    for tt, row in enumerate(tab):
         lightcurves_all = get_kowalski(row["RA"], row["Dec"], kow,
                                        min_epochs=20)
         nmax, key_to_keep = -1, -1
@@ -190,8 +190,6 @@ elif ".csv" in catalogPath:
     objids = np.array(objids)
     tab["objid"] = objids
     tab.add_index('objid')
-    idx = np.where(objids>0)[0]
-    tab = tab.iloc[idx]
 
     df = tab.to_pandas()
 
@@ -235,12 +233,17 @@ bands = {1: 'g', 2: 'r', 3: 'i'}
 if opts.doSubjectSet:
    image_list, metadata_list, subject_set_name = [], [], intersectionType 
    subject_set_name = "labeling_guide_2"
+   #subject_set_name = "mira_catalog"
+   #subject_set_name = "base"
+   #subject_set_name = "two"
 
 objfile = os.path.join(plotDir, 'objids.dat')
 objfid = open(objfile, 'w')
 for ii, (index, row) in enumerate(df.iterrows()): 
     if np.mod(ii,100) == 0:
         print('Loading %d/%d'%(ii,len(df)))
+
+    if index < 0: continue
 
     if opts.doFakeData:
         nsample = 100
@@ -272,11 +275,14 @@ for ii, (index, row) in enumerate(df.iterrows()):
 
     else:
         objid, features = get_kowalski_features_objids([index], kow)
-        if len(features) == 0:
-            continue
 
-        period = features.period.values[0]
-        amp = features.f1_amp.values[0]
+        try:
+            period = features.period.values[0]
+            amp = features.f1_amp.values[0]
+        except:
+            period = row["p"]
+            amp = -1
+
         lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline = get_kowalski_objids([index], kow)
         ra, dec = coordinates[0][0], coordinates[0][1]
 
@@ -329,15 +335,15 @@ for ii, (index, row) in enumerate(df.iterrows()):
                                    "yerr": yerr}
                     seriesData.append(data_single)
        
-                tmp, features = get_kowalski_features_objids([int(key)], kow)
-                if len(features) == 0:
-                    continue
-
                 if len(lc["fid"]) > nmax:
                     nmax = len(lc["fid"])
-                    period_tmp = features.period.values[0]
-                    #amp_tmp = features.f1_amp.values[0]
                     amp_tmp = np.diff(np.percentile(lc["mag"], (5,95)))[0]
+
+                    tmp, features = get_kowalski_features_objids([int(key)], kow)
+                    if len(features) == 0:
+                        continue
+
+                    period_tmp = features.period.values[0]
 
             if len(seriesData) == 0: continue
 
@@ -362,7 +368,7 @@ for ii, (index, row) in enumerate(df.iterrows()):
             data_json["data"]["barCharts"]["period"]["data"].append(periodOptions)
             data_json["data"]["barCharts"]["amplitude"]["data"].append(amplitudeOptions)
  
-        photFile = os.path.join(jsonDir,'%d.json' % objid)
+        photFile = os.path.join(jsonDir,'%d.json' % index)
         with open(photFile, 'w', encoding='utf-8') as f:
             json.dump(data_json, f, ensure_ascii=False, indent=4)
 
@@ -432,7 +438,7 @@ for ii, (index, row) in enumerate(df.iterrows()):
         ax2.set_xlabel(r'$\;\longleftarrow$ Temperature', fontsize=30)
 
         plt.tight_layout()
-        pngfile = os.path.join(plotDir,'%d.png' % objid)
+        pngfile = os.path.join(plotDir,'%d.png' % index)
         fig.savefig(pngfile, bbox_inches='tight')
         plt.close()
 
@@ -477,7 +483,7 @@ for ii, (index, row) in enumerate(df.iterrows()):
         ax.set_xlabel(r'$\;\longleftarrow$ Temperature', fontsize=30)
 
         plt.tight_layout()
-        pngfile_HR = os.path.join(plotDir,'%d_HR.png' % objid)
+        pngfile_HR = os.path.join(plotDir,'%d_HR.png' % index)
         fig.savefig(pngfile_HR, bbox_inches='tight')
         plt.close()
 
@@ -490,7 +496,7 @@ for ii, (index, row) in enumerate(df.iterrows()):
                            "application_json": photFile,
                            "image_png_2": pngfile_HR})
 
-        mdict = {'candidate': int(objid),
+        mdict = {'candidate': int(index),
                  'ra': ra, 'dec': dec, 
                  'period': period}
         metadata_list.append(mdict)

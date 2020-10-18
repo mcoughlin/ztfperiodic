@@ -11,7 +11,7 @@ import copy
 from scipy.stats import anderson, shapiro
 import scipy.optimize
 from scipy.optimize import curve_fit
-
+from scipy.signal import sawtooth
 
 def calc_weighted_mean_std(mag,w):
     """ Calculate the weighted mean and std values
@@ -95,7 +95,43 @@ def calc_NormPeaktoPeakamp(mag,err):
     stat /= np.max(mag-err) + np.min(mag+err)
     return stat
 
+def make_s(t, *pars):
+    """ Function that returns a sawtooth function for period p
+    input 
+        t: time-series (phase-folded)
+        A: amplitude
+        fi: stretch term for sawtooth
+        width: shape term for sawtooth
+        offset: magnitude off-set 
 
+    output:
+        f: function
+    
+    """
+
+    y1 = pars[0] * sawtooth(t / pars[1], pars[2])
+    y2 = pars[0] * sawtooth(t / pars[4], pars[5])
+
+    return y1+y2+pars[3]
+
+def sawtooth_decomposition(t,y,dy,p):
+
+    N = np.size(y)
+    x = np.mod(t,p)/p
+
+    A_est = np.diff(np.percentile(y, (2.5,97.5)))[0]
+    fi_est_1 = 0.25
+    width_1 = 0.25
+    fi_est_2 = 0.75
+    width_2 = 0.75
+    offset = np.median(y)
+
+    init = np.array([A_est, fi_est_1, width_1, offset, fi_est_2, width_2])
+    popt, pcov = curve_fit(make_s, x, y, init, sigma=dy, maxfev=5000)
+
+    print(make_s(x,*popt))
+
+    return popt
 
 def fourier_decomposition(t,y,dy,p,maxNterms=5,relative_output=True):
 

@@ -309,7 +309,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
         for objid, ii, s in zip(objids, idx, sep):
             if s.arcsec > 1:
                 lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
-                lightcurves[objid]["bp_rp"] = np.nan
+                lightcurves[objid]["bp_rp"] = [np.nan, np.nan]
                 lightcurves[objid]["parallax"] = np.nan
             else:     
                 dat2 = data2[ii]
@@ -628,7 +628,7 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
         coords = SkyCoord(ra=np.median(ra)*u.degree, 
                           dec=np.median(dec)*u.degree, frame='icrs')
 
-        absmag, bp_rp = [np.nan, np.nan, np.nan], np.nan
+        absmag, bp_rp = [np.nan, np.nan, np.nan], [np.nan, np.nan]
         if "data" in r:
             key2 = 'Gaia_DR2'
             data2 = r["data"][key2]
@@ -959,7 +959,7 @@ def get_simulated(ra, dec, min_epochs = 1, name = None, doUsePDot = False):
             lightcurves[objid]["name"] = name
 
         lightcurves[objid]["absmag"] = [np.nan, np.nan, np.nan]
-        lightcurves[objid]["bp_rp"] = np.nan
+        lightcurves[objid]["bp_rp"] = [np.nan, np.nan]
         lightcurves[objid]["parallax"] = np.nan
 
     return lightcurves
@@ -1318,7 +1318,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                 coordinates.append(coordinate)
                 ids.append(objid)
                 absmags.append([np.nan, np.nan, np.nan])
-                bp_rps.append(np.nan)
+                bp_rps.append([np.nan, np.nan])
 
                 ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
                 if dec_hex[0] == "-":
@@ -1851,7 +1851,7 @@ def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
         ids.append(k)
 
         absmags.append([np.nan, np.nan, np.nan])
-        bp_rps.append(np.nan)
+        bp_rps.append([np.nan, np.nan])
 
         ra_hex, dec_hex = convert_to_hex(RA*24/360.0,delimiter=''), convert_to_hex(Dec,delimiter='')
         if dec_hex[0] == "-":

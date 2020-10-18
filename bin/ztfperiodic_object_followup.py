@@ -269,6 +269,8 @@ if opts.lightcurve_source == "Kowalski":
                 pred = classify(classification_algorithm, features.to_numpy(),
                                 modelFile=modelFile)
                 for objid, pr in zip(ids,pred):
+                    if not pr: continue
+                    print(objid, modelName, pr)
                     print("%d %s %.5f" % (objid, modelName, pr))
 
     if len(lightcurves_all.keys()) == 0:
