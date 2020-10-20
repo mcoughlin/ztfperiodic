@@ -16,11 +16,6 @@ font = {'size'   : 22}
 matplotlib.rc('font', **font)
 import matplotlib.pyplot as plt
 
-try:
-    from penquins import Kowalski
-except:
-    print("penquins not installed... need to use matchfiles.")
-
 def parse_commandline():
     """
     Parse the options given on the command-line.
