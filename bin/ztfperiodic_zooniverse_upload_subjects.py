@@ -217,8 +217,9 @@ if opts.doIntersection:
 
 if opts.doIntersection:
     col = df1.columns[0]
-    idx = np.argsort(df1[col])[::-1]
-    idx = np.array(idx).astype(int)[:opts.Nexamples]
+    idx = np.array(np.argsort(df1[col])[::-1])
+    np.random.shuffle(idx)
+    idx = idx.astype(int)[:opts.Nexamples]
 
     idy = df.index.intersection(df1.iloc[idx].index)
     df = df.loc[idy]
@@ -232,7 +233,8 @@ bands = {1: 'g', 2: 'r', 3: 'i'}
 
 if opts.doSubjectSet:
    image_list, metadata_list, subject_set_name = [], [], intersectionType 
-   subject_set_name = "labeling_guide_2"
+   subject_set_name = subject_set_name + "_y_error"
+   #subject_set_name = "labeling_guide_2"
    #subject_set_name = "mira_catalog"
    #subject_set_name = "base"
    #subject_set_name = "two"
@@ -302,7 +304,8 @@ for ii, (index, row) in enumerate(df.iterrows()):
         if Plx > 0 :
             d_pc = 1 / (Plx*1e-3)
 
-    if opts.doLCFile:
+    photFile = os.path.join(jsonDir,'%d.json' % index)
+    if opts.doLCFile and not os.path.isfile(photFile):
         data_json = {}
         data_json["data"] = {}
         data_json["data"]["scatterPlot"] = {}
@@ -332,7 +335,7 @@ for ii, (index, row) in enumerate(df.iterrows()):
                                       format='isot', scale='utc').jd
                 for x, y, yerr in zip(tt, lc["mag"], lc["magerr"]):
                     data_single = {"x": x, "y": np.median(lc["mag"])-y,
-                                   "yerr": yerr}
+                                   "y_error": yerr}
                     seriesData.append(data_single)
        
                 if len(lc["fid"]) > nmax:
@@ -368,11 +371,11 @@ for ii, (index, row) in enumerate(df.iterrows()):
             data_json["data"]["barCharts"]["period"]["data"].append(periodOptions)
             data_json["data"]["barCharts"]["amplitude"]["data"].append(amplitudeOptions)
  
-        photFile = os.path.join(jsonDir,'%d.json' % index)
         with open(photFile, 'w', encoding='utf-8') as f:
             json.dump(data_json, f, ensure_ascii=False, indent=4)
 
-    if opts.doPlots:
+    pngfile = os.path.join(plotDir,'%d.png' % index)
+    if opts.doPlots and not os.path.isfile(pngfile):
         fig, (ax1, ax2) = plt.subplots(1, 2,figsize=(20,10))
         plt.axes(ax1)
         bands_count = np.zeros((len(fids),1))
@@ -442,6 +445,9 @@ for ii, (index, row) in enumerate(df.iterrows()):
         fig.savefig(pngfile, bbox_inches='tight')
         plt.close()
 
+    pngfile_HR = os.path.join(plotDir,'%d_HR.png' % index)
+    if opts.doPlots and not os.path.isfile(pngfile_HR):
+
         fig = plt.figure(figsize=(10,10))
         ax = plt.gca()
 
@@ -483,7 +489,6 @@ for ii, (index, row) in enumerate(df.iterrows()):
         ax.set_xlabel(r'$\;\longleftarrow$ Temperature', fontsize=30)
 
         plt.tight_layout()
-        pngfile_HR = os.path.join(plotDir,'%d_HR.png' % index)
         fig.savefig(pngfile_HR, bbox_inches='tight')
         plt.close()
 
