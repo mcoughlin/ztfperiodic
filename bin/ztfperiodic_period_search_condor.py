@@ -47,7 +47,7 @@ def parse_commandline():
 
     parser.add_option("--doVariability",  action="store_true", default=False)
     parser.add_option("--doCutNObs",  action="store_true", default=False)
-    parser.add_option("-n","--NObs",default=500,type=int)
+    parser.add_option("-n","--NObs",default=50,type=int)
 
     parser.add_option("--doUseMatchfileFile",  action="store_true", default=False)
     parser.add_option("--doCrossMatch",  action="store_true", default=False)
@@ -135,7 +135,12 @@ if not os.path.isdir(idsDir):
 if opts.doCutNObs:
     nobsfile = "../input/nobs.dat"
     nobs_data = np.loadtxt(nobsfile)
-    idx = np.where((nobs_data[:,4] >= opts.NObs) | (nobs_data[:,5] >= opts.NObs))[0]
+
+    if opts.doHCOnly:
+        idx = np.where((nobs_data[:,7] >= opts.NObs) | (nobs_data[:,8] >= opts.NObs) | (nobs_data[:,9] >= opts.NObs))[0]
+    else:
+        idx = np.where((nobs_data[:,4] >= opts.NObs) | (nobs_data[:,5] >= opts.NObs) | (nobs_data[:,6] >= opts.NObs))[0]
+
     nobs_data = nobs_data[idx,:]
     fields_list = nobs_data[:,0]
 
@@ -167,10 +172,13 @@ if opts.lightcurve_source == "Kowalski":
         #fields = np.setdiff1d(fields,fields_complete)
 
         #fields = [700]
-        #fields = np.arange(250,882)
-        fields = np.arange(250,300)
+        fields = np.arange(250,882)
+        #fields = np.arange(250,300)
 
         for field in fields:
+            if opts.doCutNObs:
+                if not field in fields_list:
+                    continue
             print('Running field %d' % field)
             for ccd in ccds:
                 for quadrant in quadrants:

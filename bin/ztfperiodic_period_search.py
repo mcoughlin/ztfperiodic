@@ -532,6 +532,7 @@ if opts.lightcurve_source == "Kowalski":
                                 program_ids=program_ids,
                                 min_epochs=min_epochs,
                                 doRemoveHC=doRemoveHC,
+                                doHCOnly=doHCOnly,
                                 doExtinction=doExtinction,
                                 doSigmaClipping=doSigmaClipping,
                                 sigmathresh=sigmathresh,
@@ -688,7 +689,8 @@ for algorithm in algorithms:
     else:
         print('Analyzing %d lightcurves...' % len(lightcurves))
         start_time = time.time()
-        periods_best, significances, pdots = find_periods(algorithm, lightcurves, 
+        periods_best, significances, pdots = find_periods(algorithm,
+                                                          lightcurves, 
                                                           freqs, 
                                                           doGPU=opts.doGPU,
                                                           doCPU=opts.doCPU,

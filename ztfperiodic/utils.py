@@ -438,6 +438,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
 
 def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
                         doRemoveHC=False, doExtinction=False, max_error = 2.0,
+                        doHCOnly=False,
                         doSigmaClipping=False,
                         sigmathresh=5.0,
                         doOutbursting=False,
@@ -461,7 +462,7 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
     data_out = []
     if doParallel:
         from joblib import Parallel, delayed
-        data_out = Parallel(n_jobs=Ncore)(delayed(get_kowalski_objid)(objids_tmp,kow,program_ids=program_ids,min_epochs=min_epochs,doRemoveHC=doRemoveHC,doExtinction=doExtinction,doSigmaClipping=doSigmaClipping,sigmathresh=sigmathresh,doOutbursting=doOutbursting,doPercentile=doPercentile,percmin = percmin, percmax = percmax) for objids_tmp in objids_split)
+        data_out = Parallel(n_jobs=Ncore)(delayed(get_kowalski_objid)(objids_tmp,kow,program_ids=program_ids,min_epochs=min_epochs,doRemoveHC=doRemoveHC,doExtinction=doExtinction,doSigmaClipping=doSigmaClipping,sigmathresh=sigmathresh,doOutbursting=doOutbursting,doPercentile=doPercentile,percmin = percmin, percmax = percmax, doHCOnly=doHCOnly) for objids_tmp in objids_split)
     else:
         for oo in range(Ncatalog):
             if np.mod(oo, 10) == 0:
@@ -471,6 +472,7 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
                                       program_ids=program_ids,
                                       min_epochs=min_epochs,
                                       doRemoveHC=doRemoveHC,
+                                      doHCOnly=doHCOnly,
                                       doExtinction=doExtinction,
                                       doSigmaClipping=doSigmaClipping,
                                       sigmathresh=sigmathresh,
@@ -538,7 +540,6 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
     datas = r["data"]
 
     for ii, data in enumerate(datas):
-
         hjd, mag, magerr, ra, dec, fid = [], [], [], [], [], []
         objid = data["_id"]
         filt = data["filter"]
@@ -589,9 +590,16 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
             ra, decobj = ra[idx], dec[idx]
             fid = fid[idx]
         elif doHCOnly:
-            dt = np.diff(hjd)
-            idx = np.setdiff1d(np.arange(len(hjd)),
-                               np.where(dt >= 30.0*60.0/86400.0)[0])
+            idx = []
+            for ii, t in enumerate(hjd):
+                if ii == 0:
+                    idx.append(ii)
+                else:
+                    dt = hjd[ii] - hjd[idx[-1]]
+                    if dt >= 30.0*60.0/86400.0:
+                        idx.append(ii)
+            idx = np.setdiff1d(np.arange(len(hjd)), idx)
+            if len(idx) == 0: continue
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
             fid = fid[idx]
             ra, dec = ra[idx], dec[idx]

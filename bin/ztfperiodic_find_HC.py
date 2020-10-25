@@ -69,14 +69,28 @@ if not os.path.isfile(filename):
         fid = np.array(obstable["fid"])
         idx = np.argsort(jd)
         jd, fid = jd[idx], fid[idx]
-    
-        dt = np.diff(jd)
-        idx = np.setdiff1d(np.arange(len(jd)),
-                           np.where(dt >= 30.0*60.0/86400.0)[0])
-        jd, fid = jd[idx], fid[idx]
-        idxg = np.where(fid == 1)[0]
-        idxr = np.where(fid == 2)[0]
-        print('%d %.5f %.5f %.5f %d %d %d %d %d'%(field_id, ra, dec, b, len(idx1), len(idx2), len(idx3), len(idxg), len(idxr)), file=outfile, flush=True)
+   
+        idx = []
+        for ii, t in enumerate(jd):
+            if ii == 0:
+                idx.append(ii)
+            else:
+                dt = jd[ii] - jd[idx[-1]]
+                if dt >= 30.0*60.0/86400.0:
+                    idx.append(ii)
+        idx = np.array(idx)
+        jd1, fid1 = jd[idx], fid[idx]
+        idxg1 = np.where(fid1 == 1)[0]
+        idxr1 = np.where(fid1 == 2)[0]
+        idxi1 = np.where(fid1 == 3)[0]
+ 
+        idx = np.setdiff1d(np.arange(len(jd)), idx)
+        jd2, fid2 = jd[idx], fid[idx]
+        idxg2 = np.where(fid2 == 1)[0]
+        idxr2 = np.where(fid2 == 2)[0]
+        idxi2 = np.where(fid2 == 3)[0]
+
+        print('%d %.5f %.5f %.5f %d %d %d %d %d %d %d %d %d'%(field_id, ra, dec, b, len(idx1), len(idx2), len(idx3), len(idxg1), len(idxr1), len(idxi1), len(idxg2), len(idxr2), len(idxi2)), file=outfile, flush=True)
     outfile.close()
 
 data_out = np.loadtxt(filename)
