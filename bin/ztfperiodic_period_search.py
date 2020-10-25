@@ -831,7 +831,7 @@ for algorithm in algorithms:
             data_out[name]["pdot"] = pdot
             data_out[name]["filt"] = filt
             data_out[name]["stats"] = stats[cnt]
-  
+ 
         if opts.doPlots and (significance>sigthresh):
             if opts.doHCOnly and np.isclose(period, 1.0/fmin, rtol=1e-2):
                 print("Vetoing... period is 1/fmax")

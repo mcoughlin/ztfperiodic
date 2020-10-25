@@ -6,8 +6,13 @@
 06/2020
 """
 
-import numpy as np
 import copy
+
+import warnings
+warnings.filterwarnings("ignore")
+
+import numpy as np
+
 from scipy.stats import anderson, shapiro
 import scipy.optimize
 from scipy.optimize import curve_fit

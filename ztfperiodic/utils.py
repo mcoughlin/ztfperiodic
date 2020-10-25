@@ -589,6 +589,7 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
             ra, decobj = ra[idx], dec[idx]
             fid = fid[idx]
+
         elif doHCOnly:
             idx = []
             for ii, t in enumerate(hjd):
@@ -603,6 +604,21 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
             fid = fid[idx]
             ra, dec = ra[idx], dec[idx]
+
+            bins = np.arange(np.floor(np.min(hjd)),
+                             np.ceil(np.max(hjd)))
+            hist, bin_edges = np.histogram(hjd, bins=bins)
+            bins = (bin_edges[1:] + bin_edges[:-1])/2.0
+
+            if len(hist) == 0: continue
+
+            idx3 = np.argmax(hist)
+            bin_start, bin_end = bin_edges[idx3], bin_edges[idx3+1]              
+            idx = np.where((hjd >= bin_start) & (hjd <= bin_end))[0]
+
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            ra, decobj = ra[idx], dec[idx]
+            fid = fid[idx]
 
         if doSigmaClipping or doOutbursting:
             iqr = np.diff(np.percentile(mag,q=[25,75]))[0]

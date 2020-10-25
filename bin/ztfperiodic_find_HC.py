@@ -44,6 +44,7 @@ def ztf_obs(field_id, start_time=None, end_time=None):
     return obstable
 
 field_ids = np.arange(245,880)
+#field_ids = np.arange(487,490)
 filename = '../input/nobs.dat'
 
 tesspath = '../input/%s.tess' % 'ZTF'
@@ -61,9 +62,9 @@ if not os.path.isfile(filename):
         gal = coord.galactic
         b = gal.b.deg
 
-        idx1 = np.where(obstable["ipac_gid"] == 1)[0]
-        idx2 = np.where(obstable["ipac_gid"] == 2)[0]
-        idx3 = np.where(obstable["ipac_gid"] == 3)[0]
+        idxp1 = np.where(obstable["ipac_gid"] == 1)[0]
+        idxp2 = np.where(obstable["ipac_gid"] == 2)[0]
+        idxp3 = np.where(obstable["ipac_gid"] == 3)[0]
     
         jd = np.array(obstable["obsjd"])
         fid = np.array(obstable["fid"])
@@ -85,12 +86,31 @@ if not os.path.isfile(filename):
         idxi1 = np.where(fid1 == 3)[0]
  
         idx = np.setdiff1d(np.arange(len(jd)), idx)
-        jd2, fid2 = jd[idx], fid[idx]
-        idxg2 = np.where(fid2 == 1)[0]
-        idxr2 = np.where(fid2 == 2)[0]
-        idxi2 = np.where(fid2 == 3)[0]
 
-        print('%d %.5f %.5f %.5f %d %d %d %d %d %d %d %d %d'%(field_id, ra, dec, b, len(idx1), len(idx2), len(idx3), len(idxg1), len(idxr1), len(idxi1), len(idxg2), len(idxr2), len(idxi2)), file=outfile, flush=True)
+        jd2, fid2 = jd[idx], fid[idx]
+        data_out = {}
+        for jj in [1,2,3]:
+            idx2 = np.where(fid2 == jj)[0]
+            if len(idx2) < 2:
+                data_out[jj] = []
+                continue
+
+            jj_slice = jd2[idx2]
+            bins = np.arange(np.floor(np.min(jj_slice)),
+                             np.ceil(np.max(jj_slice)))
+            hist, bin_edges = np.histogram(jj_slice, bins=bins)
+            bins = (bin_edges[1:] + bin_edges[:-1])/2.0
+
+            if len(hist) == 0:
+                data_out[jj] = []
+                continue
+
+            idx3 = np.argmax(hist)
+            bin_start, bin_end = bin_edges[idx3], bin_edges[idx3+1]                
+            idx_night = np.where((jj_slice >= bin_start) & (jj_slice <= bin_end))[0]
+            data_out[jj] = jj_slice[idx_night]
+
+        print('%d %.5f %.5f %.5f %d %d %d %d %d %d %d %d %d'%(field_id, ra, dec, b, len(idxp1), len(idxp2), len(idxp3), len(idxg1), len(idxr1), len(idxi1), len(data_out[1]), len(data_out[2]), len(data_out[3])), file=outfile, flush=True)
     outfile.close()
 
 data_out = np.loadtxt(filename)
