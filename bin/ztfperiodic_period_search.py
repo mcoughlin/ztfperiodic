@@ -647,9 +647,9 @@ print('Lightcurve basic statistics took %.2f seconds' % (end_time - start_time))
 
 if baseline<10:
     if opts.doLongPeriod:
-        fmin, fmax = 18, 48
+        fmin, fmax = 2/baseline, 48
     else:
-        fmin, fmax = 18, 1440
+        fmin, fmax = 2/baseline, 1440
 else:
     if opts.doLongPeriod:
         fmin, fmax = 2/baseline, 48

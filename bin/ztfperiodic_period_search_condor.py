@@ -137,9 +137,9 @@ if opts.doCutNObs:
     nobs_data = np.loadtxt(nobsfile)
 
     if opts.doHCOnly:
-        idx = np.where((nobs_data[:,7] >= opts.NObs) | (nobs_data[:,8] >= opts.NObs) | (nobs_data[:,9] >= opts.NObs))[0]
+        idx = np.where((nobs_data[:,10] >= opts.NObs) | (nobs_data[:,11] >= opts.NObs) | (nobs_data[:,12] >= opts.NObs))[0]
     else:
-        idx = np.where((nobs_data[:,4] >= opts.NObs) | (nobs_data[:,5] >= opts.NObs) | (nobs_data[:,6] >= opts.NObs))[0]
+        idx = np.where((nobs_data[:,7] >= opts.NObs) | (nobs_data[:,8] >= opts.NObs) | (nobs_data[:,9] >= opts.NObs))[0]
 
     nobs_data = nobs_data[idx,:]
     fields_list = nobs_data[:,0]
