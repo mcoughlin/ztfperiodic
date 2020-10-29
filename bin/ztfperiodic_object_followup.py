@@ -115,6 +115,9 @@ def parse_commandline():
 
     parser.add_option("--doLCFile",  action="store_true", default=False)
 
+    parser.add_option("--doBrutus",  action="store_true", default=False)
+    parser.add_option("-b","--brutusPath",default="/home/michael.coughlin/ZTF/brutus/data/DATAFILES/")
+
     opts, args = parser.parse_args()
 
     return opts
@@ -136,8 +139,17 @@ classification_algorithm = opts.classification_algorithm
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
-gaia = gaia_query(opts.ra, opts.declination, 5/3600.0)
 
+coord = SkyCoord(ra=opts.ra*u.degree, dec=opts.declination*u.degree, frame='icrs')
+
+# Gaia and PS1 
+ps1 = ps1_query(opts.ra, opts.declination, 5/3600.0)
+if ps1:
+    print(ps1)
+galex = galex_query(opts.ra, opts.declination, 5/3600.0)
+if galex:
+    print(galex)
+gaia = gaia_query(opts.ra, opts.declination, 5/3600.0)
 if gaia:
     Plx = gaia['Plx'].data.data[0] # mas
     e_Plx = gaia['e_Plx'].data.data[0] # mas
@@ -172,8 +184,137 @@ if opts.doOverwrite:
 if not os.path.isdir(path_out_dir):
     os.makedirs(path_out_dir)
 
+if opts.doBrutus:
+    from brutus import filters
+    from brutus import seds
+    from brutus import utils as butils
+    from brutus.fitting import BruteForce
+    from brutus import plotting as bplot
 
-coord = SkyCoord(ra=opts.ra*u.degree, dec=opts.declination*u.degree, frame='icrs')
+    mag = np.array([ps1["gmag"], ps1["rmag"], ps1["imag"], ps1["zmag"], ps1["ymag"], gaia['Gmag'], gaia['BPmag'], gaia['RPmag']])
+    magerr = np.array([ps1["e_gmag"], ps1["e_rmag"], ps1["e_imag"], ps1["e_zmag"], ps1["e_ymag"], gaia['e_Gmag'], gaia['e_BPmag'], gaia['e_RPmag']])
+    magerr = np.sqrt(magerr**2 + 0.02**2)
+
+    mask = np.isfinite(magerr)  # create boolean band mask
+    phot, err = butils.inv_magnitude(mag, magerr)  # convert to flux (in maggies)
+    parallax = gaia['Plx'].data.data[0] # mas
+    parallax_err = gaia['e_Plx'].data.data[0] # mas
+
+    galcoords = np.c_[coord.galactic.l.deg, coord.galactic.b.deg]
+
+    filt = filters.ps[:-2] + filters.gaia
+    # import EEP tracks
+    nnfile = '%s/nn_c3k.h5' % opts.brutusPath
+    mistfile = '%s/MIST_1.2_EEPtrk.h5' % opts.brutusPath
+
+    sedfile = os.path.join(opts.brutusPath,'sed.pkl')
+    if not os.path.isfile(sedfile):
+        sedmaker = seds.SEDmaker(filters=filt, nnfile=nnfile, mistfile=mistfile)
+        with open(sedfile, 'wb') as handle:
+            pickle.dump(sedmaker, handle,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+    with open(sedfile, 'rb') as handle:
+        sedmaker = pickle.load(handle)
+
+    gridfile = '%s/grid_mist_v9_binaries.h5' % opts.brutusPath
+
+    #sedmaker.make_grid(smf_grid=np.arange(0,1.2,0.2),  # no binaries
+    #                   afe_grid=np.array([0.]))  # no afe
+
+    #with h5py.File(gridfile, "w") as out:
+    #    # selection array
+    #    sel = sedmaker.grid_sel
+    #
+    #    # labels used to generate the grid
+    #    labels = out.create_dataset("labels", data=sedmaker.grid_label[sel])
+    #
+    #    # parameters generated interpolating over the MIST isochrones
+    #    pars = out.create_dataset("parameters", data=sedmaker.grid_param[sel])
+    #
+    #    # SEDS generated using the NN from the stellar parameters
+    #    seds = out.create_dataset("mag_coeffs", data=sedmaker.grid_sed[sel])
+
+    # import MIST model grid
+    #gridfile = '%s/grid_mist_v9.h5' % opts.brutusPath
+    (models_mist, labels_mist, lmask_mist) = butils.load_models(gridfile, filters=filt, include_binaries=True)
+
+    # initialize `BruteForce` class
+    BF_mist = BruteForce(models_mist, labels_mist, lmask_mist)
+
+    off_file_mist = '%s/offsets_mist_v9.txt' % opts.brutusPath 
+    off_mist = butils.load_offsets(off_file_mist, filters=filt)
+
+    dustfile = '%s/bayestar2019_v1.h5' % opts.brutusPath  # 3-D dust map
+
+    filename = os.path.join(path_out_dir,'mist')
+    filenameh5 = filename + '.h5'
+
+    if not os.path.isfile(filenameh5):
+        rv_gauss=(3.32, 0.18)
+        rvlim=(rv_gauss[0]-5*rv_gauss[1],rv_gauss[0]+5*rv_gauss[1])
+
+        # fit a set of hypothetical objects
+        BF_mist.fit(np.atleast_2d(phot).T,  # fluxes (in maggies)
+                    np.atleast_2d(err).T,  # errors (in maggies)
+                    np.atleast_2d(mask).T,  # band mask (True/False whether band was observed)
+                    rv_gauss=rv_gauss,
+                    rvlim=rvlim,
+                    data_labels=np.atleast_2d(np.arange(1)).T,
+                    save_file=filename,  # filename where results are stored (.h5 automatically added)
+                    data_coords=galcoords,  # array of (l, b) coordinates for Galactic prior
+                    parallax=np.atleast_2d(parallax).T,
+                    parallax_err=np.atleast_2d(parallax_err).T,  # parallax measurements (in mas)
+                    phot_offsets=off_mist,  # photometric offsets applied to **data**
+                    dustfile=dustfile,  # 3-D dustmap prior
+                    Ndraws=25000,  # number of samples to save to disk
+                    Nmc_prior=5000,  # number of Monte Carlo draws used to incorporate priors
+                    logl_dim_prior=True,  # use chi2 distribution instead of Gaussian
+                    save_dar_draws=True,  # save (dist, Av, Rv) samples
+                    running_io=True,  # write out objects as soon as they finish
+                    verbose=True)  # print progress
+
+    # load results
+    f = h5py.File(filenameh5, 'r')
+    idxs_mist = f['model_idx'][:]  # model indices
+    chi2_mist = f['obj_chi2min'][:]  # best-fit chi2
+    nbands_mist = f['obj_Nbands'][:]  # number of bands in fit
+    dists_mist = f['samps_dist'][:]  # distance samples
+    reds_mist = f['samps_red'][:]  # A(V) samples
+    dreds_mist = f['samps_dred'][:]  # R(V) samples
+    lnps_mist = f['samps_logp'][:]  # log-posterior of samples
+   
+    # pick an object
+    i = 0
+   
+    # plot SED (posterior predictive)
+    fig, ax, parts = bplot.posterior_predictive(models_mist,  # stellar model grid
+                                                idxs_mist[i],  # model indices
+                                                reds_mist[i],  # A(V) draws
+                                                dreds_mist[i],  # R(V) draws
+                                                dists_mist[i],  # distance draws
+                                                data=phot.flatten(),
+                                                data_err=err.flatten(),  # data
+                                                data_mask=mask.flatten(),  # band mask
+                                                offset=off_mist,  # photometric offsets
+                                                psig=2.,  # plot 2-sigma errors
+                                                labels=filt,  # filters 
+                                                vcolor='blue',  # "violin plot" colors for the posteriors
+                                                pcolor='black')  # photometry colors for the data
+    plotName = os.path.join(path_out_dir,'brutus_posterior.pdf')
+    plt.savefig(plotName)
+    plt.close()
+    
+    # plot corner
+    print('Best-fit chi2 (MIST):', chi2_mist[i])
+    fig, axes = bplot.cornerplot(idxs_mist[i], 
+                                 (dists_mist[i], reds_mist[i], dreds_mist[i]),
+                                 labels_mist,  # model labels
+                                 parallax=parallax, parallax_err=parallax_err,  # overplot if included
+                                 show_titles=True, color='blue', pcolor='orange',
+                                 fig=plt.subplots(12, 12, figsize=(55, 55)))  #  custom figure
+    plotName = os.path.join(path_out_dir,'brutus_corner.pdf')
+    plt.savefig(plotName)
+    plt.close()
 
 spectral_data = {}
 if opts.doSpectra:
@@ -239,14 +380,6 @@ if opts.doPlots and len(list(spectral_data.keys()))>0:
     plt.ylabel('Flux')
     plt.savefig(plotName)
     plt.close()
-
-# Gaia and PS1 
-ps1 = ps1_query(opts.ra, opts.declination, 5/3600.0)
-if ps1:
-    print(ps1)
-galex = galex_query(opts.ra, opts.declination, 5/3600.0)
-if galex:
-    print(galex)
 
 if opts.lightcurve_source == "Kowalski":
     kow = Kowalski(username=opts.user, password=opts.pwd)
