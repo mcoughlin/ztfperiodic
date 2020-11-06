@@ -51,7 +51,8 @@ def gaia_query(ra_deg, dec_deg, rad_deg, maxmag=25,
     vquery = Vizier(columns=['Source', 'RA_ICRS', 'DE_ICRS',
                              'e_RA_ICRS', 'e_DE_ICRS',
                              'phot_g_mean_mag','phot_r_mean_mag',
-                             'e_Gmag',
+                             'BPmag', 'Gmag', 'RPmag',
+                             'e_BPmag', 'e_Gmag', 'e_RPmag',
                              'Plx', 'e_Plx', 
                 'gofAL', #Goodness of fit statistic of model wrt along-scan observations, 
                 # it should approximately follow a normal distribution with zero mean value and unit standard deviation, > 3 are suspicious
@@ -89,7 +90,8 @@ def ps1_query(ra_deg, dec_deg, rad_deg, maxmag=25,
     returns: astropy.table object
     """
     vquery = Vizier(columns=['Source', 'RAJ2000', 'DEJ2000',
-                             'gmag','rmag','imag','zmag','ymag'],
+                             'gmag','rmag','imag','zmag','ymag',
+                             'e_gmag','e_rmag','e_imag','e_zmag','e_ymag'],
                     column_filters={"gmag":
                                     ("<%f" % maxmag),
                                    "imag":
@@ -1375,6 +1377,8 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
 def get_featuresetnames(featuresetname):
 
+    feature_all = ['ra', 'dec', 'period', 'significance', 'pdot', 'n', 'median', 'wmean', 'chi2red', 'roms', 'wstd', 'norm_peak_to_peak_amp', 'norm_excess_var', 'median_abs_dev', 'iqr', 'f60', 'f70', 'f80', 'f90', 'skew', 'smallkurt', 'inv_vonneumannratio', 'welch_i', 'stetson_j', 'stetson_k', 'ad', 'sw', 'f1_power', 'f1_bic', 'f1_a', 'f1_b', 'f1_amp', 'f1_phi0', 'f1_relamp1', 'f1_relphi1', 'f1_relamp2', 'f1_relphi2', 'f1_relamp3', 'f1_relphi3', 'f1_relamp4', 'f1_relphi5', 'n_ztf_alerts', 'mean_ztf_alert_braai', 'dmdt', 'AllWISE___id', 'AllWISE__w1mpro', 'AllWISE__w1sigmpro', 'AllWISE__w2mpro', 'AllWISE__w2sigmpro', 'AllWISE__w3mpro', 'AllWISE__w3sigmpro', 'AllWISE__w4mpro', 'AllWISE__w4sigmpro', 'AllWISE__ph_qual', 'Gaia_DR2___id', 'Gaia_DR2__phot_g_mean_mag', 'Gaia_DR2__phot_bp_mean_mag', 'Gaia_DR2__phot_rp_mean_mag', 'Gaia_DR2__parallax', 'Gaia_DR2__parallax_error', 'Gaia_DR2__pmra', 'Gaia_DR2__pmra_error', 'Gaia_DR2__pmdec', 'Gaia_DR2__pmdec_error', 'Gaia_DR2__astrometric_excess_noise', 'Gaia_DR2__phot_bp_rp_excess_factor', 'PS1_DR1___id', 'PS1_DR1__gMeanPSFMag', 'PS1_DR1__gMeanPSFMagErr', 'PS1_DR1__rMeanPSFMag', 'PS1_DR1__rMeanPSFMagErr', 'PS1_DR1__iMeanPSFMag', 'PS1_DR1__iMeanPSFMagErr', 'PS1_DR1__zMeanPSFMag', 'PS1_DR1__zMeanPSFMagErr', 'PS1_DR1__yMeanPSFMag', 'PS1_DR1__yMeanPSFMagErr', 'PS1_DR1__qualityFlag']
+
     feature_set11 = ['median', 'wmean', 'chi2red', 'roms', 'wstd', 'norm_peak_to_peak_amp',
            'norm_excess_var', 'median_abs_dev', 'iqr', 'f60', 'f70', 'f80', 'f90',
            'skew', 'smallkurt', 'inv_vonneumannratio', 'welch_i', 'stetson_j',
@@ -1465,13 +1469,13 @@ def get_featuresetnames(featuresetname):
     feature_set_f =  feature_set_e + feature_set32
     
     featuresetnames = {'b': feature_set_b,   # 21 features
-                        'c': feature_set_c,  # 35 features
-                        'd': feature_set_d,  # 41 features - 1 (n)
-                        'e': feature_set_e,  # 64 features - 1 (n)
-                        'f': feature_set_f,  # 70 features - 1 (n)
-                        'phenomenological': phenomenological,
-                        'ontological': ontological
-                          }
+                       'c': feature_set_c,  # 35 features
+                       'd': feature_set_d,  # 41 features - 1 (n)
+                       'e': feature_set_e,  # 64 features - 1 (n)
+                       'f': feature_set_f,  # 70 features - 1 (n)
+                       'phenomenological': phenomenological,
+                       'ontological': ontological,
+                       'all': feature_all}
 
     return featuresetnames[featuresetname]
 
@@ -1542,6 +1546,7 @@ def get_kowalski_features_objids(objids, kow, featuresetname='f',
         datlist = r["data"][0]
         datlist["ztf_id"] = datlist["_id"]
         del datlist["_id"]
+
         df_series = pd.Series(datlist).fillna(0)
         features[objid] = df_series
 
