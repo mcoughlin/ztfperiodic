@@ -41,9 +41,8 @@ from torch.utils.data import DataLoader
 
 from sklearn.metrics import confusion_matrix
 
-from ztfperiodic.periodicnetwork.model.resnet import Classifier as resnet
+from ztfperiodic.periodicnetwork.model.iresnet import Classifier as iresnet
 from ztfperiodic.periodicnetwork.model.itcn import Classifier as itcn
-from ztfperiodic.periodicnetwork.model.itin import Classifier as itin
 from ztfperiodic.periodicnetwork.model.rnn import Classifier as rnn
 from ztfperiodic.periodicnetwork.data import MyDataset as MyDataset
 
@@ -150,38 +149,55 @@ def get_device(path):
     return device
 
 def get_network(n_classes):
-    if opts.network == 'itcn':
-        clf = itcn(num_inputs=n_inputs, num_channels=[opts.hidden] * opts.depth, num_class=n_classes, hidden=32,
-                   dropout=opts.dropout, kernel_size=opts.kernel, dropout_classifier=0, aux=3,
-                   padding='cyclic').type(dtype)
-    elif opts.network == 'tcn':
-        clf = itcn(num_inputs=n_inputs, num_channels=[opts.hidden] * opts.depth, num_class=n_classes, hidden=32,
-                   dropout=opts.dropout, kernel_size=opts.kernel, dropout_classifier=0, aux=3,
-                   padding='zero').type(dtype)
-    elif opts.network == 'itin':
-        clf = itin(num_inputs=n_inputs, kernel_sizes=[opts.kernel,opts.kernel+2,opts.kernel+4],
-                   num_channels=[opts.hidden] * opts.depth, num_class=n_classes, hidden=32, dropout=opts.dropout,
-                   dropout_classifier=0, aux=3, padding='cyclic').type(dtype)
-    elif opts.network == 'tin':
-        clf = itin(num_inputs=n_inputs, kernel_sizes=[opts.kernel,opts.kernel+2,opts.kernel+4],
-                   num_channels=[opts.hidden] * opts.depth, num_class=n_classes, hidden=32,
-                   dropout=opts.dropout, dropout_classifier=0, aux=3, padding='zero').type(dtype)
-    elif opts.network == 'iresnet':
-        clf = resnet(n_inputs, n_classes, depth=opts.depth, nlayer=opts.n_layer, kernel_size=opts.kernel,
-                     hidden_conv=opts.hidden, max_hidden=opts.max_hidden, padding='cyclic',min_length=opts.min_maxpool,
-                     aux=3, dropout_classifier=opts.dropout_classifier, hidden=opts.hidden_classifier).type(dtype)
-    elif opts.network == 'resnet':
-        clf = resnet(n_inputs, n_classes, depth=opts.depth, nlayer=opts.n_layer, kernel_size=opts.kernel,
-                     hidden_conv=opts.hidden, max_hidden=opts.max_hidden, padding='zero',min_length=opts.min_maxpool,
-                     aux=3, dropout_classifier=0, hidden=32).type(dtype)
-    elif opts.network == 'gru':
-        clf = rnn(num_inputs=n_inputs, hidden_rnn=opts.hidden, num_layers=opts.depth, num_class=n_classes, hidden=32,
-                  rnn='GRU', dropout=opts.dropout, aux=3).type(dtype)
-    elif opts.network == 'lstm':
-        clf = rnn(num_inputs=n_inputs, hidden_rnn=opts.hidden, num_layers=opts.depth, num_class=n_classes, hidden=32,
-                  rnn='LSTM', dropout=opts.dropout, aux=3).type(dtype)
-    return clf
 
+    if opts.network in ['itcn', 'iresnet']:
+        padding = 'cyclic'
+    else:
+        padding = 'zero'
+
+    if opts.network in ['itcn', 'tcn']:
+        clf = itcn(
+            num_inputs=n_inputs,
+            num_class=n_classes,
+            depth=opts.depth,
+            hidden_conv=opts.hidden,
+            hidden_classifier=opts.hidden_classifier,
+            dropout=opts.dropout,
+            kernel_size=opts.kernel,
+            dropout_classifier=opts.dropout_classifier,
+            aux=3,
+            padding=padding
+        ).type(dtype)
+
+    elif opts.network in ['iresnet', 'resnet']:
+        clf = iresnet(
+            n_inputs,
+            n_classes,
+            depth=opts.depth,
+            nlayer=opts.n_layer,
+            kernel_size=opts.kernel,
+            hidden_conv=opts.hidden,
+            max_hidden=opts.max_hidden,
+            padding=padding,
+            min_length=opts.min_maxpool,
+            aux=3,
+            dropout_classifier=opts.dropout_classifier,
+            hidden=opts.hidden_classifier
+        ).type(dtype)
+
+    elif opts.network in ['gru', 'lstm']:
+        clf = rnn(
+            num_inputs=n_inputs,
+            hidden_rnn=opts.hidden,
+            num_layers=opts.depth,
+            num_class=n_classes,
+            hidden=opts.hidden_classifier,
+            rnn=opts.network.upper(),
+            dropout=opts.dropout,
+            aux=3
+        ).type(dtype)
+
+    return clf
 
 def train_helper(param):
     global map_loc
