@@ -96,6 +96,9 @@ target_labels = {'agn': 'AGN',
                  'yso': 'YSO'
                 }
 
+target_labels = {'pnp': 'periodic',
+                 'vnv': 'variable'}
+
 for label in sorted(target_labels.keys()):
     print('Analyzing %s' % label)
  

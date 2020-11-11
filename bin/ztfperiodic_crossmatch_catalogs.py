@@ -61,7 +61,7 @@ def read_catalog(catalog_file):
             amaj, amin, phi = [], [], []
         for line in lines:
             lineSplit = list(filter(None,line.split(" ")))
-            if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file):
+            if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file) or ("wd_rd" in catalog_file) or ("wd_bd" in catalog_file) or ("cyclotron" in catalog_file) or ("elm_wd" in catalog_file) or ("amcvn" in catalog_file) or ("sdb_dm" in catalog_file) or ("wdb_noneclipsing" in catalog_file):
                 ra_hex, dec_hex = convert_to_hex(float(lineSplit[0])*24/360.0,delimiter=''), convert_to_hex(float(lineSplit[1]),delimiter='')
                 if dec_hex[0] == "-":
                     objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])

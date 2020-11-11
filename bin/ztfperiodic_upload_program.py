@@ -30,6 +30,7 @@ from astropy.coordinates import SkyCoord
 
 from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.utils import get_kowalski
+from ztfperiodic.utils import get_kowalski_features_list
 
 try:
     from penquins import Kowalski
@@ -345,19 +346,39 @@ compareFile = os.path.join(outputDir,'catalog.dat')
 if os.path.isfile(compareFile):
     try:
         data_out = np.loadtxt(compareFile)
-        objids = data_out[:,1]
-        periods = data_out[:,4]
+        nlines, ncols = data_out.shape
+        if ncols == 2:
+            ras, decs = data_out[:,0], data_out[:,1]
+            objids, features = get_kowalski_features_list(ras, decs,
+                                                          kow)
+            objids = np.array(objids)
+            periods = np.array(features['period'])
+        else:
+            objids = data_out[:,1]
+            periods = data_out[:,4]
     except:
-        data_out = Table.read(compareFile, format='ascii',
-                              names=('objids', 'periods', 'classifications'))
+        if "ogle" in compareFile:
+            data_out = Table.read(compareFile, format='ascii',
+                                  names=('name', 'ra', 'dec',
+                                         'classifications', 'period'))
 
-        objids, periods = data_out["objids"].tolist(), data_out["periods"].tolist()
-        classifications = data_out["classifications"].tolist()
+            ras, decs = np.array(data_out['ra']), np.array(data_out['dec'])
+            objids, features = get_kowalski_features_list(ras, decs,
+                                                          kow)
+            objids = np.array(objids)
+            periods = np.array(features['period'])
+
+        else:
+            data_out = Table.read(compareFile, format='ascii',
+                                  names=('objids', 'periods', 'classifications'))
+
+            objids, periods = data_out["objids"].tolist(), data_out["periods"].tolist()
+            classifications = data_out["classifications"].tolist()
 
 else:
     filenames = glob.glob(os.path.join(plotDir,'*.png'))
     if len(filenames) == 0:
-        filedirs = glob.glob(os.path.join(outputDir,'*-*'))
+        filedirs = glob.glob(os.path.join(outputDir,'*_*','*-*'))
         for ii, filedir in enumerate(filedirs):
             filenames = glob.glob(os.path.join(filedir,'*.png'))
             for jj, filename in enumerate(filenames):
@@ -402,9 +423,11 @@ for ii, (objid, period) in enumerate(zip(objids, periods)):
     if np.isnan(source['period']) and (period > 0):
         source['period'] = period  
 
-    if classifications[ii] == "OTHER":
-        fid.write('%d %.10f %.10f %.10f\n' % (objid, source['ra'], source['dec'],
-                                          source['period'])) 
+    if classifications is not None:
+        if classifications[ii] == "OTHER":
+            fid.write('%d %.10f %.10f %.10f\n' % (objid,
+                                                  source['ra'], source['dec'],
+                                                  source['period'])) 
     
     if opts.doUpload:
         if classifications is not None: 

@@ -55,6 +55,10 @@ catalogDir = os.path.join(outputDir,'catalog')
 if not os.path.isdir(catalogDir):
     os.makedirs(catalogDir)
 
+h5Dir = os.path.join(outputDir,'h5')
+if not os.path.isdir(h5Dir):
+    os.makedirs(h5Dir)
+
 numpyDir = os.path.join(outputDir,'numpy')
 if not os.path.isdir(numpyDir):
     os.makedirs(numpyDir)
@@ -64,6 +68,24 @@ if not os.path.isfile(nmpyfile):
     filenames = glob.glob(os.path.join(numpyDir,'*.npy'))
     smfrac = []
     for ii, filename in enumerate(filenames):
+
+        objid = int(filename.split("/")[-1].split(".")[0].split("_")[0])
+        filenameh5 = os.path.join(h5Dir, '%d.h5' % objid)
+
+        # load results
+        f = h5py.File(filenameh5, 'r')
+        idxs_mist = f['model_idx'][:]  # model indices
+        chi2_mist = f['obj_chi2min'][:]  # best-fit chi2
+        nbands_mist = f['obj_Nbands'][:]  # number of bands in fit
+        dists_mist = f['samps_dist'][:]  # distance samples
+        reds_mist = f['samps_red'][:]  # A(V) samples
+        dreds_mist = f['samps_dred'][:]  # R(V) samples
+        lnps_mist = f['samps_logp'][:]  # log-posterior of samples
+
+        print(f.keys())
+        print(chi2_mist)
+        print(stop)
+
         #if ii > 10000: continue
         if np.mod(ii,100) == 0:
             print("%d/%d"%(ii,len(filenames)))

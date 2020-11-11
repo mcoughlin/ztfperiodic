@@ -80,6 +80,9 @@ if not os.path.isfile(filename):
                 if dt >= 30.0*60.0/86400.0:
                     idx.append(ii)
         idx = np.array(idx)
+        if len(idx) == 0:
+            continue
+
         jd1, fid1 = jd[idx], fid[idx]
         idxg1 = np.where(fid1 == 1)[0]
         idxr1 = np.where(fid1 == 2)[0]

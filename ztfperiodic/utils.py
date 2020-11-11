@@ -536,7 +536,7 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
     r = database_query(kow, qu, nquery = 10)
 
     if not "data" in r:
-        print("Query for objid %d failed... continuing."%(objid))
+        print("Query for objid %d failed... continuing."%(objids))
         return []
 
     datas = r["data"]
