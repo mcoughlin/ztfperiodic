@@ -12,6 +12,8 @@ from functools import reduce
 import numpy as np
 import pandas as pd
 
+from scipy import stats
+
 import matplotlib
 matplotlib.use('Agg')
 font = {'size'   : 22}
@@ -28,6 +30,9 @@ from astropy.io import ascii
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 
+from brutus import filters
+from brutus import utils as butils
+
 def parse_commandline():
     """
     Parse the options given on the command-line.
@@ -36,6 +41,8 @@ def parse_commandline():
     parser.add_option("--doPlots",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_phenomenological_ids_DR2/catalog/compare/condor")
+
+    parser.add_option("-b","--brutusPath",default="/home/michael.coughlin/ZTF/brutus/data/DATAFILES/")
 
     opts, args = parser.parse_args()
 
@@ -63,7 +70,26 @@ numpyDir = os.path.join(outputDir,'numpy')
 if not os.path.isdir(numpyDir):
     os.makedirs(numpyDir)
 
+filt = filters.wise + filters.ps[:-2]
+
+# import EEP tracks
+nnfile = '%s/nn_c3k.h5' % opts.brutusPath
+mistfile = '%s/MIST_1.2_EEPtrk.h5' % opts.brutusPath
+
+sedfile = os.path.join(opts.brutusPath,'sed.pkl')
+if not os.path.isfile(sedfile):
+    sedmaker = seds.SEDmaker(nnfile=nnfile, mistfile=mistfile)
+    with open(sedfile, 'wb') as handle:
+        pickle.dump(sedmaker, handle,
+                    protocol=pickle.HIGHEST_PROTOCOL)
+with open(sedfile, 'rb') as handle:
+    sedmaker = pickle.load(handle)
+
+gridfile = '%s/grid_mist_v9_binaries.h5' % opts.brutusPath
+(models_mist, labels_mist, lmask_mist) = butils.load_models(gridfile, filters=filt, include_binaries=True)
+
 nmpyfile = os.path.join(plotDir,'smf.npy')
+
 if not os.path.isfile(nmpyfile):
     filenames = glob.glob(os.path.join(numpyDir,'*.npy'))
     smfrac = []
@@ -82,9 +108,22 @@ if not os.path.isfile(nmpyfile):
         dreds_mist = f['samps_dred'][:]  # R(V) samples
         lnps_mist = f['samps_logp'][:]  # log-posterior of samples
 
-        print(f.keys())
-        print(chi2_mist)
-        print(stop)
+        # check number of good fits
+        good = stats.chi2.sf(chi2_mist, nbands_mist - 3) > 1e-3
+        if not good[0]:
+            continue
+        Ngood = sum(good)
+        #print('Good fits: {0}/{1} [{2}%]'.format(Ngood, len(good),
+        #                                         100. * Ngood / len(good)))
+        for l in ['mini', 'feh', 'eep']:
+            bound_low, bound_high = np.percentile(labels_mist[l][idxs_mist], [2.5, 97.5],
+                                                  axis=1)
+            good *= (bound_low > np.min(labels_mist[l])) & (bound_high < np.max(labels_mist[l]))
+        Ngood = sum(good)
+        if not good[0]:
+            continue
+        #print('Good posteriors: {0}/{1} [{2}%]'.format(Ngood, len(good),
+        #                                               100. * Ngood / len(good)))
 
         #if ii > 10000: continue
         if np.mod(ii,100) == 0:
