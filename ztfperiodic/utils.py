@@ -1479,6 +1479,23 @@ def get_featuresetnames(featuresetname):
 
     return featuresetnames[featuresetname]
 
+def get_kowalski_objids_from_radec(ra, dec, kow, radius = 5.0,
+                                   dbname='ZTF_source_features_20191101'):
+
+    qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": { "test": [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { dbname: { "filter": "{}", "projection": "{'_id':1}" } } } }
+
+    r = database_query(kow, qu, nquery = 10)
+
+    data = r["data"][dbname]
+    key = data.keys()[0]
+    data = data[key]
+
+    objids = []
+    for datlist in data:
+        objid = str(datlist["_id"])
+        objids.append(int(objid))
+
+    return objids
 
 def get_kowalski_features_ind(ra, dec, kow, radius = 5.0, oid = None,
                               featuresetname='f',
