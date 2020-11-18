@@ -33,8 +33,9 @@ from astropy.coordinates import SkyCoord
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
-from ztfperiodic.utils import get_kowalski
-from ztfperiodic.periodicnetwork.light_curve import LightCurve
+from ztfperiodic.utils import get_kowalski, get_featuresetnames
+from ztfperiodic.periodicnetwork.light_curve import LightCurve, Periodogram
+from ztfperiodic.periodsearch import find_periods
 
 try:
     from penquins import Kowalski
@@ -82,6 +83,15 @@ def parse_commandline():
     parser.add_option("-n","--Ncore",default=8,type=int)
 
     parser.add_option("-N","--Nexamples",default=500,type=int)
+
+    parser.add_option("--doPeriodSearch", action="store_true", default=False)
+    parser.add_option("--doLongPeriod",  action="store_true", default=False)
+    parser.add_option("--doRemoveTerrestrial",  action="store_true", default=False)
+
+    parser.add_option("-a", "--algorithms", default="ECE_periodogram,ELS_periodogram,EAOV_periodogram")
+
+    parser.add_option("--doGPU", action="store_true", default=False)
+    parser.add_option("--doCPU", action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
@@ -235,6 +245,13 @@ def get_lightcurves(ztf_id):
     label = target_labels[keys[idx]]
 
     feat = get_features(ztf_id)
+    metadata = []
+    for name in featuresetnames:
+        if feat[name] is None:
+            metadata.append(0)
+        else:
+            metadata.append(feat[name])
+    metadata = np.array(metadata)
     lightcurves_all = get_kowalski(feat['ra'], feat['dec'], kow,
                                    radius=1.0,
                                    min_epochs=50)
@@ -249,7 +266,8 @@ def get_lightcurves(ztf_id):
                             best_period=feat["period"],
                             best_score=feat["significance"],
                             name=ztf_id,
-                            label=label)
+                            label=label,
+                            metadata=metadata)
         lcs.append(lcurve)
     return lcs
 
@@ -260,6 +278,7 @@ catalogs = {'features': 'ZTF_source_features_20191101',
             'sources': 'ZTF_sources_20200401'}
 
 outputDir = opts.outputDir
+algorithms = opts.algorithms.split(",")
 
 plotDir = os.path.join(outputDir,'plots')
 if not os.path.isdir(plotDir):
@@ -443,6 +462,9 @@ for label in target_labels.keys():
     ztf_ids.append(ids[idx2])
 ztf_ids = list(itertools.chain(*ztf_ids))
 
+featuresetname = 'nonztf'
+featuresetnames = get_featuresetnames(featuresetname)
+
 lightcurvesfile = os.path.join(outputDir, 'lightcurves.pkl')
 if not os.path.isfile(lightcurvesfile):
     print('Pulling lightcurves...')
@@ -463,5 +485,67 @@ if not os.path.isfile(lightcurvesfile):
 with open(lightcurvesfile, 'rb') as handle:
     lightcurves = pickle.load(handle)
 
-for lc in lightcurves:
-    print(lc)
+if opts.doPeriodSearch:
+
+    periodogramsfile = os.path.join(outputDir, 'periodograms.pkl')
+
+    periodogramDir = os.path.join(outputDir,'periodograms')
+    if not os.path.isdir(periodogramDir):
+        os.makedirs(periodogramDir)
+
+    if not (opts.doCPU or opts.doGPU):
+        print("--doCPU or --doGPU required")
+        exit(0)
+
+    for lc in lightcurves:
+        periodogramsfile = os.path.join(periodogramDir, '%s.pkl' % lc.name)
+        if os.path.isfile(periodogramsfile): continue
+       
+        hjd, mag, magerr = lc.times, lc.measurements, lc.errors
+        lightcurve = [np.array(hjd), np.array(mag), np.array(magerr)]
+
+        baseline = max(hjd)-min(hjd)
+        if baseline<10:
+            if opts.doLongPeriod:
+                fmin, fmax = 18, 48
+            else:
+                fmin, fmax = 18, 1440
+        else:
+            if opts.doLongPeriod:
+                fmin, fmax = 2/baseline, 48
+            else:
+                fmin, fmax = 2/baseline, 480
+
+        samples_per_peak = 3
+
+        dfreq = 1./(samples_per_peak * baseline)
+        nf = int(np.ceil((fmax - fmin) / dfreq))
+        freqs = fmin + dfreq * np.arange(nf)
+
+        if opts.doRemoveTerrestrial:
+            freqs_to_remove = [[3e-2,4e-2], [47.99,48.01], [46.99,47.01], [45.99,46.01], [3.95,4.05], [2.95,3.05], [1.95,2.05], [0.95,1.05], [0.48, 0.52]]
+        else:
+            freqs_to_remove = None
+
+        #print('Cataloging lightcurves...')
+        data = np.zeros((len(algorithms),len(freqs)))
+        for ii, algorithm in enumerate(algorithms):
+            periods_best, significances, pdots = find_periods(algorithm, [lightcurve], freqs, doGPU=opts.doGPU, doCPU=opts.doCPU, doRemoveTerrestrial=opts.doRemoveTerrestrial, freqs_to_remove=freqs_to_remove)
+            data[ii,:] = periods_best[0]["data"].T
+        
+        pg = Periodogram(1.0/freqs, data,
+                         survey=lc.survey, name=lc.name,
+                         times=lc.times,
+                         measurements=lc.measurements,
+                         errors=lc.errors,
+                         label=lc.label,
+                         p=lc.p,
+                         metadata=lc.metadata)
+
+        with open(periodogramsfile, 'wb') as handle:
+            pickle.dump(pg, handle,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+
+    #with open(periodogramsfile, 'rb') as handle:
+    #    pgs = pickle.load(handle)
+    #print(pgs[0])

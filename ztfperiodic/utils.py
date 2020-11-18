@@ -222,6 +222,96 @@ def get_catalog(data):
 
     return SkyCoord(ra=np.array(ras)*u.degree, dec=np.array(decs)*u.degree, frame='icrs')
 
+def get_kowalski_external(ra, dec, kow, radius = 5.0):
+
+    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{}"}, "AllWISE": { "filter": "{}", "projection": "{}" }, "PS1_DR1": { "filter": "{}", "projection": "{}"} } } }
+
+    start = time.time()
+    r = database_query(kow, qu, nquery = 10)
+    end = time.time()
+    loadtime = end - start
+
+    if not "data" in r:
+        print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec))
+        return {}
+
+    key1, key2, key3 = 'PS1_DR1', 'Gaia_DR2', 'AllWISE'
+    data1, data2, data3 = r["data"][key1], r["data"][key2], r["data"][key3]
+    key = list(data1.keys())[0]
+    data1 = data1[key]
+    key = list(data2.keys())[0]
+    data2 = data2[key]
+    key = list(data3.keys())[0]
+    data3 = data3[key]
+
+    w1mpro, w2mpro, w3mpro, w4mpro = np.nan, np.nan, np.nan, np.nan
+    w1sigmpro, w2sigmpro, w3sigmpro, w4sigmpro = np.nan, np.nan, np.nan, np.nan
+
+    if len(data3) > 0:
+        if "w1mpro" in data3:
+            w1mpro = data3["w1mpro"]
+        if "w2mpro" in data3:
+            w2mpro = data3["w2mpro"]
+        if "w3mpro" in data3:
+            w3mpro = data3["w3mpro"]
+        if "w4mpro" in data3:
+            w4mpro = data3["w4mpro"]
+        if "w1sigmpro" in data3:
+            w1sigmpro = data3["w1sigmpro"]
+        if "w2sigmpro" in data3:
+            w2sigmpro = data3["w2sigmpro"]
+        if "w3sigmpro" in data3:
+            w3sigmpro = data3["w3sigmpro"]
+        if "w4sigmpro" in data3:
+            w4sigmpro = data3["w4sigmpro"]
+
+    gMeanPSFMag, rMeanPSFMag, iMeanPSFMag, zMeanPSFMag, yMeanPSFMag = np.nan, np.nan, np.nan, np.nan, np.nan
+    gMeanPSFMagErr, rMeanPSFMagErr, iMeanPSFMagErr, zMeanPSFMagErr, yMeanPSFMagErr = np.nan, np.nan, np.nan, np.nan, np.nan
+
+    if len(data1) > 0:
+        data1 = data1[0]
+        if "gMeanPSFMag" in data1:
+            gMeanPSFMag = data1["gMeanPSFMag"]
+        if "rMeanPSFMag" in data1:
+            rMeanPSFMag = data1["rMeanPSFMag"]
+        if "iMeanPSFMag" in data1:
+            iMeanPSFMag = data1["iMeanPSFMag"]
+        if "zMeanPSFMag" in data1:
+            zMeanPSFMag = data1["zMeanPSFMag"]
+        if "yMeanPSFMag" in data1:
+            yMeanPSFMag = data1["yMeanPSFMag"]
+        if "gMeanPSFMagErr" in data1:
+            gMeanPSFMagErr = data1["gMeanPSFMagErr"]
+        if "rMeanPSFMagErr" in data1:
+            rMeanPSFMagErr = data1["rMeanPSFMagErr"]
+        if "iMeanPSFMagErr" in data1:
+            iMeanPSFMagErr = data1["iMeanPSFMagErr"]
+        if "zMeanPSFMagErr" in data1:
+            zMeanPSFMagErr = data1["zMeanPSFMagErr"]
+        if "yMeanPSFMagErr" in data1:
+            yMeanPSFMagErr = data1["yMeanPSFMagErr"]
+
+    parallax, parallax_error = np.nan, np.nan
+
+    if len(data2) > 0:
+        data2 = data2[0]
+        if "parallax" in data2:
+            parallax = data2["parallax"]
+        if "parallax_error" in data2:
+            parallax_error = data2["parallax_error"]
+
+    external = {}
+    external["mag"] = [w1mpro, w2mpro, w3mpro, w4mpro,
+                       gMeanPSFMag, rMeanPSFMag,
+                       iMeanPSFMag, zMeanPSFMag, yMeanPSFMag]
+    external["magerr"] = [w1sigmpro, w2sigmpro, w3sigmpro, w4sigmpro,
+                          gMeanPSFMagErr, rMeanPSFMagErr,
+                          iMeanPSFMagErr, zMeanPSFMagErr,
+                          yMeanPSFMagErr]
+    external["parallax"] = [parallax, parallax_error]
+
+    return external
+
 def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
                  program_ids = [1, 2,3], min_epochs = 1, name = None):
 
@@ -1468,6 +1558,8 @@ def get_featuresetnames(featuresetname):
     feature_set_e =  feature_set_d + feature_set31
     feature_set_f =  feature_set_e + feature_set32
     
+    feature_set_nonztf = feature_set31 + feature_set32  
+ 
     featuresetnames = {'b': feature_set_b,   # 21 features
                        'c': feature_set_c,  # 35 features
                        'd': feature_set_d,  # 41 features - 1 (n)
@@ -1475,7 +1567,8 @@ def get_featuresetnames(featuresetname):
                        'f': feature_set_f,  # 70 features - 1 (n)
                        'phenomenological': phenomenological,
                        'ontological': ontological,
-                       'all': feature_all}
+                       'all': feature_all,
+                       'nonztf': feature_set_nonztf}
 
     return featuresetnames[featuresetname]
 

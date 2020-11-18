@@ -364,11 +364,11 @@ def find_periods(algorithm, lightcurves, freqs, batch_size=1,
                 if algorithm.split("_")[0] == "ECE":
                     significance = np.abs(np.mean(stat.data)-np.min(stat.data))/np.std(stat.data)
                     period = periods[np.argmin(stat.data)]
-                elif algorithm.split("_")[0] == "ECE":
+                elif algorithm.split("_")[0] == "EAOV":
                     significance = np.abs(np.mean(stat.data)-np.min(stat.data))/np.std(stat.data)
                     period = periods[np.argmin(stat.data)]
                 elif algorithm.split("_")[0] == "ELS":
-                    significance = np.abs(np.mean(stat.data)-np.min(stat.data))/np.std(stat.data)
+                    significance = np.abs(np.mean(stat.data)-np.max(stat.data))/np.std(stat.data)
                     period = periods[np.argmax(stat.data)]
 
                 if np.isnan(significance):

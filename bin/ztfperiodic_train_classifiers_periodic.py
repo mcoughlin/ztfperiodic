@@ -72,6 +72,10 @@ def parse_commandline():
                         help='training sequence length')
     parser.add_option('--varlen_train', action='store_true', default=False,
                         help='enable variable length training')
+    parser.add_option('--use-error', action='store_true', default=False,
+                        help='use error as additional dimension')
+    parser.add_option('--use-meta', action='store_true', default=False,
+                        help='use meta as auxiliary network input')
     parser.add_option('--input', type=str, default='dtf',
                         help='input representation of data. combination of t/dt/f/df/g.')
     parser.add_option('--n_test', type=int, default=1,
@@ -215,7 +219,8 @@ def train_helper(param):
     periods = np.array([lc.p for lc in split])
     label = np.array([convert_label[chunk.label] for chunk in split])
 
-    x, means, scales = getattr(PreProcessor, opts.input)(np.array(X_list), periods)
+    #x, means, scales = getattr(PreProcessor, opts.input)(np.array(X_list), periods)
+    x, means, scales = preprocess(np.array(X_list), periods, use_error=opts.use_error)
     print('shape of the training dataset array:', x.shape)
     mean_x = x.reshape(-1, n_inputs).mean(axis=0)
     std_x = x.reshape(-1, n_inputs).std(axis=0)
@@ -229,6 +234,11 @@ def train_helper(param):
     # shape: (N, 3, L-1)
 
     aux = np.c_[means, scales, np.log10(periods)]
+    if opts.use_meta and split[0].metadata is not None:
+        metadata = np.array([lc.metadata for lc in split])  # Metadata must have same dimension!
+        aux = np.c_[aux, metadata]                          # Concatenate metadata
+        print('metadata will be used as auxiliary inputs.')
+
     aux_mean = aux.mean(axis=0)
     aux_std = aux.std(axis=0)
     aux -= aux_mean
@@ -260,7 +270,8 @@ def train_helper(param):
     # shape: (N, L, 3)
     x_list = [np.c_[chunk.times, chunk.measurements, chunk.errors] for chunk in split]
     periods = np.array([lc.p for lc in split])
-    x, means, scales = getattr(PreProcessor, opts.input)(np.array(x_list), periods)
+    #x, means, scales = getattr(PreProcessor, opts.input)(np.array(x_list), periods)
+    x, means, scales = preprocess(np.array(x_list), periods, use_error=opts.use_error)
 
     # whiten data
     x -= mean_x
@@ -274,6 +285,11 @@ def train_helper(param):
 
     label = np.array([convert_label[chunk.label] for chunk in split])
     aux = np.c_[means, scales, np.log10(periods)]
+    if opts.use_meta and split[0].metadata is not None:
+        metadata = np.array([lc.metadata for lc in split])  # Metadata must have same dimension!
+        aux = np.c_[aux, metadata]  # Concatenate metadata
+        print('metadata will be used as auxiliary inputs.')
+
     aux -= aux_mean
     aux /= aux_std
 
@@ -318,7 +334,8 @@ def train_helper(param):
             # shape: (N, L, 3)
             x_list = [np.c_[chunk.times, chunk.measurements, chunk.errors] for chunk in split]
             periods = np.array([lc.p for lc in split])
-            x, means, scales = getattr(PreProcessor, opts.input)(np.array(x_list), periods)
+            #x, means, scales = getattr(PreProcessor, opts.input)(np.array(x_list), periods)
+            x, means, scales = preprocess(np.array(x_list), periods, use_error=opts.use_error)
 
             # whiten data
             x -= mean_x
@@ -330,6 +347,10 @@ def train_helper(param):
 
             label = np.array([convert_label[chunk.label] for chunk in split])
             aux = np.c_[means, scales, np.log10(periods)]
+            if opts.use_meta and split[0].metadata is not None:
+                metadata = np.array([lc.metadata for lc in split])  # Metadata must have same dimension!
+                aux = np.c_[aux, metadata]  # Concatenate metadata
+                print('metadata will be used as auxiliary inputs.')
             aux -= aux_mean
             aux /= aux_std
 
@@ -483,12 +504,7 @@ if __name__ == '__main__':
     convert_label = dict(zip(use_label, np.arange(len(use_label))))
     all_labels = np.array([convert_label[lc.label] for lc in data])
     
-    if opts.input in ['dtdfg', 'dtfg', 'dtfe']:
-        n_inputs = 3
-    elif opts.input in ['df', 'f', 'g']:
-        n_inputs = 1
-    else:
-        n_inputs = 2
+    n_inputs = 3 if opts.use_error else 2
 
     jobs = []
     np.random.seed(opts.seed)
@@ -524,7 +540,10 @@ if __name__ == '__main__':
     X, Y = np.meshgrid(np.arange(len(unique_label)+1), np.arange(len(unique_label)+1))
     plt.figure()
     cm = confusion_matrix(data_out[:,1], data_out[:,0], normalize='true')
-    
+   
+    for ii in range(len(unique_label)):
+        print(unique_label[ii],  cm[ii,ii])
+ 
     fig = plt.figure()
     ax = fig.add_subplot(111)
     cax = ax.pcolor(X, Y, cm, cmap=plt.get_cmap('cool'), vmin=0, vmax=1)

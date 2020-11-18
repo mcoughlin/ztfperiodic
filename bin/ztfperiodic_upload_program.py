@@ -354,8 +354,8 @@ if os.path.isfile(compareFile):
             objids = np.array(objids)
             periods = np.array(features['period'])
         else:
-            objids = data_out[:,1]
-            periods = data_out[:,4]
+            objids = data_out[:,0]
+            periods = data_out[:,3]
     except:
         if "ogle" in compareFile:
             data_out = Table.read(compareFile, format='ascii',
@@ -402,6 +402,8 @@ else:
             filenameSplit = filename.split("/")[-1].split(".png")[0]
             objids.append(int(filenameSplit))
             periods.append(-1)
+
+print(objids, periods)
 
 objids = np.array(objids)
 periods = np.array(periods)

@@ -16,6 +16,7 @@ import pandas as pd
 import numpy as np
 import h5py
 from scipy.signal import lombscargle
+from scipy import stats
 
 import matplotlib
 matplotlib.use('Agg')
@@ -40,6 +41,7 @@ from ztfperiodic.utils import get_simulated_list
 from ztfperiodic.utils import get_matchfile
 from ztfperiodic.utils import find_matchfile
 from ztfperiodic.utils import convert_to_hex
+from ztfperiodic.utils import get_kowalski_external
 from ztfperiodic.periodsearch import find_periods
 from ztfperiodic.specfunc import correlate_spec, adjust_subplots_band, tick_function
 
@@ -126,6 +128,9 @@ def parse_commandline():
     parser.add_option("--doCheckLightcurves",  action="store_true", default=False)
 
     parser.add_option("--samples_per_peak",default=10,type=int)
+
+    parser.add_option("--doBrutus",  action="store_true", default=False)
+    parser.add_option("--brutusPath",default="/home/michael.coughlin/ZTF/brutus/data/DATAFILES/")
 
     opts, args = parser.parse_args()
 
@@ -220,6 +225,71 @@ crossmatch_radius = opts.crossmatch_radius
 doPercentile=opts.doPercentile
 percmin = opts.percmin
 percmax = opts.percmax
+doBrutus = opts.doBrutus
+
+if opts.doBrutus:
+
+    from brutus import filters
+    from brutus import seds
+    from brutus import utils as butils
+    from brutus.fitting import BruteForce
+    from brutus import plotting as bplot
+
+    brutusDir = os.path.join(outputDir,'brutus', "%d_%d_%d_%d"%(field, ccd, quadrant, Ncatindex))
+    if not os.path.isdir(brutusDir):
+        os.makedirs(brutusDir)
+
+    filt = filters.wise + filters.ps[:-2]
+    #filt = filters.ps[:-2]
+    
+    # import EEP tracks
+    nnfile = '%s/nn_c3k.h5' % opts.brutusPath
+    mistfile = '%s/MIST_1.2_EEPtrk.h5' % opts.brutusPath
+    
+    sedfile = os.path.join(opts.brutusPath,'sed.pkl')
+    if not os.path.isfile(sedfile):
+        sedmaker = seds.SEDmaker(nnfile=nnfile, mistfile=mistfile)
+        with open(sedfile, 'wb') as handle:
+            pickle.dump(sedmaker, handle,
+                        protocol=pickle.HIGHEST_PROTOCOL)
+    with open(sedfile, 'rb') as handle:
+        sedmaker = pickle.load(handle)
+    
+    gridfile = '%s/grid_mist_v9_binaries.h5' % opts.brutusPath
+    if not os.path.isfile(gridfile):
+        #sedmaker.make_grid(smf_grid=np.arange(0,1.2,0.2),  # no binaries
+        #                   afe_grid=np.array([0.]))  # no afe
+    
+        sedmaker.make_grid(smf_grid=np.arange(0,1.5,0.5),  # no binaries
+                           afe_grid=np.array([0.]))  # no afe
+    
+        with h5py.File(gridfile, "w") as out:
+            # selection array
+            sel = sedmaker.grid_sel
+    
+            # labels used to generate the grid
+            labels = out.create_dataset("labels", data=sedmaker.grid_label[sel])
+    
+            # parameters generated interpolating over the MIST isochrones
+            pars = out.create_dataset("parameters", data=sedmaker.grid_param[sel])
+    
+            # SEDS generated using the NN from the stellar parameters
+            seds = out.create_dataset("mag_coeffs", data=sedmaker.grid_sed[sel])
+    
+    # import MIST model grid
+    #gridfile = '%s/grid_mist_v9.h5' % opts.brutusPath
+    (models_mist, labels_mist, lmask_mist) = butils.load_models(gridfile, filters=filt, include_binaries=True)
+    
+    # initialize `BruteForce` class
+    BF_mist = BruteForce(models_mist, labels_mist, lmask_mist)
+    
+    off_file_mist = '%s/offsets_mist_v9.txt' % opts.brutusPath
+    off_mist = butils.load_offsets(off_file_mist, filters=filt)
+    
+    dustfile = '%s/bayestar2019_v1.h5' % opts.brutusPath  # 3-D dust map
+    
+    rv_gauss=(3.32, 0.18)
+    rvlim=(rv_gauss[0]-5*rv_gauss[1],rv_gauss[0]+5*rv_gauss[1])
 
 if opts.doQuadrantFile:
     if opts.lightcurve_source == "Kowalski":
@@ -629,6 +699,106 @@ if opts.doCheckLightcurves:
 print('Running lightcurve basic stats...')
 start_time = time.time()
 
+if opts.doBrutus:
+    brutus_out = np.nan*np.ones((len(coordinates),len(filt)+4))
+    for ii, coordinate in enumerate(coordinates):
+
+        ra, dec = coordinate[0], coordinate[1]
+        external = get_kowalski_external(ra, dec, kow)
+        coord = SkyCoord(ra=ra*u.degree, dec=dec*u.degree, frame='icrs')
+        galcoords = np.vstack([coord.galactic.l.deg, coord.galactic.b.deg]).T
+
+        mag, magerr = np.array(external["mag"]), np.array(external["magerr"])
+        parallax, parallax_err = external["parallax"][0], external["parallax"][1]
+        mask = np.isfinite(magerr) & np.not_equal(magerr,np.zeros(magerr.shape))  # create boolean band mask
+        if len(np.where(mask)[0]) < 4: continue
+
+        magerr = np.sqrt(magerr**2 + 0.02**2)
+        phot, err = butils.inv_magnitude(mag, magerr)  # convert to flux (in maggies)
+        if np.isnan(parallax) or np.isnan(parallax_err) or (parallax - 5*parallax_err < 0):
+            continue
+   
+        filename = os.path.join(brutusDir, '%d' % ii)
+        filenameh5 = filename + '.h5'
+        if not os.path.isfile(filenameh5):
+     
+            # fit a set of hypothetical objects
+            BF_mist.fit(np.atleast_2d(phot),  # fluxes (in maggies)
+                        np.atleast_2d(err),  # errors (in maggies)
+                        np.atleast_2d(mask),  # band mask (True/False whether band was observed)
+                        merr_max=1.00,
+                        wt_thresh=1e-2,
+                        rv_gauss=rv_gauss,
+                        rvlim=rvlim,
+                        data_labels=np.atleast_2d(np.arange(1)).T,
+                        save_file=filename,  # filename where results are stored (.h5 automatically added)
+                        data_coords=np.atleast_2d(galcoords),  # array of (l, b) coordinates for Galactic prior
+                        parallax=np.atleast_2d(parallax).T,
+                        parallax_err=np.atleast_2d(parallax_err).T,  # parallax measurements (in mas)
+                        phot_offsets=off_mist,  # photometric offsets applied to **data**
+                        dustfile=dustfile,  # 3-D dustmap prior
+                        Ndraws=100,  # number of samples to save to disk
+                        Nmc_prior=20,  # number of Monte Carlo draws used to incorporate priors
+                        logl_dim_prior=True,  # use chi2 distribution instead of Gaussian
+                        save_dar_draws=True,  # save (dist, Av, Rv) samples
+                        running_io=False,  # write out objects as soon as they finish
+                        verbose=True)
+    
+        # load results
+        f = h5py.File(filenameh5, 'r')
+        idxs_mist = f['model_idx'][:]  # model indices
+        chi2_mist = f['obj_chi2min'][:]  # best-fit chi2
+        nbands_mist = f['obj_Nbands'][:]  # number of bands in fit
+        dists_mist = f['samps_dist'][:]
+        reds_mist = f['samps_red'][:]
+        dreds_mist = f['samps_dred'][:]
+        lnps_mist = f['samps_logp'][:]
+
+        i = 0
+
+        # Generate SEDs.
+        seds = butils.get_seds(models_mist[idxs_mist[i]],
+                               av=reds_mist[i], rv=dreds_mist[i])
+        # SEDs are in magnitude space.
+        seds += 5. * np.log10(dists_mist[i])[:, None]
+
+        sedsdiff = (mag - np.median(seds, axis=0))/magerr
+        parallaxdiff = (parallax - np.median(1.0/dists_mist))/parallax_err
+
+        # Ignore age weights.
+        labels = [x for x in labels_mist.dtype.names if x != 'agewt']
+
+        # Deal with 1D results.
+        samples = labels_mist[idxs_mist[i]]
+        samples = np.array([samples[l] for l in labels]).T
+        samples = np.atleast_1d(samples)
+
+        idx = labels.index('smf')
+        smfsamp = samples[:,idx]
+        frac = len(np.where(smfsamp > 0.5)[0])/len(smfsamp)
+        #print('Fraction of smf > 0.5: %.5f' % (frac))
+
+        brutus_out[ii,:len(filt)] = sedsdiff
+        brutus_out[ii,len(filt)] = parallaxdiff
+        brutus_out[ii,len(filt)+1] = frac
+        brutus_out[ii,len(filt)+2] = stats.chi2.sf(chi2_mist[i], nbands_mist - 3)
+        brutus_out[ii,len(filt)+3] = 1
+ 
+        # check number of good fits
+        good = brutus_out[ii,len(filt)+2] > 1e-3
+        if not good:
+            brutus_out[ii,len(filt)+3] = 0
+            continue
+        for l in ['mini', 'feh', 'eep']:
+            bound_low, bound_high = np.percentile(labels_mist[l][idxs_mist], [2.5, 97.5],
+                                                  axis=1)
+            good *= (bound_low > np.min(labels_mist[l])) & (bound_high < np.max(labels_mist[l]))
+        if not good[0]:
+            brutus_out[ii,len(filt)+3] = 0
+            continue
+        #print('Good posteriors: {0}/{1} [{2}%]'.format(Ngood, len(good),
+        #                                               100. * Ngood / len(good)))
+
 if opts.doParallel:
     from joblib import Parallel, delayed
     stats = Parallel(n_jobs=opts.Ncore)(delayed(calc_basic_stats)(LC[0],LC[1],LC[2]) for LC in lightcurves)
@@ -649,7 +819,7 @@ if baseline<10:
     if opts.doLongPeriod:
         fmin, fmax = 2/baseline, 48
     else:
-        fmin, fmax = 2/baseline, 1440
+        fmin, fmax = 2/baseline, 480
 else:
     if opts.doLongPeriod:
         fmin, fmax = 2/baseline, 48
@@ -663,7 +833,6 @@ phase_bins, mag_bins = 20, 10
 
 df = 1./(samples_per_peak * baseline)
 nf = int(np.ceil((fmax - fmin) / df))
-
 freqs = fmin + df * np.arange(nf)
 
 if opts.doRemoveTerrestrial:
@@ -1075,6 +1244,9 @@ with h5py.File(catalogFile, 'w') as hf:
     for algorithm in algorithms:
         hf.create_dataset("stats_%s" % algorithm,
                           data=periodic_stats_algorithms[algorithm])
+
+    if opts.doBrutus:
+        hf.create_dataset("brutus_out",  data=brutus_out)
 
 if opts.doSpectra:
     with open(spectraFile, 'wb') as handle:

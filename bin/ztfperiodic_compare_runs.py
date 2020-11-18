@@ -38,12 +38,12 @@ def parse_commandline():
     parser = optparse.OptionParser()
     parser.add_option("--doPlots",  action="store_true", default=False)
 
-    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields_v2/catalog/compare/v2_v3/")
-    parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields_v2/catalog/compare/700/catalog_GCE_LS_AOV.fits")
-    parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants_AOV_20Fields_v3/catalog/compare/700/catalog_GCE_LS_AOV.fits")
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3_HC/catalog/compare/HC_vs_normal/360")
+    parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3_HC/catalog/compare/360/catalog_EAOV.fits")
+    parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3/catalog/compare/360/catalog_EAOV.fits")
 
-    parser.add_option("--sig1",default=7.0,type=float)
-    parser.add_option("--sig2",default=7.0,type=float)
+    parser.add_option("--sig1",default=7.5,type=float)
+    parser.add_option("--sig2",default=13.0,type=float)
 
     parser.add_option("--crossmatch_distance",default=1.0,type=float)
    
@@ -132,11 +132,14 @@ if opts.doPlots:
     cmap = cm.autumn
 
     #xedges = np.logspace(np.log10(0.02),3.0,100)
-    xedges = np.logspace(np.log10(0.02),4.0,100)
+    xedges = np.logspace(1,5.0,100)
     #yedges = np.logspace(np.log10(0.02),3.0,100)
-    yedges = np.logspace(np.log10(0.02),4.0,100)
+    yedges = np.logspace(-3,2.0,100)
    
     H, xedges, yedges = np.histogram2d(xs, ys, bins=(xedges, yedges))
+    print(np.min(xs), np.max(xs))
+    print(np.min(ys), np.max(ys))
+
     H = H.T  # Let each row list bins with common y range.
     X, Y = np.meshgrid(xedges, yedges)
     #H[H==0] = np.nan
@@ -148,13 +151,15 @@ if opts.doPlots:
     ax=fig.add_subplot(1,1,1)
     c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm(),
                        cmap=cmap)
+    plt.plot(np.logspace(-3,5,500), np.logspace(-3,5,500), 'k--', zorder=100)
+    #print(np.logspace(-3,5,500))
     ax.set_xscale('log')
     ax.set_yscale('log')
     #plt.xlim([0.02, 50])
-    plt.xlim([0.02, 500])
+    plt.xlim([10, 2*1000])
     #plt.ylim([0.02, 50])
-    plt.ylim([0.02, 500])
-    plt.fill_between([0.02, 500],[50,50],[500,500],color='gray',alpha=0.5)
+    plt.ylim([0.005, 100])
+    #plt.fill_between([0.02, 10],[0.02,0.02],[500,500],color='gray',alpha=0.5)
     plt.xlabel('Frequency [1/days]', fontsize=24)
     plt.ylabel('Frequency [1/days]', fontsize=24)
 
@@ -185,6 +190,7 @@ if opts.doPlots:
     ax=fig.add_subplot(1,1,1)
     c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm(),
                        cmap=cmap)
+    print(np.logspace(-3,5,500))
     ax.set_xscale('log')
     ax.set_yscale('log')
     #plt.xlim([0.02, 50])

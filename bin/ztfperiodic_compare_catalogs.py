@@ -203,6 +203,7 @@ def load_catalog(catalog,doFermi=False,doSimbad=False,
     #filenames = filenames[:500]
     for ii, filename in enumerate(filenames):
         if np.mod(ii,100) == 0:
+            print(filename)
             print('Loading file %d/%d' % (ii, len(filenames)))
 
         filenameSplit = filename.split("/")
@@ -269,6 +270,10 @@ def load_catalog(catalog,doFermi=False,doSimbad=False,
             data = vstack([data,data_tmp])
         cnt = cnt + 1
  
+    if len(data) == 0:
+        print('No data in %s available...' % catalog)
+        return []
+
     sig = data["sig"]
     idx = np.arange(len(sig))/len(sig)
     sigsort = idx[np.argsort(sig)]
@@ -299,7 +304,7 @@ if opts.doObjectFile:
                       names=['objid', 'ra', 'dec', 'period'])
 else:
     if not os.path.isfile(cat1file):
-        cat1 = load_catalog(catalog,doFermi=opts.doFermi,doSimbad=opts.doSimbad,
+        cat1 = load_catalog(opts.catalog1,doFermi=opts.doFermi,doSimbad=opts.doSimbad,
                                     doField=opts.doField,field=opts.field,
                                     algorithm=opts.algorithm1)
         cat1.write(cat1file, format='fits')
@@ -317,7 +322,7 @@ if opts.doCrossMatch:
         cat2 = Table.read(cat2file, format='fits')
 else:
     if not os.path.isfile(cat2file):
-        cat2 = load_catalog(catalog,doFermi=opts.doFermi,
+        cat2 = load_catalog(opts.catalog2,doFermi=opts.doFermi,
                             doSimbad=opts.doSimbad,
                             doField=opts.doField,field=opts.field,
                             algorithm=opts.algorithm2)
