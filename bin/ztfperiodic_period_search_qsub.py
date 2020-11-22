@@ -40,6 +40,8 @@ def parse_commandline():
     parser.add_option("--doQuadrantScale",  action="store_true", default=False)
 
     parser.add_option("--doVariability",  action="store_true", default=False)
+    parser.add_option("--doCutNObs",  action="store_true", default=False)
+    parser.add_option("-n","--NObs",default=500,type=int)
 
     parser.add_option("-l","--lightcurve_source",default="Kowalski")
     parser.add_option("-s","--source_type",default="quadrant")
@@ -128,6 +130,18 @@ idsDir = os.path.join(qsubDir,'ids')
 if not os.path.isdir(idsDir):
     os.makedirs(idsDir)
 
+if opts.doCutNObs:
+    nobsfile = "../input/nobs.dat"
+    nobs_data = np.loadtxt(nobsfile)
+
+    if opts.doHCOnly:
+        idx = np.where((nobs_data[:,7] >= opts.NObs) | (nobs_data[:,8] >= opts.NObs) | (nobs_data[:,9] >= opts.NObs))[0]
+    else:
+        idx = np.where((nobs_data[:,4] >= opts.NObs) | (nobs_data[:,5] >= opts.NObs) | (nobs_data[:,6] >= opts.NObs))[0]
+
+    nobs_data = nobs_data[idx,:]
+    fields_list = nobs_data[:,0]
+
 if opts.doQuadrantScale:
     kow = Kowalski(username=opts.user, password=opts.pwd)
 
@@ -147,11 +161,15 @@ if opts.lightcurve_source == "Kowalski":
 
         fields = [400]
         fields = np.arange(250,882)
+        fields = np.arange(600,700)
 
         job_number = 0
         quadrantfile = os.path.join(qsubDir,'qsub.dat')
         fid = open(quadrantfile,'w')
         for field in fields:
+            if opts.doCutNObs:
+                if not field in fields_list:
+                    continue
             print('Running field %d' % field)
             for ccd in ccds:
                 for quadrant in quadrants:
@@ -166,9 +184,8 @@ if opts.lightcurve_source == "Kowalski":
                                        } 
                              }                                            
                         r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
-                        if r is None: continue
-                        if not "result_data" in r: continue
-                        nlightcurves = r['result_data']['query_result']
+                        if not "data" in r: continue
+                        nlightcurves = r['data']
 
                         Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
 
@@ -195,7 +212,7 @@ if opts.lightcurve_source == "Kowalski":
                             print('%s already exists... continuing.' % catalogFile)
                             continue
 
-                        fid.write('%d %d %d %d %d %d\n' % (job_number, field, ccd, quadrant, ii, Ncatalog))
+                        fid.write('%d %d %d %d %d %d %s\n' % (job_number, field, ccd, quadrant, ii, Ncatalog, idsFile))
     
                         job_number = job_number + 1
         fid.close()
@@ -227,7 +244,7 @@ fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
 fid.write('cd $PBS_O_WORKDIR\n')
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type quadrant --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,algorithm,extra_flags))
+        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type objid --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,algorithm,extra_flags))
     elif opts.source_type == "catalog":
         fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,algorithm,extra_flags))
 elif opts.lightcurve_source == "matchfiles":

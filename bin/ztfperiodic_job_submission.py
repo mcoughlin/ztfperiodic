@@ -33,24 +33,24 @@ def parse_commandline():
 
     return opts
 
-def filter_completed(quad_out, catalogDir):
+def filter_completed(df, catalogDir):
 
     start_time = time.time()
 
-    njobs, ncols = quad_out.shape
     tbd = []
-    for ii, row in enumerate(quad_out):
-        field, ccd, quadrant = row[1], row[2], row[3]
-        Ncatindex, Ncatalog = row[4], row[5]
+    for ii, (index, row) in enumerate(df.iterrows()):
+        field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
+        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+        idsFile = row["idsFile"]
         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
         if not os.path.isfile(catalogFile):
             tbd.append(ii)
-    quad_out = quad_out[tbd,:]
+    df = df.iloc[tbd]
 
     end_time = time.time()
     print('Checking completed jobs took %.2f seconds' % (end_time - start_time))
 
-    return quad_out
+    return df
 
 # Parse command line
 opts = parse_commandline()
@@ -72,10 +72,15 @@ algorithm = joblineSplit[0]
 
 quadrantfile = os.path.join(qsubDir,'%s.dat' % filetype)
 
+names = ["job_number", "field", "ccd", "quadrant",
+         "Ncatindex", "Ncatalog", "idsFile"]
+
 catalogDir = os.path.join(outputDir,'catalog',algorithm)
-quad_out_original = np.loadtxt(quadrantfile)
-quad_out = filter_completed(quad_out_original, catalogDir)       
-njobs, ncols = quad_out.shape
+#quad_out_original = np.loadtxt(quadrantfile)
+df_original = pd.read_csv(quadrantfile, header=0, delimiter=' ',
+                          names=names)
+df = filter_completed(df_original, catalogDir)       
+njobs = len(df)
 print('%d jobs remaining...' % njobs)
 
 counter = 0
@@ -83,21 +88,23 @@ counter = 0
 if opts.doSubmit:
     while njobs > 0:
         quadrant_index = np.random.randint(0, njobs, size=1)
-        idx = np.where(quad_out_original[:,0] == quad_out[quadrant_index,0])[0]
-        row = quad_out_original[idx,:][0]
-        field, ccd, quadrant = row[1], row[2], row[3]
-        Ncatindex, Ncatalog = row[4], row[5]
+        row = df.iloc[quadrant_index]
+        field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
+        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+        idsFile = row["idsFile"]
 
         print(field, ccd, quadrant, Ncatindex, Ncatalog)
         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
         if not os.path.isfile(catalogFile):
-            jobstr = jobline.replace("$PBS_ARRAYID","%d"%row[0])
+            jobstr = jobline.replace("$PBS_ARRAYID","%d"%row["job_number"])
+            print(jobstr)
+            print(stop)
             os.system(jobstr)
 
         counter = counter + 1
         print(counter)
 
         if np.mod(counter,500) == 0:
-            quad_out = filter_completed(quad_out, catalogDir)
-            njobs, ncols = quad_out.shape
+            df = filter_completed(df, catalogDir)
+            njobs = len(df)
             print('%d jobs remaining...' % njobs)

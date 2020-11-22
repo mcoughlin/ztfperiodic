@@ -293,11 +293,16 @@ if opts.doBrutus:
 
 if opts.doQuadrantFile:
     if opts.lightcurve_source == "Kowalski":
-        quad_out = np.loadtxt(quadrant_file)
-        idx = np.where(quad_out[:,0] == opts.quadrant_index)[0]
-        row = quad_out[idx,:][0]
-        field, ccd, quadrant = row[1], row[2], row[3]
-        Ncatindex, Ncatalog = row[4], row[5]
+        names = ["job_number", "field", "ccd", "quadrant",
+                 "Ncatindex", "Ncatalog", "idsFile"]
+
+        df_original = pd.read_csv(opts.quadrant_file, header=0, delimiter=' ',
+                                  names=names)
+        row = df_original.iloc[opts.quadrant_index]
+        field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
+        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+        catalog_file = row["idsFile"]
+
     elif opts.lightcurve_source == "matchfiles":
         lines = [line.rstrip('\n') for line in open(quadrant_file)]
         for line in lines:
