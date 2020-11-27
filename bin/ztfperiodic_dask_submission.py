@@ -11,6 +11,7 @@ import numpy as np
 import h5py
 
 import dask
+from dask.distributed import Client, progress
 
 import ztfperiodic.utils
 
@@ -28,6 +29,7 @@ def parse_commandline():
     parser.add_option("-p","--python",default="python")
     parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output")
     parser.add_option("-f","--filetype",default="slurm")
+    parser.add_option("-s","--scheduler",default="208.69.128.79:8786")
 
     parser.add_option("--doSubmit",  action="store_true", default=False)
 
@@ -102,12 +104,15 @@ if __name__ == '__main__':
     print('%d jobs remaining...' % njobs)
     
     counter = 0
-   
+
+    client = Client(opts.scheduler)
     if opts.doSubmit:
+        njobs = 10
         lazy_results = []
         for ii in range(njobs):
             lazy_result = dask.delayed(run_job)(df, ii)
             lazy_results.append(lazy_result)
 
-        #futures = dask.persist(*lazy_results)  # trigger computation in the background
-        dask.compute(*lazy_results)
+        futures = dask.persist(*lazy_results)  # trigger computation in the background
+        #dask.compute(*lazy_results)
+        progress(futures)

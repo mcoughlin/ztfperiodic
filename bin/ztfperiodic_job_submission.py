@@ -64,6 +64,7 @@ def run_job(df, quadrant_index):
     if not os.path.isfile(catalogFile):
         jobstr = jobline.replace("$PBS_ARRAYID","%d"%row["job_number"])
         print(jobstr)
+        print(stop)
         os.system(jobstr)
 
 # Parse command line
