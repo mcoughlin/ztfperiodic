@@ -10,6 +10,8 @@ import pandas as pd
 import numpy as np
 import h5py
 
+import dask
+
 import ztfperiodic.utils
 
 try:
@@ -66,48 +68,46 @@ def run_job(df, quadrant_index):
         print(jobstr)
         os.system(jobstr)
 
-# Parse command line
-opts = parse_commandline()
+if __name__ == '__main__':
 
-dir_path = os.path.dirname(os.path.realpath(__file__))
+    # Parse command line
+    opts = parse_commandline()
+    
+    dir_path = os.path.dirname(os.path.realpath(__file__))
+    
+    outputDir = opts.outputDir
+    filetype = opts.filetype
+    
+    qsubDir = os.path.join(outputDir,filetype)
+    if not os.path.isdir(qsubDir):
+        os.makedirs(qsubDir)
+    qsubfile = os.path.join(qsubDir,'%s.sub' % filetype)
+    
+    lines = [line.rstrip('\n') for line in open(qsubfile)]
+    jobline = lines[-1]
+    joblineSplit = list(filter(None,jobline.split("algorithm")[-1].split(" ")))
+    algorithm = joblineSplit[0]
+    
+    quadrantfile = os.path.join(qsubDir,'%s.dat' % filetype)
+    
+    names = ["job_number", "field", "ccd", "quadrant",
+             "Ncatindex", "Ncatalog", "idsFile"]
+    
+    catalogDir = os.path.join(outputDir,'catalog',algorithm)
+    #quad_out_original = np.loadtxt(quadrantfile)
+    df_original = pd.read_csv(quadrantfile, header=0, delimiter=' ',
+                              names=names)
+    df = filter_completed(df_original, catalogDir)       
+    njobs = len(df)
+    print('%d jobs remaining...' % njobs)
+    
+    counter = 0
+   
+    if opts.doSubmit:
+        lazy_results = []
+        for ii in range(njobs):
+            lazy_result = dask.delayed(run_job)(df, ii)
+            lazy_results.append(lazy_result)
 
-outputDir = opts.outputDir
-filetype = opts.filetype
-
-qsubDir = os.path.join(outputDir,filetype)
-if not os.path.isdir(qsubDir):
-    os.makedirs(qsubDir)
-qsubfile = os.path.join(qsubDir,'%s.sub' % filetype)
-
-lines = [line.rstrip('\n') for line in open(qsubfile)]
-jobline = lines[-1]
-joblineSplit = list(filter(None,jobline.split("algorithm")[-1].split(" ")))
-algorithm = joblineSplit[0]
-
-quadrantfile = os.path.join(qsubDir,'%s.dat' % filetype)
-
-names = ["job_number", "field", "ccd", "quadrant",
-         "Ncatindex", "Ncatalog", "idsFile"]
-
-catalogDir = os.path.join(outputDir,'catalog',algorithm)
-#quad_out_original = np.loadtxt(quadrantfile)
-df_original = pd.read_csv(quadrantfile, header=0, delimiter=' ',
-                          names=names)
-df = filter_completed(df_original, catalogDir)       
-njobs = len(df)
-print('%d jobs remaining...' % njobs)
-
-counter = 0
-
-if opts.doSubmit:
-    while njobs > 0:
-        quadrant_index = np.random.randint(0, njobs, size=1)
-        run_job(df, quadrant_index)
-
-        counter = counter + 1
-        print(counter)
-
-        if np.mod(counter,500) == 0:
-            df = filter_completed(df, catalogDir)
-            njobs = len(df)
-            print('%d jobs remaining...' % njobs)
+        #futures = dask.persist(*lazy_results)  # trigger computation in the background
+        dask.compute(*lazy_results)

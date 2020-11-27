@@ -173,6 +173,7 @@ if opts.lightcurve_source == "Kowalski":
 
         #fields = [700]
         fields = np.arange(250,882)
+        fields = np.arange(750,800)
         #fields = np.arange(250,300)
 
         for field in fields:

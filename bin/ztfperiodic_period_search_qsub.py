@@ -162,6 +162,8 @@ if opts.lightcurve_source == "Kowalski":
         fields = [400]
         fields = np.arange(250,882)
         fields = np.arange(600,700)
+        fields = np.arange(750,800)
+        #fields = np.arange(300,305)
 
         job_number = 0
         quadrantfile = os.path.join(qsubDir,'qsub.dat')
@@ -202,7 +204,7 @@ if opts.lightcurve_source == "Kowalski":
                                  }
                             r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
                             objids = []
-                            for obj in r['result_data']['query_result']:
+                            for obj in r['data']:
                                 objids.append(obj['_id'])
                             np.save(idsFile, objids)
                     
