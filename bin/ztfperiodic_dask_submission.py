@@ -107,7 +107,6 @@ if __name__ == '__main__':
 
     client = Client(opts.scheduler)
     if opts.doSubmit:
-        njobs = 10
         lazy_results = []
         for ii in range(njobs):
             lazy_result = dask.delayed(run_job)(df, ii)
