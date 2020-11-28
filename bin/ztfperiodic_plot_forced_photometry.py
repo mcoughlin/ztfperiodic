@@ -90,12 +90,15 @@ bands = ['g', 'r', 'i']
 plotName = os.path.join(outputDir,'phase.pdf')
 plt.figure(figsize=(12,8))
 ylims = [np.inf, -np.inf]
-for band, color, symbol in zip(bands, colors, symbols):
+for kk, (band, color, symbol) in enumerate(zip(bands, colors, symbols)):
     idx = np.where(band == fids_mod)[0]
-    plt.errorbar(hjd_mod[idx],flux_mod[idx],yerr=fluxerr_mod[idx],fmt='%s%s' % (color, symbol), label=band)
+    vals = flux_mod[idx]+kk*300
+    label = band + " + %d" % (kk*300)
 
-    ymed = np.nanmedian(flux_mod[idx])
-    y10, y90 = np.nanpercentile(flux_mod[idx],5), np.nanpercentile(flux_mod[idx],95)
+    plt.errorbar(hjd_mod[idx],vals,yerr=fluxerr_mod[idx],fmt='%s%s' % (color, symbol), label=label, alpha=0.5)
+
+    ymed = np.nanmedian(vals)
+    y10, y90 = np.nanpercentile(vals,5), np.nanpercentile(vals,95)
     #y90 = np.nanmax(flux_mod[idx])
     ystd = np.nanmedian(fluxerr_mod[idx])
 
