@@ -268,5 +268,8 @@ fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
 fid.write('cd $PBS_O_WORKDIR\n')
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('%s/ztfperiodic_job_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, opts.filetype))
+        if opts.filetype == "dask":
+            fid.write('CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 %s/ztfperiodic_dask_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, opts.filetype))
+        else:
+            fid.write('%s/ztfperiodic_job_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, opts.filetype))
 fid.close()

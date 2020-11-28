@@ -11,6 +11,7 @@ import numpy as np
 import h5py
 
 import dask
+from dask_cuda import LocalCUDACluster
 from dask.distributed import Client, progress
 
 import ztfperiodic.utils
@@ -29,7 +30,7 @@ def parse_commandline():
     parser.add_option("-p","--python",default="python")
     parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output")
     parser.add_option("-f","--filetype",default="slurm")
-    parser.add_option("-s","--scheduler",default="208.69.128.79:8786")
+    parser.add_option("-c","--CUDA_VISIBLE_DEVICES",default="0,1,2,3,4,5,6,7")
 
     parser.add_option("--doSubmit",  action="store_true", default=False)
 
@@ -56,9 +57,8 @@ def filter_completed(df, catalogDir):
 
     return df
 
-def run_job(df, quadrant_index):
+def run_job(row):
 
-    row = df.iloc[quadrant_index]
     field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
     Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
     idsFile = row["idsFile"]
@@ -105,11 +105,17 @@ if __name__ == '__main__':
     
     counter = 0
 
-    client = Client(opts.scheduler)
+    #client = Client(opts.scheduler)
+    cluster = LocalCUDACluster(CUDA_VISIBLE_DEVICES=opts.CUDA_VISIBLE_DEVICES,
+                               threads_per_worker=1)
+
+    client = Client(cluster)
     if opts.doSubmit:
+        njobs = 100
         lazy_results = []
         for ii in range(njobs):
-            lazy_result = dask.delayed(run_job)(df, ii)
+            row = df.iloc[ii]
+            lazy_result = dask.delayed(run_job)(row)
             lazy_results.append(lazy_result)
 
         futures = dask.persist(*lazy_results)  # trigger computation in the background
