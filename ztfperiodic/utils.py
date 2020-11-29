@@ -121,7 +121,8 @@ def galex_query(ra_deg, dec_deg, rad_deg, maxmag=25,
     returns: astropy.table object
     """
     vquery = Vizier(columns=['Source', 'RAJ2000', 'DEJ2000',
-                             'FUVmag', 'NUVmag'],
+                             'FUVmag', 'NUVmag',
+                             'e_FUVmag', 'e_NUVmag'],
                     column_filters={"FUVmag":
                                     ("<%f" % maxmag),
                                    "NUVmag":
@@ -136,6 +137,38 @@ def galex_query(ra_deg, dec_deg, rad_deg, maxmag=25,
         source = vquery.query_region(field,
                                width=("%fd" % rad_deg),
                                catalog="II/335/galex_ais")
+        return source[0]
+    except:
+        return []
+
+
+def sdss_query(ra_deg, dec_deg, rad_deg, maxmag=25,
+               maxsources=1):
+    """
+    Query Pan-STARRS @ VizieR using astroquery.vizier
+    parameters: ra_deg, dec_deg, rad_deg: RA, Dec, field
+                                          radius in degrees
+                maxmag: upper limit G magnitude (optional)
+                maxsources: maximum number of sources
+    returns: astropy.table object
+    """
+    vquery = Vizier(columns=['Source', 'RA_ICRS', 'DE_ICRS',
+                             'umag', 'gmag', 'rmag', 'imag', 'zmag',
+                             'e_umag', 'e_gmag', 'e_rmag', 'e_imag', 'e_zmag'],
+                    column_filters={"gmag":
+                                    ("<%f" % maxmag),
+                                   "rmag":
+                                    ("<%f" % maxmag)},
+                    row_limit = maxsources)
+
+    field = SkyCoord(ra=ra_deg, dec=dec_deg,
+                           unit=(u.deg, u.deg),
+                           frame='icrs')
+
+    try:
+        source = vquery.query_region(field,
+                               width=("%fd" % rad_deg),
+                               catalog="V/147/sdss12")
         return source[0]
     except:
         return []
