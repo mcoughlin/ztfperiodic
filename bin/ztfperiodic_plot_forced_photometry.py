@@ -52,15 +52,26 @@ phase = opts.phase
 if not os.path.isdir(outputDir):
     os.makedirs(outputDir)
 
-data = Table.read(datafile, format='ascii', data_start=1)
-
 hjd, flux, fluxerr, fids = [], [], [], []
-for a, b, c, d in zip(data["col23"], data["col25"], data["col26"], data["col5"]):
-    if b == "null": continue
-    hjd.append(a)
-    flux.append(float(b))
-    fluxerr.append(float(c))
-    fids.append(d.split("_")[1])
+if "dat" in datafile:
+    data = Table.read(datafile, format='ascii', data_start=1)
+
+    for a, b, c, d in zip(data["col23"], data["col25"], data["col26"], data["col5"]):
+        if b == "null": continue
+        hjd.append(a)
+        flux.append(float(b))
+        fluxerr.append(float(c))
+        fids.append(d.split("_")[1])
+
+elif "fits" in datafile:
+    data = Table.read(datafile, format='fits')
+
+    for a, b, c, d in zip(data["jdobs"], data["Flux_maxlike"], data["Flux_maxlike_unc"], data["filter"]):
+        if b == "null": continue
+        hjd.append(a)
+        flux.append(float(b))
+        fluxerr.append(float(c))
+        fids.append(d)
 
 hjd, flux, fluxerr, fids = np.array(hjd), np.array(flux), np.array(fluxerr), np.array(fids)
 
@@ -77,11 +88,29 @@ fids = [1,2,3]
 bands = ['g', 'r', 'i']
 
 plotName = os.path.join(outputDir,'phase.pdf')
-plt.figure(figsize=(7,5))
-for band, color, symbol in zip(bands, colors, symbols):
+plt.figure(figsize=(12,8))
+ylims = [np.inf, -np.inf]
+for kk, (band, color, symbol) in enumerate(zip(bands, colors, symbols)):
     idx = np.where(band == fids_mod)[0]
-    print(idx)
-    plt.errorbar(hjd_mod[idx],flux_mod[idx],yerr=fluxerr_mod[idx],fmt='%s%s' % (color, symbol), label=band)
+    vals = flux_mod[idx]+kk*300
+    label = band + " + %d" % (kk*300)
+
+    plt.errorbar(hjd_mod[idx],vals,yerr=fluxerr_mod[idx],fmt='%s%s' % (color, symbol), label=label, alpha=0.5)
+
+    ymed = np.nanmedian(vals)
+    y10, y90 = np.nanpercentile(vals,5), np.nanpercentile(vals,95)
+    #y90 = np.nanmax(flux_mod[idx])
+    ystd = np.nanmedian(fluxerr_mod[idx])
+
+    ymin = y10 - 5*ystd
+    ymax = y90 + 5*ystd
+
+    if ymin < ylims[0]:
+        ylims[0] = ymin
+    if ymax > ylims[1]:
+        ylims[1] = ymax
+
+plt.ylim(ylims)
 plt.xlabel('Phase')
 plt.ylabel('Flux')
 plt.legend()

@@ -162,6 +162,8 @@ if opts.lightcurve_source == "Kowalski":
         fields = [400]
         fields = np.arange(250,882)
         fields = np.arange(600,700)
+        fields = np.arange(750,800)
+        #fields = np.arange(300,305)
 
         job_number = 0
         quadrantfile = os.path.join(qsubDir,'qsub.dat')
@@ -202,7 +204,7 @@ if opts.lightcurve_source == "Kowalski":
                                  }
                             r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
                             objids = []
-                            for obj in r['result_data']['query_result']:
+                            for obj in r['data']:
                                 objids.append(obj['_id'])
                             np.save(idsFile, objids)
                     
@@ -266,5 +268,8 @@ fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
 fid.write('cd $PBS_O_WORKDIR\n')
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('%s/ztfperiodic_job_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, opts.filetype))
+        if opts.filetype == "dask":
+            fid.write('CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 %s/ztfperiodic_dask_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, opts.filetype))
+        else:
+            fid.write('%s/ztfperiodic_job_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, opts.filetype))
 fid.close()

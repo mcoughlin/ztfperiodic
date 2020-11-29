@@ -52,6 +52,21 @@ def filter_completed(df, catalogDir):
 
     return df
 
+def run_job(df, quadrant_index):
+
+    row = df.iloc[quadrant_index]
+    field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
+    Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+    idsFile = row["idsFile"]
+
+    print(field, ccd, quadrant, Ncatindex, Ncatalog)
+    catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
+    if not os.path.isfile(catalogFile):
+        jobstr = jobline.replace("$PBS_ARRAYID","%d"%row["job_number"])
+        print(jobstr)
+        print(stop)
+        os.system(jobstr)
+
 # Parse command line
 opts = parse_commandline()
 
@@ -88,18 +103,7 @@ counter = 0
 if opts.doSubmit:
     while njobs > 0:
         quadrant_index = np.random.randint(0, njobs, size=1)
-        row = df.iloc[quadrant_index]
-        field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
-        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
-        idsFile = row["idsFile"]
-
-        print(field, ccd, quadrant, Ncatindex, Ncatalog)
-        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
-        if not os.path.isfile(catalogFile):
-            jobstr = jobline.replace("$PBS_ARRAYID","%d"%row["job_number"])
-            print(jobstr)
-            print(stop)
-            os.system(jobstr)
+        run_job(df, quadrant_index)
 
         counter = counter + 1
         print(counter)
