@@ -35,12 +35,14 @@ Simbad.TIMEOUT = 300000
 from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.utils import get_kowalski_features_objids 
 from ztfperiodic.utils import get_kowalski_classifications_objids
+from ztfperiodic.utils import get_kowalski_external
 from ztfperiodic.utils import get_kowalski_objids
 from ztfperiodic.lcstats import sawtooth_decomposition, make_s
 from ztfperiodic.utils import gaia_query
 from ztfperiodic.utils import ps1_query
 from ztfperiodic.utils import galex_query
 from ztfperiodic.utils import sdss_query
+from ztfperiodic.utils import database_query
 
 try:
     from penquins import Kowalski
@@ -227,21 +229,23 @@ if not os.path.isfile(catalogFile):
     mag[:, :ncols] = mag_tmp
     magerr[:, :ncols] = magerr_tmp
 
+    radius = 5
     for kk, (r, d) in enumerate(zip(ra, dec)):
 
         if np.mod(kk,100) == 0:
             print('Loading %d/%d'%(kk,len(ra)))
 
-        galex = galex_query(r, d, 5/3600.0)
-        if galex:
-            FUVmag = galex["FUVmag"].data.data[0]
-            NUVmag = galex["NUVmag"].data.data[0]
-            e_FUVmag = galex["e_FUVmag"].data.data[0]
-            e_NUVmag = galex["e_NUVmag"].data.data[0]
+        external = get_kowalski_external(r, d, kow, radius = radius)
+        FUVmag, NUVmag = external["mag"][9], external["mag"][10]
+        e_FUVmag, e_NUVmag = external["magerr"][9], external["magerr"][10]
 
+        if not np.isnan(FUVmag):
             mag[kk, ncols] = FUVmag
+        if not np.isnan(NUVmag):
             mag[kk, ncols+1] = NUVmag
+        if not np.isnan(e_FUVmag):
             magerr[kk, ncols] = e_FUVmag
+        if not np.isnan(e_NUVmag):
             magerr[kk, ncols+1] = e_NUVmag
 
         sdss = sdss_query(r, d, 5/3600.0)
@@ -255,7 +259,7 @@ if not os.path.isfile(catalogFile):
             e_gmag = sdss["e_gmag"].data.data[0]
             e_rmag = sdss["e_rmag"].data.data[0]
             e_imag = sdss["e_imag"].data.data[0]
-            e_zmag = sdss["e_zmag"].data.data[1]
+            e_zmag = sdss["e_zmag"].data.data[0]
 
             mag[kk, ncols+2] = umag
             mag[kk, ncols+3] = gmag
@@ -284,6 +288,21 @@ with h5py.File(catalogFile, 'r') as f:
     ra, dec = f['ra'][:], f['dec'][:]   
     gaia = f['gaia'][:]
 
+
+radius = 5
+for r, d in zip(ra, dec):
+    #qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [r,d]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "GALEX": { "filter": "{}", "projection": "{}"} } } }
+
+    #r = database_query(kow, qu, nquery = 10)
+
+    data = get_kowalski_external(r, d, kow, radius = 5.0)
+    print(data)
+
+    #qu = { "query_type": "info", "query": {"command": "catalog_names"}}
+    #r = database_query(kow, qu, nquery = 1)
+
+print(stop)
+
 if opts.doPlots:
 
     w1, w2, w3, w4 = mag[:,0], mag[:,1], mag[:,2], mag[:,3]
@@ -293,9 +312,9 @@ if opts.doPlots:
 
     plotName = os.path.join(outputDir,'WISE.pdf')
     plt.figure(figsize=(7,5))
-    plt.scatter(w1-w2, w3-w4, s=20, c='k')
-    plt.xlabel('w1-w2')
-    plt.ylabel('w3-w4')
+    hist2 = plt.hist2d(w1-w2, w3-w4, bins=100,zorder=0,norm=LogNorm())
+    plt.xlabel('WISE $w_1-w_2$')
+    plt.ylabel('WISE $w_3-w_4$')
     plt.tight_layout()
     plt.savefig(plotName)
     plt.close()
@@ -307,8 +326,8 @@ if opts.doPlots:
     plotName = os.path.join(outputDir,'galex.pdf')
     plt.figure(figsize=(7,5))
     plt.scatter(FUV, NUV, s=20, c='k')
-    plt.xlabel('FUV')
-    plt.ylabel('NUV')
+    plt.xlabel('Galex FUV')
+    plt.ylabel('Galex NUV')
     plt.tight_layout()
     plt.savefig(plotName)
     plt.close()
@@ -331,13 +350,13 @@ if opts.doPlots:
     plt.figure(figsize=(8,6))
     hist2 = plt.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
     plt.errorbar(bp_rp,absmag,yerr=asymmetric_error,
-                 c='r',zorder=1,fmt='o',alpha=0.2)
+                 c='r',zorder=1,fmt='o',alpha=0.01)
     plt.xlabel('Gaia BP - RP')
     plt.ylabel('Gaia $M_G$')
     plt.xlim([-1,4.0])
     plt.ylim([-5,18])
     plt.gca().invert_yaxis()
     plt.tight_layout()
-    plt.savefig(plotName)
+    plt.savefig(plotName, bbox_inches='tight')
     plt.close()
 
