@@ -42,10 +42,9 @@ from ztfperiodic.utils import get_matchfile
 from ztfperiodic.utils import find_matchfile
 from ztfperiodic.utils import convert_to_hex
 from ztfperiodic.utils import get_kowalski_external
-from ztfperiodic.utils import sigma_model
 from ztfperiodic.periodsearch import find_periods
 from ztfperiodic.specfunc import correlate_spec, adjust_subplots_band, tick_function
-from ztfperiodic.simulate import pdot_lc, ellc 
+from ztfperiodic.simulate import inject 
 
 try:
     from penquins import Kowalski
@@ -134,9 +133,7 @@ def parse_commandline():
     parser.add_option("--doBrutus",  action="store_true", default=False)
     parser.add_option("--brutusPath",default="/home/michael.coughlin/ZTF/brutus/data/DATAFILES/")
 
-    parser.add_option("--mag",default=16.0,type=float)
-    parser.add_option("--period",default=0.004861111111111111,type=float)
-    parser.add_option("--inclination",default=90.0,type=float)
+    parser.add_option("-i","--injtype",default="wdb")
 
     opts, args = parser.parse_args()
 
@@ -192,43 +189,6 @@ def touch(fname):
     else:
         open(fname, 'a').close()
 
-def inject_wdb(lc, model_params, magerr_params):
-
-    hjd, mag, err = lc
-
-    # Model parameters:
-    period, inclination, sbratio = model_params
-
-    #A, phase, magerr = pdot_lc(t_obs=hjd, absmag=False, period=period,
-    #                           incl=inclination, sbratio=sbratio)
-
-    A = ellc(hjd, period=period, incl=inclination, sbratio=sbratio)
-
-    # Transforming magnitudes to flux and calculating the median flux:
-    flux = pow(10.0,0.4*(18.0-mag))
-    flux_median = np.median(flux)
-
-    # Injecting microlensing signal
-
-    flux_median_magnified = flux_median * A
-
-    mag_median_magnified = 18.0-2.5*np.log10(flux_median_magnified)
-    mag_median = 18.0-2.5*np.log10(flux_median)
-
-    sigma_median_magnified = sigma_model(mag_median_magnified,*magerr_params)
-    sigma_median = sigma_model(mag_median,*magerr_params)
-
-    flux_new = (flux-flux_median)*sigma_median_magnified/sigma_median
-    flux_new += flux_median_magnified
-
-    mag_new = 18.0-2.5*np.log10(flux_new)
-    magerr_new = err*sigma_median_magnified/sigma_median/A
-
-    idx = np.where(~np.isnan(mag_new))[0]
-
-    return [hjd[idx], mag_new[idx], magerr_new[idx]]
-
-
 # Parse command line
 opts = parse_commandline()
 
@@ -268,10 +228,7 @@ crossmatch_radius = opts.crossmatch_radius
 doPercentile=opts.doPercentile
 percmin = opts.percmin
 percmax = opts.percmax
-
-mag = opts.mag
-period = opts.period
-inclination = opts.inclination
+injtype = opts.injtype
 
 if opts.doQuadrantFile:
     if opts.lightcurve_source == "Kowalski":
@@ -703,28 +660,36 @@ if opts.doCheckLightcurves:
 
 n_simulated = len(lightcurves)
 
-sbratio_min, sbratio_max = 0.00, 1.00
-period_min, period_max = 4.0*60.0/86400.0, 60.0*60.0/86400.0
-inclination_min, inclination_max = 80.0, 90.0
-
-sbratios = sbratio_min + (sbratio_max - sbratio_min)*np.random.rand(n_simulated)
-periods = period_min + (period_max - period_min)*np.random.rand(n_simulated)
-inclinations = inclination_min + (inclination_max - inclination_min)*np.random.rand(n_simulated)
-injections = np.vstack([periods, inclinations, sbratios])
+if injtype == "wdb":
+    sbratio_min, sbratio_max = 0.00, 1.00
+    period_min, period_max = 4.0*60.0/86400.0, 60.0*60.0/86400.0
+    inclination_min, inclination_max = 80.0, 90.0
+    
+    sbratios = sbratio_min + (sbratio_max - sbratio_min)*np.random.rand(n_simulated)
+    periods = period_min + (period_max - period_min)*np.random.rand(n_simulated)
+    inclinations = inclination_min + (inclination_max - inclination_min)*np.random.rand(n_simulated)
+    injections = np.vstack([periods, inclinations, sbratios]).T
+elif injtype == "gaussian":
+    amplitude_min, amplitude_max = np.log10(0.01), np.log10(1.00)
+    period_min, period_max = np.log10(0.1), np.log10(100.0)
+    phase_min, phase_max = 0.0, 2*np.pi
+ 
+    amplitudes = 10**(amplitude_min + (amplitude_max - amplitude_min)*np.random.rand(n_simulated))
+    periods = 10**(period_min + (period_max - period_min)*np.random.rand(n_simulated))
+    phases = phase_min + (phase_max - phase_min)*np.random.rand(n_simulated)
+    injections = np.vstack([periods, amplitudes, phases]).T
 
 print('Generating injections...')
 start_time = time.time()
 
 if opts.doParallel:
     from joblib import Parallel, delayed
-    lightcurves = Parallel(n_jobs=opts.Ncore)(delayed(inject_wdb)(lightcurves[ii], injections[:,ii], err_pars[filters[ii][0]]) for ii in range(len(lightcurves)))
+    lightcurves = Parallel(n_jobs=opts.Ncore)(delayed(inject)(lightcurves[ii], injections[ii,:], err_pars[filters[ii][0]], injtype=injtype) for ii in range(len(lightcurves)))
 else:
     for ii, data in enumerate(lightcurves):
         if np.mod(ii,100) == 0:
             print("%d/%d"%(ii,len(lightcurves)))
-        lightcurves[ii] = inject_wdb(lightcurves[ii], injections[:,ii], err_pars[filters[ii][0]])
-        if np.any(np.isnan(lightcurves[ii][1])):
-            print(lightcurves[ii][1])
+        lightcurves[ii] = inject(lightcurves[ii], injections[ii,:], err_pars[filters[ii][0]], injtype=injtype)
 end_time = time.time()
 print('Generating injections took %.2f seconds' % (end_time - start_time))
 

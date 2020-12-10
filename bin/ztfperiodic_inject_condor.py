@@ -67,6 +67,8 @@ def parse_commandline():
 
     parser.add_option("--min_epochs",default=50,type=int)
 
+    parser.add_option("-i","--injtype",default="wdb")
+
     opts, args = parser.parse_args()
 
     return opts
@@ -75,6 +77,7 @@ def parse_commandline():
 opts = parse_commandline()
 Ncatalog = opts.Ncatalog
 min_epochs = opts.min_epochs
+injtype = opts.injtype
 
 if not (opts.doCPU or opts.doGPU):
     print("--doCPU or --doGPU required")
@@ -233,7 +236,7 @@ if opts.lightcurve_source == "Kowalski":
                             print('%s already exists... continuing.' % catalogFile)
                             continue
 
-                        fid1.write('%s %s/ztfperiodic_inject_search.py %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type objid --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --catalog_file %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, idsFile, extra_flags))
+                        fid1.write('%s %s/ztfperiodic_inject_search.py %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type objid --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --catalog_file %s --injtype %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, idsFile, injtype, extra_flags))
     
                         fid.write('JOB %d condor.sub\n'%(job_number))
                         fid.write('RETRY %d 3\n'%(job_number))
@@ -248,7 +251,7 @@ fid = open(os.path.join(condorDir,'condor.sub'),'w')
 fid.write('executable = %s/ztfperiodic_inject_search.py\n'%dir_path)
 fid.write('output = logs/out.$(jobNumber)\n');
 fid.write('error = logs/err.$(jobNumber)\n');
-fid.write('arguments = %s --outputDir %s --batch_size %d --field $(field) --ccd $(ccd) --quadrant $(quadrant) --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --program_ids 1,2,3 --algorithm %s --catalog_file $(idsFile) %s --source_type objid\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.algorithm,extra_flags))
+fid.write('arguments = %s --outputDir %s --batch_size %d --field $(field) --ccd $(ccd) --quadrant $(quadrant) --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --program_ids 1,2,3 --algorithm %s --catalog_file $(idsFile) --injtype %s %s --source_type objid\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.algorithm,injtype,extra_flags))
 fid.write('requirements = OpSys == "LINUX"\n');
 fid.write('request_memory = 8192\n');
 if opts.doCPU:

@@ -11,6 +11,8 @@ import ellc
 from ellc import lc
 import pandas as pd
 
+from ztfperiodic.utils import sigma_model
+
 # default params
 m1 = 0.5 # mass 1 (msun)
 m2 = 0.25 # mass 2 (msun)
@@ -411,3 +413,41 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=None, radius_1=None, radi
             fig.savefig(str(Pdot)+'_pdotlightcurve.png',dpi=100)
 
     return np.array(fluxes),np.array(phases),errors
+
+
+def inject(lc, model_params, magerr_params, injtype="wdb"):
+
+    hjd, mag, err = lc
+
+    if injtype == "wdb":
+        # Model parameters:
+        period, inclination, sbratio = model_params
+        A = ellc(hjd, period=period, incl=inclination, sbratio=sbratio)
+    elif injtype == "gaussian":
+        # Model parameters:
+        period, amplitude, phase = model_params
+        A = 1 + amplitude*np.sin((2*np.pi*hjd/period) + phase)
+
+    # Transforming magnitudes to flux and calculating the median flux:
+    flux = pow(10.0,0.4*(18.0-mag))
+    flux_median = np.median(flux)
+
+    # Injecting microlensing signal
+
+    flux_median_magnified = flux_median * A
+
+    mag_median_magnified = 18.0-2.5*np.log10(flux_median_magnified)
+    mag_median = 18.0-2.5*np.log10(flux_median)
+
+    sigma_median_magnified = sigma_model(mag_median_magnified,*magerr_params)
+    sigma_median = sigma_model(mag_median,*magerr_params)
+
+    flux_new = (flux-flux_median)*sigma_median_magnified/sigma_median
+    flux_new += flux_median_magnified
+
+    mag_new = 18.0-2.5*np.log10(flux_new)
+    magerr_new = err*sigma_median_magnified/sigma_median/A
+
+    idx = np.where(~np.isnan(mag_new) & (mag_new < 22.0) )[0]
+
+    return [hjd[idx], mag_new[idx], magerr_new[idx]]

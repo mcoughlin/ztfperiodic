@@ -288,21 +288,6 @@ with h5py.File(catalogFile, 'r') as f:
     ra, dec = f['ra'][:], f['dec'][:]   
     gaia = f['gaia'][:]
 
-
-radius = 5
-for r, d in zip(ra, dec):
-    #qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [r,d]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "GALEX": { "filter": "{}", "projection": "{}"} } } }
-
-    #r = database_query(kow, qu, nquery = 10)
-
-    data = get_kowalski_external(r, d, kow, radius = 5.0)
-    print(data)
-
-    #qu = { "query_type": "info", "query": {"command": "catalog_names"}}
-    #r = database_query(kow, qu, nquery = 1)
-
-print(stop)
-
 if opts.doPlots:
 
     w1, w2, w3, w4 = mag[:,0], mag[:,1], mag[:,2], mag[:,3]
