@@ -775,6 +775,7 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
                 fid = fid[idx]
 
         if doPercentile:
+            if len(hjd) == 0: continue
             magmin, magmax = np.percentile(mag, percmin), np.percentile(mag, percmax)
             idx = np.where((mag >= magmin) & (mag <= magmax))[0]
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
@@ -2230,3 +2231,26 @@ def flux2mag(flux, fluxerr, flux_0 = 3631.0):
     mag = -2.5*np.log10(flux/flux_0)
     magerr = np.abs(fluxerr)/flux
     return mag, magerr
+
+def sigma_model (mag, A, B, C, D):
+
+    """ Calculating the corrected ZTF photometric uncertainties:
+    According to the ZTF Data Explanatory Supplement (Section 6.8.1),
+    photometric uncertainties in the matchfiles are estimated using a
+    simple model:
+    magerr = A + B*x + C*10^(0.4*x) + D*10^(0.8*x) for x <= 21.0
+    magerr = b*x + c for x > 21.0
+    According to Frank Masci (email from 17 Nov 2020), the "b" and "c"
+    coefficients are not stored anywhere. So for objects fainter than 21
+    I am assuming photometric uncertainties equal to those of a 21-mag
+    object. Note that according to Frank, the model applies to the
+    magnitude range 13 <= mag <= 21.
+    """
+
+    if isinstance(mag,(list,np.ndarray)):
+        aux = np.clip(mag,None,21.0)
+    else:
+        aux = min((mag,21.0))
+    tmp = pow(10.0,0.4*aux)
+    magerr = A + B*aux + C*tmp + D*tmp**2
+    return magerr

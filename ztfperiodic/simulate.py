@@ -338,78 +338,76 @@ def pdot_lc(t_obs, mag=None, absmag=True, d=None, Pdot=None, radius_1=None, radi
         phot = np.interp(tmod,t_obs,flux,period=P_new)
         fluxes.append(phot)
        
-    #plt.figure()
-    #plt.plot(tmods, fluxes, 'kx')
-    #plt.savefig('test.png')
-    #plt.close()
- 
-    fig = plt.figure()
-    
-    script = os.path.realpath(__file__)
-    magerrdir = os.path.join("/".join(script.split("/")[:-2]),"input")
-    gmagerr = os.path.join(magerrdir,'gmagerr.txt')
-    rmagerr = os.path.join(magerrdir,'Rmagerr.txt')
-    
-    if mag is not None:
-        gerr = pd.read_csv(gmagerr,sep=' ',names=['Mag','Err'])
-        rerr = pd.read_csv(rmagerr,sep=' ',names=['Mag','Err'])
-        gmags, gerrs = gerr['Mag'], gerr['Err']
-        rmags, rerrs = rerr['Mag'], rerr['Err']
-        
-        if absmag is True:
-            magarr = mag - 2.5*np.log10(fluxes/max(fluxes))
-            errors = np.interp(magarr,gmags,gerrs)
-            plt.errorbar(phases,magarr,errors,ls='none',c='k',label=r'\.P = '+str(Pdot))
-            plt.xlabel('Phase', fontsize=12)
-            plt.ylabel('Absolute Mag', fontsize=12)
-            plt.xlim(0,1)
-            plt.xticks(fontsize=12)
-            plt.yticks(fontsize=12)
-            plt.gca().invert_yaxis()
-            plt.legend()
-            plt.show()
-            
-        if absmag is False:    
-            appmag = 5*np.log10(d) - 5 + mag
-            magarr = appmag - 2.5*np.log10(fluxes/max(fluxes))
-            errors = np.interp(magarr,gmags,gerrs)
-            plt.errorbar(phases,magarr,errors,ls='none',c='k',label=r'\.P = '+str(Pdot))
-            plt.xlabel('Phase', fontsize=12)
-            plt.ylabel('Apparent Mag', fontsize=12)
-            plt.xlim(0,1)
-            plt.xticks(fontsize=12)
-            plt.yticks(fontsize=12)
-            plt.gca().invert_yaxis()
-            plt.legend()
-            plt.show()
-            
-        return np.array(magarr),np.array(phases),np.array(errors)
-       
-    else:
-        errors = np.zeros_like(fluxes)
-        if plot_nopdot is True:
-            phase_fold(t_obs,flux_nopdot,P0)
-            plt.plot(phases,fluxes,'k.',label=r'\.P = '+str(Pdot))
-            plt.xlabel('Phase', fontsize=12)
-            plt.ylabel('Flux', fontsize=12)
-            plt.xlim(0,1)
-            plt.xticks(fontsize=12)
-            plt.yticks(fontsize=12)
-            plt.legend()
-            plt.show()
+    errors = np.zeros_like(fluxes)
 
-        if plot_nopdot is False:
-            plt.plot(phases,fluxes,'k.',label=r'\.P = '+str(Pdot))
-            plt.xlabel('Phase', fontsize=12)
-            plt.ylabel('Flux', fontsize=12)
-            plt.xticks(fontsize=12)
-            plt.yticks(fontsize=12)
-            plt.legend()
-            plt.show()
+    if False:
+        fig = plt.figure()
         
-        return np.array(fluxes),np.array(phases),errors
+        script = os.path.realpath(__file__)
+        magerrdir = os.path.join("/".join(script.split("/")[:-2]),"input")
+        gmagerr = os.path.join(magerrdir,'gmagerr.txt')
+        rmagerr = os.path.join(magerrdir,'Rmagerr.txt')
         
+        if mag is not None:
+            gerr = pd.read_csv(gmagerr,sep=' ',names=['Mag','Err'])
+            rerr = pd.read_csv(rmagerr,sep=' ',names=['Mag','Err'])
+            gmags, gerrs = gerr['Mag'], gerr['Err']
+            rmags, rerrs = rerr['Mag'], rerr['Err']
+            
+            if absmag is True:
+                magarr = mag - 2.5*np.log10(fluxes/max(fluxes))
+                errors = np.interp(magarr,gmags,gerrs)
+                plt.errorbar(phases,magarr,errors,ls='none',c='k',label=r'\.P = '+str(Pdot))
+                plt.xlabel('Phase', fontsize=12)
+                plt.ylabel('Absolute Mag', fontsize=12)
+                plt.xlim(0,1)
+                plt.xticks(fontsize=12)
+                plt.yticks(fontsize=12)
+                plt.gca().invert_yaxis()
+                plt.legend()
+                plt.show()
+                
+            if absmag is False:    
+                appmag = 5*np.log10(d) - 5 + mag
+                magarr = appmag - 2.5*np.log10(fluxes/max(fluxes))
+                errors = np.interp(magarr,gmags,gerrs)
+                plt.errorbar(phases,magarr,errors,ls='none',c='k',label=r'\.P = '+str(Pdot))
+                plt.xlabel('Phase', fontsize=12)
+                plt.ylabel('Apparent Mag', fontsize=12)
+                plt.xlim(0,1)
+                plt.xticks(fontsize=12)
+                plt.yticks(fontsize=12)
+                plt.gca().invert_yaxis()
+                plt.legend()
+                plt.show()
+                
+            return np.array(magarr),np.array(phases),np.array(errors)
+           
+        else:
+            errors = np.zeros_like(fluxes)
+            if plot_nopdot is True:
+                phase_fold(t_obs,flux_nopdot,P0)
+                plt.plot(phases,fluxes,'k.',label=r'\.P = '+str(Pdot))
+                plt.xlabel('Phase', fontsize=12)
+                plt.ylabel('Flux', fontsize=12)
+                plt.xlim(0,1)
+                plt.xticks(fontsize=12)
+                plt.yticks(fontsize=12)
+                plt.legend()
+                plt.show()
     
-        
-    if savefig is True:
-        fig.savefig(str(Pdot)+'_pdotlightcurve.png',dpi=100)
+            if plot_nopdot is False:
+                plt.plot(phases,fluxes,'k.',label=r'\.P = '+str(Pdot))
+                plt.xlabel('Phase', fontsize=12)
+                plt.ylabel('Flux', fontsize=12)
+                plt.xticks(fontsize=12)
+                plt.yticks(fontsize=12)
+                plt.legend()
+                plt.show()
+            
+            return np.array(fluxes),np.array(phases),errors
+            
+        if savefig is True:
+            fig.savefig(str(Pdot)+'_pdotlightcurve.png',dpi=100)
+
+    return np.array(fluxes),np.array(phases),errors
