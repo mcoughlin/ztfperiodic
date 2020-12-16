@@ -72,6 +72,7 @@ install_requires = [
     'matplotlib',
     'numpy',
     'pandas',
+    'penquins',
     'scipy',
     'tables',
     'tqdm'

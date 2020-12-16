@@ -1,9 +1,6 @@
 # ztfperiodic
 Scripts for analyzing ZTF periodic data
 
-Reminder: penquins required
-pip install git+https://github.com/dmitryduev/broker.git
-
 ## Period Search
 
 This package implements several period-searching algorithms. Below we explain some of them.
