@@ -33,8 +33,8 @@ def plot_gaia_subplot(gaia, ax, tboutputDir, doTitle=False):
     cbar.set_label('Object Count')
     ax.set_xlabel('Gaia BP - RP')
     ax.set_ylabel('Gaia $M_G$')
-    
-    bp_rp = gaia['BP-RP'].data.data[0]
+  
+    bp_rp = gaia['BPmag'].data.data[0] - gaia['RPmag'].data.data[0]
     Plx = gaia['Plx'].data.data[0] # mas
     e_Plx = gaia['e_Plx'].data.data[0] # mas
     gofAL = gaia["gofAL"].data.data[0]

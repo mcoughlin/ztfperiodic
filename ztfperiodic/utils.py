@@ -121,7 +121,8 @@ def galex_query(ra_deg, dec_deg, rad_deg, maxmag=25,
     returns: astropy.table object
     """
     vquery = Vizier(columns=['Source', 'RAJ2000', 'DEJ2000',
-                             'FUVmag', 'NUVmag'],
+                             'FUVmag', 'NUVmag',
+                             'e_FUVmag', 'e_NUVmag'],
                     column_filters={"FUVmag":
                                     ("<%f" % maxmag),
                                    "NUVmag":
@@ -136,6 +137,38 @@ def galex_query(ra_deg, dec_deg, rad_deg, maxmag=25,
         source = vquery.query_region(field,
                                width=("%fd" % rad_deg),
                                catalog="II/335/galex_ais")
+        return source[0]
+    except:
+        return []
+
+
+def sdss_query(ra_deg, dec_deg, rad_deg, maxmag=25,
+               maxsources=1):
+    """
+    Query Pan-STARRS @ VizieR using astroquery.vizier
+    parameters: ra_deg, dec_deg, rad_deg: RA, Dec, field
+                                          radius in degrees
+                maxmag: upper limit G magnitude (optional)
+                maxsources: maximum number of sources
+    returns: astropy.table object
+    """
+    vquery = Vizier(columns=['Source', 'RA_ICRS', 'DE_ICRS',
+                             'umag', 'gmag', 'rmag', 'imag', 'zmag',
+                             'e_umag', 'e_gmag', 'e_rmag', 'e_imag', 'e_zmag'],
+                    column_filters={"gmag":
+                                    ("<%f" % maxmag),
+                                   "rmag":
+                                    ("<%f" % maxmag)},
+                    row_limit = maxsources)
+
+    field = SkyCoord(ra=ra_deg, dec=dec_deg,
+                           unit=(u.deg, u.deg),
+                           frame='icrs')
+
+    try:
+        source = vquery.query_region(field,
+                               width=("%fd" % rad_deg),
+                               catalog="V/147/sdss12")
         return source[0]
     except:
         return []
@@ -224,7 +257,7 @@ def get_catalog(data):
 
 def get_kowalski_external(ra, dec, kow, radius = 5.0):
 
-    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{}"}, "AllWISE": { "filter": "{}", "projection": "{}" }, "PS1_DR1": { "filter": "{}", "projection": "{}"} } } }
+    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{}"}, "AllWISE": { "filter": "{}", "projection": "{}" }, "PS1_DR1": { "filter": "{}", "projection": "{}"}, "GALEX": { "filter": "{}", "projection": "{}"} } } }
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
@@ -235,14 +268,17 @@ def get_kowalski_external(ra, dec, kow, radius = 5.0):
         print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec))
         return {}
 
-    key1, key2, key3 = 'PS1_DR1', 'Gaia_DR2', 'AllWISE'
-    data1, data2, data3 = r["data"][key1], r["data"][key2], r["data"][key3]
+    key1, key2, key3, key4 = 'PS1_DR1', 'Gaia_DR2', 'AllWISE', 'GALEX'
+    data1, data2 = r["data"][key1], r["data"][key2]
+    data3, data4 = r["data"][key3], r["data"][key4]
     key = list(data1.keys())[0]
     data1 = data1[key]
     key = list(data2.keys())[0]
     data2 = data2[key]
     key = list(data3.keys())[0]
     data3 = data3[key]
+    key = list(data4.keys())[0]
+    data4 = data4[key]
 
     w1mpro, w2mpro, w3mpro, w4mpro = np.nan, np.nan, np.nan, np.nan
     w1sigmpro, w2sigmpro, w3sigmpro, w4sigmpro = np.nan, np.nan, np.nan, np.nan
@@ -300,14 +336,30 @@ def get_kowalski_external(ra, dec, kow, radius = 5.0):
         if "parallax_error" in data2:
             parallax_error = data2["parallax_error"]
 
+    FUVmag, NUVmag = np.nan, np.nan
+    e_FUVmag, e_NUVmag = np.nan, np.nan
+    if len(data4) > 0:
+        data4 = data4[0]
+        if "NUVmag" in data4:
+            NUVmag = data4["NUVmag"]
+        if "FUVmag" in data4:
+            FUVmag = data4["FUVmag"]
+        if "NUVmag" in data4:
+            e_NUVmag = data4["e_NUVmag"]
+        if "e_FUVmag" in data4:
+            e_FUVmag = data4["e_FUVmag"]
+        print(FUVmag, NUVmag, e_FUVmag, e_NUVmag)
+
     external = {}
     external["mag"] = [w1mpro, w2mpro, w3mpro, w4mpro,
                        gMeanPSFMag, rMeanPSFMag,
-                       iMeanPSFMag, zMeanPSFMag, yMeanPSFMag]
+                       iMeanPSFMag, zMeanPSFMag, yMeanPSFMag,
+                       FUVmag, NUVmag]
     external["magerr"] = [w1sigmpro, w2sigmpro, w3sigmpro, w4sigmpro,
                           gMeanPSFMagErr, rMeanPSFMagErr,
                           iMeanPSFMagErr, zMeanPSFMagErr,
-                          yMeanPSFMagErr]
+                          yMeanPSFMagErr,
+                          e_FUVmag, e_NUVmag]
     external["parallax"] = [parallax, parallax_error]
 
     return external
@@ -723,6 +775,7 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
                 fid = fid[idx]
 
         if doPercentile:
+            if len(hjd) == 0: continue
             magmin, magmax = np.percentile(mag, percmin), np.percentile(mag, percmax)
             idx = np.where((mag >= magmin) & (mag <= magmax))[0]
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
@@ -2178,3 +2231,26 @@ def flux2mag(flux, fluxerr, flux_0 = 3631.0):
     mag = -2.5*np.log10(flux/flux_0)
     magerr = np.abs(fluxerr)/flux
     return mag, magerr
+
+def sigma_model (mag, A, B, C, D):
+
+    """ Calculating the corrected ZTF photometric uncertainties:
+    According to the ZTF Data Explanatory Supplement (Section 6.8.1),
+    photometric uncertainties in the matchfiles are estimated using a
+    simple model:
+    magerr = A + B*x + C*10^(0.4*x) + D*10^(0.8*x) for x <= 21.0
+    magerr = b*x + c for x > 21.0
+    According to Frank Masci (email from 17 Nov 2020), the "b" and "c"
+    coefficients are not stored anywhere. So for objects fainter than 21
+    I am assuming photometric uncertainties equal to those of a 21-mag
+    object. Note that according to Frank, the model applies to the
+    magnitude range 13 <= mag <= 21.
+    """
+
+    if isinstance(mag,(list,np.ndarray)):
+        aux = np.clip(mag,None,21.0)
+    else:
+        aux = min((mag,21.0))
+    tmp = pow(10.0,0.4*aux)
+    magerr = A + B*aux + C*tmp + D*tmp**2
+    return magerr

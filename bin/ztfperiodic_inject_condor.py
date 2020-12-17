@@ -39,16 +39,17 @@ def parse_commandline():
     parser.add_option("--doSpectra",  action="store_true", default=False)
     parser.add_option("--doQuadrantScale",  action="store_true", default=False)
 
-    parser.add_option("--doVariability",  action="store_true", default=False)
-    parser.add_option("--doCutNObs",  action="store_true", default=False)
-    parser.add_option("-n","--NObs",default=500,type=int)
-
     parser.add_option("-l","--lightcurve_source",default="Kowalski")
     parser.add_option("-s","--source_type",default="quadrant")
     parser.add_option("--catalog_file",default="../input/xray.dat")
     parser.add_option("--Ncatalog",default=13.0,type=int)
     parser.add_option("--Nmax",default=1000.0,type=int)
 
+    parser.add_option("--doVariability",  action="store_true", default=False)
+    parser.add_option("--doCutNObs",  action="store_true", default=False)
+    parser.add_option("-n","--NObs",default=50,type=int)
+
+    parser.add_option("--doUseMatchfileFile",  action="store_true", default=False)
     parser.add_option("--doCrossMatch",  action="store_true", default=False)
 
     parser.add_option("--qid",default=None,type=int)
@@ -63,10 +64,10 @@ def parse_commandline():
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
-    parser.add_option("-e","--email")
 
-    parser.add_option("-f","--filetype",default="slurm")
-    parser.add_option("--queue_type",default="v100")
+    parser.add_option("--min_epochs",default=50,type=int)
+
+    parser.add_option("-i","--injtype",default="wdb")
 
     opts, args = parser.parse_args()
 
@@ -74,12 +75,13 @@ def parse_commandline():
 
 # Parse command line
 opts = parse_commandline()
+Ncatalog = opts.Ncatalog
+min_epochs = opts.min_epochs
+injtype = opts.injtype
 
 if not (opts.doCPU or opts.doGPU):
     print("--doCPU or --doGPU required")
     exit(0)
-
-dir_path = os.path.dirname(os.path.realpath(__file__))
 
 if opts.doCPU:
     cpu_gpu_flag = "--doCPU"
@@ -117,57 +119,77 @@ extra_flags = " ".join(extra_flags)
 matchfileDir = opts.matchfileDir
 outputDir = opts.outputDir
 batch_size = opts.batch_size
-Ncatalog = opts.Ncatalog
 algorithm = opts.algorithm
 
-catalogDir = os.path.join(outputDir,'catalog',algorithm)
+catalogDir = os.path.join(outputDir,'catalog',algorithm.replace(",","_"))
 
-qsubDir = os.path.join(outputDir,'qsub')
-if not os.path.isdir(qsubDir):
-    os.makedirs(qsubDir)
+condorDir = os.path.join(outputDir,'condor')
+if not os.path.isdir(condorDir):
+    os.makedirs(condorDir)
 
-idsDir = os.path.join(qsubDir,'ids')
+logDir = os.path.join(condorDir,'logs')
+if not os.path.isdir(logDir):
+    os.makedirs(logDir)
+
+idsDir = os.path.join(condorDir,'ids')
 if not os.path.isdir(idsDir):
     os.makedirs(idsDir)
+idsDir = "/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3/condor/ids"
 
 if opts.doCutNObs:
     nobsfile = "../input/nobs.dat"
     nobs_data = np.loadtxt(nobsfile)
 
     if opts.doHCOnly:
-        idx = np.where((nobs_data[:,7] >= opts.NObs) | (nobs_data[:,8] >= opts.NObs) | (nobs_data[:,9] >= opts.NObs))[0]
+        idx = np.where((nobs_data[:,10] >= opts.NObs) | (nobs_data[:,11] >= opts.NObs) | (nobs_data[:,12] >= opts.NObs))[0]
     else:
-        idx = np.where((nobs_data[:,4] >= opts.NObs) | (nobs_data[:,5] >= opts.NObs) | (nobs_data[:,6] >= opts.NObs))[0]
+        idx = np.where((nobs_data[:,7] >= opts.NObs) | (nobs_data[:,8] >= opts.NObs) | (nobs_data[:,9] >= opts.NObs))[0]
 
     nobs_data = nobs_data[idx,:]
     fields_list = nobs_data[:,0]
 
+dir_path = os.path.dirname(os.path.realpath(__file__))
+
+condordag = os.path.join(condorDir,'condor.dag')
+fid = open(condordag,'w') 
+condorsh = os.path.join(condorDir,'condor.sh')
+fid1 = open(condorsh,'w') 
+
+job_number = 0
+
 if opts.doQuadrantScale:
     kow = Kowalski(username=opts.user, password=opts.pwd)
 
+mag_min, mag_max = 16.0, 21.0
+period_min, period_max = 4.0*60.0/86400.0, 60.0*60.0/86400.0
+inclination_min, inclination_max = 0.0, 90.0
+
+mags = np.linspace(mag_min, mag_max, 31)
+periods = np.linspace(period_min, period_max, 31)
+inclinations = np.linspace(inclination_min, inclination_max, 11)
+
 if opts.lightcurve_source == "Kowalski":
+
     if opts.source_type == "quadrant":
         fields, ccds, quadrants = np.arange(1,880), np.arange(1,17), np.arange(1,5)
-        #ccds, quadrants = [1], [1]
-
         fields1 = [683,853,487,718,372,842,359,778,699,296]
         fields2 = [841,852,682,717,488,423,424,563,562,297,700,777]
         fields3 = [851,848,797,761,721,508,352,355,364,379]
         fields4 = [1866,1834,1835,1804,1734,1655,1565]
 
-        fields_complete = fields1 + fields2 + fields3 + fields4
-        fields = np.arange(1600,1700)
-        fields = np.setdiff1d(fields,fields_complete)
+        fields = fields1 + fields2
+        #fields_complete = fields1 + fields2 # + fields3 + fields4
+        #fields = np.arange(300,400)
+        #fields = np.arange(700,800)
+        #fields = np.setdiff1d(fields,fields_complete)
 
-        fields = [400]
-        fields = np.arange(250,882)
-        fields = np.arange(600,700)
-        fields = np.arange(750,800)
-        #fields = np.arange(300,305)
+        #fields = [700]
+        #fields = np.arange(250,882)
+        #fields = np.arange(750,800)
+        #fields = np.arange(250,300)
+        #fields = np.arange(600,700)
+        #fields = [257]
 
-        job_number = 0
-        quadrantfile = os.path.join(qsubDir,'qsub.dat')
-        fid = open(quadrantfile,'w')
         for field in fields:
             if opts.doCutNObs:
                 if not field in fields_list:
@@ -183,9 +205,9 @@ if opts.lightcurve_source == "Kowalski":
                                              'ccd': {'$eq': int(ccd)},
                                              'quad': {'$eq': int(quadrant)}
                                              }
-                                       } 
-                             }                                            
-                        r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
+                                       }
+                             }
+                        r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
                         if not "data" in r: continue
                         nlightcurves = r['data']
 
@@ -207,69 +229,41 @@ if opts.lightcurve_source == "Kowalski":
                             for obj in r['data']:
                                 objids.append(obj['_id'])
                             np.save(idsFile, objids)
-                    
+
                     for ii in range(Ncatalog):
                         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant, ii))
                         if os.path.isfile(catalogFile):
                             print('%s already exists... continuing.' % catalogFile)
                             continue
 
-                        fid.write('%d %d %d %d %d %d %s\n' % (job_number, field, ccd, quadrant, ii, Ncatalog, idsFile))
+                        fid1.write('%s %s/ztfperiodic_inject_search.py %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type objid --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --catalog_file %s --injtype %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, idsFile, injtype, extra_flags))
     
+                        fid.write('JOB %d condor.sub\n'%(job_number))
+                        fid.write('RETRY %d 3\n'%(job_number))
+                        fid.write('VARS %d jobNumber="%d" field="%d" ccd="%d" quadrant="%d" Ncatindex="%d" Ncatalog="%d" idsFile="%s"\n'%(job_number,job_number,field, ccd, quadrant, ii, Ncatalog, idsFile))
+                        fid.write('\n\n')
                         job_number = job_number + 1
-        fid.close()
-elif opts.lightcurve_source == "matchfiles":
-    bands = {1: 'g', 2: 'r', 3: 'i', 4: 'z', 5: 'J'}
-    directory="%s/*/*/*.pytable"%opts.matchfileDir
-    job_number = 0
-    quadrantfile = os.path.join(qsubDir,'qsub.dat')
-    fid = open(quadrantfile,'w')
-    for f in glob.iglob(directory):
-        if not opts.qid is None:
-            if not ("rc%02d"%opts.qid) in f:
-                continue
-        if not opts.fid is None:
-            if not ("z%s"%bands[opts.fid]) in f:
-                continue
-        for ii in range(Ncatalog):    
-            fid.write('%d %s %d\n' % (job_number, f, ii))
- 
-            job_number = job_number + 1
-    fid.close()
 
-fid = open(os.path.join(qsubDir,'qsub.sub'),'w')
-fid.write('#!/bin/bash\n')
-fid.write('#PBS -l walltime=23:59:59,nodes=1:ppn=24:gpus=1,pmem=5290mb -q k40\n')
-fid.write('#PBS -m abe\n')
-fid.write('#PBS -M cough052@umn.edu\n')
-fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
-fid.write('cd $PBS_O_WORKDIR\n')
-if opts.lightcurve_source == "Kowalski":
-    if opts.source_type == "quadrant":
-        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type objid --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,algorithm,extra_flags))
-    elif opts.source_type == "catalog":
-        fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,algorithm,extra_flags))
-elif opts.lightcurve_source == "matchfiles":
-    fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d -l matchfiles --doRemoveTerrestrial --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,quadrantfile,opts.Ncatalog,algorithm,extra_flags))
+fid1.close()
 fid.close()
 
-fid = open(os.path.join(qsubDir,'qsub_submission.sub'),'w')
-fid.write('#!/bin/bash\n')
-if opts.queue_type == "v100":
-    fid.write('#PBS -l walltime=23:59:59,nodes=1:ppn=24:gpus=1,pmem=3000mb -q v100\n')
-elif opts.queue_type == "k40":
-    fid.write('#PBS -l walltime=23:59:59,nodes=1:ppn=24:gpus=1,pmem=5290mb -q k40\n')
+fid = open(os.path.join(condorDir,'condor.sub'),'w')
+fid.write('executable = %s/ztfperiodic_inject_search.py\n'%dir_path)
+fid.write('output = logs/out.$(jobNumber)\n');
+fid.write('error = logs/err.$(jobNumber)\n');
+fid.write('arguments = %s --outputDir %s --batch_size %d --field $(field) --ccd $(ccd) --quadrant $(quadrant) --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --program_ids 1,2,3 --algorithm %s --catalog_file $(idsFile) --injtype %s %s --source_type objid\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.algorithm,injtype,extra_flags))
+fid.write('requirements = OpSys == "LINUX"\n');
+fid.write('request_memory = 8192\n');
+if opts.doCPU:
+    fid.write('request_cpus = 1\n');
 else:
-    print('queue_type must be v100 or k40')
-    exit(0)
-fid.write('#PBS -m abe\n')
-fid.write('#PBS -M cough052@umn.edu\n')
-fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
-fid.write('cd $PBS_O_WORKDIR\n')
-if opts.lightcurve_source == "Kowalski":
-    if opts.source_type == "quadrant":
-        if opts.filetype == "dask":
-            fid.write('CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 %s/ztfperiodic_dask_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, opts.filetype))
-        else:
-            fid.write('%s/ztfperiodic_job_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, opts.filetype))
+    fid.write('request_gpus = 1\n');
+fid.write('accounting_group = ligo.dev.o2.burst.allsky.stamp\n');
+fid.write('notification = never\n');
+fid.write('getenv = true\n');
+fid.write('log = /local/michael.coughlin/folding.log\n')
+fid.write('+MaxHours = 24\n');
+fid.write('universe = vanilla\n');
+fid.write('queue 1\n');
 fid.close()
+
