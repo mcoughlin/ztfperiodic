@@ -50,19 +50,19 @@ RUN useradd -mr ztfperiodic
 RUN echo "ztfperiodic ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 ENV HOME /home/ztfperiodic
 
-COPY id_rsa $HOME/.ssh/id_rsa
-COPY docker/etc/ssh/ssh_known_hosts $HOME/.ssh/known_hosts
+#COPY id_rsa $HOME/.ssh/id_rsa
+#COPY docker/etc/ssh/ssh_known_hosts $HOME/.ssh/known_hosts
 COPY docker/penquins/penquins.py /usr/local/lib/python3.6/dist-packages/penquins/ 
 RUN chown -R ztfperiodic:ztfperiodic $HOME
-RUN \
-    chmod 700 $HOME/.ssh &&\
-    chmod 600 $HOME/.ssh/id_rsa
+#RUN \
+#    chmod 700 $HOME/.ssh &&\
+#    chmod 600 $HOME/.ssh/id_rsa
 
 USER ztfperiodic:ztfperiodic
 WORKDIR /home/ztfperiodic
-RUN mkdir -p /home/ztfperiodic/ids
+#RUN mkdir -p /home/ztfperiodic/ids
 
-RUN ssh-keygen -f "/home/ztfperiodic/.ssh/known_hosts" -R "schoty.caltech.edu"
+#RUN ssh-keygen -f "/home/ztfperiodic/.ssh/known_hosts" -R "schoty.caltech.edu"
 
 ENV LD_LIBRARY_PATH "/usr/local/cuda/lib64"
 

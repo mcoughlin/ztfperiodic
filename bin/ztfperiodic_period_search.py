@@ -25,8 +25,8 @@ matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
 from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 
-import astropy
-astropy.utils.iers.conf.auto_download = False
+from astropy.utils import iers
+iers.conf.auto_download = False  
 from astropy import units as u
 from astropy.table import Table, vstack, hstack
 from astropy.coordinates import SkyCoord
