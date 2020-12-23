@@ -33,6 +33,7 @@ LOGIN_URL = "https://irsa.ipac.caltech.edu/account/signon/login.do"
 meta_baseurl="https://irsa.ipac.caltech.edu/ibe/search/ztf/products/"
 data_baseurl="https://irsa.ipac.caltech.edu/ibe/data/ztf/products/"
 
+DEFAULT_TIMEOUT = 5  # seconds
 
 def gaia_query(ra_deg, dec_deg, rad_deg, maxmag=25,
                maxsources=1):
@@ -1327,7 +1328,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
     if not "data" in r:
         print("Query for field: %d, CCD: %d, quadrant %d failed... returning."%(field, ccd, quadrant))
-        return [], [], [], []
+        return [], [], [], [], [], [], [], []
 
     if doAlias:
         magerrdir = "/home/michael.coughlin/ZTF/ztfperiodic/input"
@@ -2127,6 +2128,7 @@ def get_matchfile_original(f):
 
 def database_query(kow, qu, nquery = 5):
     r = {}
+    qu["timeout"] = DEFAULT_TIMEOUT
     cnt = 0
     while cnt < nquery:
         r = kow.query(query=qu)

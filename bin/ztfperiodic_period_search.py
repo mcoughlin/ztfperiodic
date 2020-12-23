@@ -28,7 +28,6 @@ import matplotlib.pyplot as plt
 from astropy import units as u
 from astropy.table import Table, vstack, hstack
 from astropy.coordinates import SkyCoord
-from astroquery.sdss import SDSS
 import astropy.constants as const
 import astropy.io.fits
 
@@ -1097,6 +1096,8 @@ for algorithm in algorithms:
     
             spectral_data = {}
             if opts.doSpectra:
+                from astroquery.sdss import SDSS
+
                 coord = SkyCoord(ra=RA*u.degree, dec=Dec*u.degree, frame='icrs')
                 try:
                     xid = SDSS.query_region(coord, spectro=True)
@@ -1299,7 +1300,7 @@ if opts.doSpectra:
 
 if opts.doRsyncFiles:
     outputDirSplit = outputDir.split("/")[-1]
-    rsync_command = "rsync -zarvh %s %s" % (outputDir,
-                                            opts.rsync_directory)
+    rsync_command = "rsync -zarvh --chmod=Du+rwx %s/catalog %s" % (outputDir,
+                                                           opts.rsync_directory)
     print(rsync_command)
     os.system(rsync_command)

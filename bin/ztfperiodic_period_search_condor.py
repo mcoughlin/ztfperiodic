@@ -57,6 +57,7 @@ def parse_commandline():
 
     parser.add_option("--doDocker",  action="store_true", default=False)
     parser.add_option("--doRsyncFiles",  action="store_true", default=False)
+    parser.add_option("-d","--dockerDir",default="/home/ztfperiodic")
 
     parser.add_option("--doPercentile",  action="store_true", default=False)
     parser.add_option("--doParallel",  action="store_true", default=False)
@@ -175,6 +176,7 @@ if opts.lightcurve_source == "Kowalski":
         fields = np.arange(250,882)
         fields = np.arange(750,800)
         #fields = np.arange(250,300)
+        fields = [400]
 
         for field in fields:
             if opts.doCutNObs:
@@ -212,7 +214,7 @@ if opts.lightcurve_source == "Kowalski":
                                  }
                             r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
                             objids = []
-                            for obj in r['result_data']['query_result']:
+                            for obj in r['data']:
                                 objids.append(obj['_id'])
                             np.save(idsFile, objids)
 
@@ -223,7 +225,7 @@ if opts.lightcurve_source == "Kowalski":
                             continue
 
                         if opts.doDocker:
-                            fid1.write('nvidia-docker run --runtime=nvidia python-ztfperiodic %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type quadrant --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars %s\n'%(cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, extra_flags))
+                            fid1.write('nvidia-docker run --runtime=nvidia --mount type=bind,source=%s,target=%s/ids python-ztfperiodic %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type objid --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --catalog_file %s/ids/%s %s\n'%(idsDir,opts.dockerDir,cpu_gpu_flag, opts.dockerDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, opts.dockerDir, idsFile.split('/')[-1], extra_flags))
                         else:
                             fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type objid --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --catalog_file %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, idsFile, extra_flags))
     
