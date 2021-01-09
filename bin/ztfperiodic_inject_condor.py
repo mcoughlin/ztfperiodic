@@ -57,7 +57,6 @@ def parse_commandline():
 
     parser.add_option("--doDocker",  action="store_true", default=False)
     parser.add_option("--doRsyncFiles",  action="store_true", default=False)
-    parser.add_option("-d","--dockerDir",default="/home/ztfperiodic")
 
     parser.add_option("--doPercentile",  action="store_true", default=False)
     parser.add_option("--doParallel",  action="store_true", default=False)
@@ -68,6 +67,8 @@ def parse_commandline():
 
     parser.add_option("--min_epochs",default=50,type=int)
 
+    parser.add_option("-i","--injtype",default="wdb")
+
     opts, args = parser.parse_args()
 
     return opts
@@ -76,6 +77,7 @@ def parse_commandline():
 opts = parse_commandline()
 Ncatalog = opts.Ncatalog
 min_epochs = opts.min_epochs
+injtype = opts.injtype
 
 if not (opts.doCPU or opts.doGPU):
     print("--doCPU or --doGPU required")
@@ -132,6 +134,7 @@ if not os.path.isdir(logDir):
 idsDir = os.path.join(condorDir,'ids')
 if not os.path.isdir(idsDir):
     os.makedirs(idsDir)
+idsDir = "/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3/condor/ids"
 
 if opts.doCutNObs:
     nobsfile = "../input/nobs.dat"
@@ -157,6 +160,14 @@ job_number = 0
 if opts.doQuadrantScale:
     kow = Kowalski(username=opts.user, password=opts.pwd)
 
+mag_min, mag_max = 16.0, 21.0
+period_min, period_max = 4.0*60.0/86400.0, 60.0*60.0/86400.0
+inclination_min, inclination_max = 0.0, 90.0
+
+mags = np.linspace(mag_min, mag_max, 31)
+periods = np.linspace(period_min, period_max, 31)
+inclinations = np.linspace(inclination_min, inclination_max, 11)
+
 if opts.lightcurve_source == "Kowalski":
 
     if opts.source_type == "quadrant":
@@ -173,10 +184,11 @@ if opts.lightcurve_source == "Kowalski":
         #fields = np.setdiff1d(fields,fields_complete)
 
         #fields = [700]
-        fields = np.arange(250,882)
-        fields = np.arange(750,800)
+        #fields = np.arange(250,882)
+        #fields = np.arange(750,800)
         #fields = np.arange(250,300)
-        fields = [400]
+        #fields = np.arange(600,700)
+        #fields = [257]
 
         for field in fields:
             if opts.doCutNObs:
@@ -224,10 +236,7 @@ if opts.lightcurve_source == "Kowalski":
                             print('%s already exists... continuing.' % catalogFile)
                             continue
 
-                        if opts.doDocker:
-                            fid1.write('nvidia-docker run --runtime=nvidia --mount type=bind,source=%s,target=%s/ids python-ztfperiodic %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type objid --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --catalog_file %s/ids/%s %s\n'%(idsDir,opts.dockerDir,cpu_gpu_flag, opts.dockerDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, opts.dockerDir, idsFile.split('/')[-1], extra_flags))
-                        else:
-                            fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type objid --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --catalog_file %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, idsFile, extra_flags))
+                        fid1.write('%s %s/ztfperiodic_inject_search.py %s --outputDir %s --program_ids 1,2,3 --field %d --ccd %d --quadrant %d --user %s --pwd %s --batch_size %d -l Kowalski --source_type objid --Ncatalog %d --Ncatindex %d --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --catalog_file %s --injtype %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, field, ccd, quadrant, opts.user, opts.pwd,opts.batch_size, Ncatalog, ii, opts.algorithm, idsFile, injtype, extra_flags))
     
                         fid.write('JOB %d condor.sub\n'%(job_number))
                         fid.write('RETRY %d 3\n'%(job_number))
@@ -235,64 +244,14 @@ if opts.lightcurve_source == "Kowalski":
                         fid.write('\n\n')
                         job_number = job_number + 1
 
-    elif opts.source_type == "catalog":
-        for ii in range(Ncatalog):
-            if opts.doDocker:
-                fid1.write('nvidia-docker run --runtime=nvidia python-ztfperiodic %s --outputDir %s --user %s --pwd %s --batch_size %d -l Kowalski --source_type catalog --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --catalog_file %s --Ncatalog %d --Ncatindex %d --min_epochs %d %s\n'%(cpu_gpu_flag, outputDir, opts.user, opts.pwd,opts.batch_size, opts.algorithm, opts.catalog_file,opts.Ncatalog,ii,min_epochs,extra_flags))
-            else:
-                fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --user %s --pwd %s --batch_size %d -l Kowalski --source_type catalog --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --catalog_file %s --Ncatalog %d --Ncatindex %d --min_epochs %d %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, opts.user, opts.pwd,opts.batch_size, opts.algorithm, opts.catalog_file,opts.Ncatalog,ii,min_epochs,extra_flags))
-
-            fid.write('JOB %d condor.sub\n'%(job_number))
-            fid.write('RETRY %d 3\n'%(job_number))
-            fid.write('VARS %d jobNumber="%d" Ncatindex="%d" Ncatalog="%d"\n'%(job_number,job_number, ii, Ncatalog))
-            fid.write('\n\n')
-            job_number = job_number + 1
-
-elif opts.lightcurve_source == "matchfiles":
-    bands = {1: 'g', 2: 'r', 3: 'i', 4: 'z', 5: 'J'}
-    if opts.doUseMatchfileFile:
-        filename = "../input/matchfiles.txt"
-        filenames = [line.rstrip('\n') for line in open(filename)]
-    else:
-        directory="%s/*/*/*.pytable"%opts.matchfileDir
-        filenames = [f for f in glob.iglob(directory)]
-    for f in filenames:
-        field_id = int(f.split("/")[-1].split("_")[1])
-        if opts.doCutNObs:
-            if not field_id in fields_list:
-                continue
-        if not opts.qid is None:
-            if not ("rc%02d"%opts.qid) in f:
-                continue
-        if not opts.fid is None:
-            if not ("z%s"%bands[opts.fid]) in f:
-                continue
-        for ii in range(Ncatalog):
-            if opts.doDocker:
-                fid1.write('nvidia-docker run --runtime=nvidia python-ztfperiodic %s --outputDir %s --matchFile %s -l matchfiles --source_type quadrants --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex %d --matchfileDir %s %s\n'%(cpu_gpu_flag, outputDir, f, opts.algorithm, opts.Ncatalog,ii, matchfileDir, extra_flags))
-            else:
-                fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --matchFile %s -l matchfiles --source_type quadrants --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex %d --matchfileDir %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, f, opts.algorithm, opts.Ncatalog,ii, matchfileDir, extra_flags))
-
-            fid.write('JOB %d condor.sub\n'%(job_number))
-            fid.write('RETRY %d 3\n'%(job_number))
-            fid.write('VARS %d jobNumber="%d" matchFile="%s" Ncatindex="%d" Ncatalog="%d"\n'%(job_number,job_number,f,ii,opts.Ncatalog))
-            fid.write('\n\n')
-            job_number = job_number + 1
-
 fid1.close()
 fid.close()
 
 fid = open(os.path.join(condorDir,'condor.sub'),'w')
-fid.write('executable = %s/ztfperiodic_period_search.py\n'%dir_path)
+fid.write('executable = %s/ztfperiodic_inject_search.py\n'%dir_path)
 fid.write('output = logs/out.$(jobNumber)\n');
 fid.write('error = logs/err.$(jobNumber)\n');
-if opts.lightcurve_source == "Kowalski":
-    if opts.source_type == "quadrant":
-        fid.write('arguments = %s --outputDir %s --batch_size %d --field $(field) --ccd $(ccd) --quadrant $(quadrant) --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --program_ids 1,2,3 --algorithm %s --catalog_file $(idsFile) %s --source_type objid\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.algorithm,extra_flags))
-    elif opts.source_type == "catalog":
-        fid.write('arguments = %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex $(Ncatindex) --algorithm %s --min_epochs %d %s\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,opts.algorithm,min_epochs,extra_flags))
-elif opts.lightcurve_source == "matchfiles":
-    fid.write('arguments = %s --outputDir %s --batch_size %d --matchFile $(matchFile) -l matchfiles --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --doRemoveTerrestrial --doRemoveBrightStars --program_ids 1,2,3 --matchfileDir %s --algorithm %s %s\n'%(cpu_gpu_flag,outputDir,batch_size,matchfileDir,opts.algorithm,extra_flags))
+fid.write('arguments = %s --outputDir %s --batch_size %d --field $(field) --ccd $(ccd) --quadrant $(quadrant) --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --doRemoveBrightStars --program_ids 1,2,3 --algorithm %s --catalog_file $(idsFile) --injtype %s %s --source_type objid\n'%(cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.algorithm,injtype,extra_flags))
 fid.write('requirements = OpSys == "LINUX"\n');
 fid.write('request_memory = 8192\n');
 if opts.doCPU:
