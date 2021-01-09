@@ -847,6 +847,8 @@ else:
     freqs_to_remove = None
 
 periodic_stats_algorithms = {}
+periodic_stats_algorithms_2 = {}
+
 for algorithm in algorithms:    
     if opts.doGPU and (algorithm == "PDM"):
         from cuvarbase.utils import weights
@@ -884,8 +886,9 @@ for algorithm in algorithms:
     if opts.doParallel:
         from joblib import Parallel, delayed
         periodic_stats = Parallel(n_jobs=opts.Ncore)(delayed(calc_fourier_stats)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,periods_best))
+        periodic_stats_2 = Parallel(n_jobs=opts.Ncore)(delayed(calc_fourier_stats)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,2*periods_best))
     else:
-        periodic_stats = []
+        periodic_stats, periodic_stats_2 = [], []
         for ii,data in enumerate(lightcurves):
             period = periods_best[ii]
             if np.mod(ii,100) == 0:
@@ -895,6 +898,9 @@ for algorithm in algorithms:
 
             periodic_stat = calc_fourier_stats(t, mag, magerr, period)
             periodic_stats.append(periodic_stat)
+            periodic_stat_2 = calc_fourier_stats(t, mag, magerr, 2*period)
+            periodic_stats_2.append(periodic_stat_2)
+
     end_time = time.time()
     print('Lightcurve statistics took %.2f seconds' % (end_time - start_time))
     
@@ -942,7 +948,8 @@ for algorithm in algorithms:
     str_stats = np.empty((0,2))
     data_stats = np.empty((0,25))
     data_periodic_stats = np.empty((0,18))
-    
+    data_periodic_stats_2 = np.empty((0,18))   
+ 
     if baseline<10:
         basefolder = os.path.join(outputDir,'%sHC'%algorithm)
     else:
@@ -988,6 +995,19 @@ for algorithm in algorithms:
                                           periodic_stats[cnt][12], periodic_stats[cnt][13]]]),
                                axis=0)
     
+        data_periodic_stats_2 = np.append(data_periodic_stats_2,
+                               np.array([[objid,
+                                          period, significance,
+                                          pdot,
+                                          periodic_stats_2[cnt][0], periodic_stats_2[cnt][1],
+                                          periodic_stats_2[cnt][2], periodic_stats_2[cnt][3],
+                                          periodic_stats_2[cnt][4], periodic_stats_2[cnt][5],
+                                          periodic_stats_2[cnt][6], periodic_stats_2[cnt][7],
+                                          periodic_stats_2[cnt][8], periodic_stats_2[cnt][9],
+                                          periodic_stats_2[cnt][10], periodic_stats_2[cnt][11],
+                                          periodic_stats_2[cnt][12], periodic_stats_2[cnt][13]]]),
+                               axis=0)
+
         if opts.doPlots and ((period/(1.0/fmax)) <= 1.05):
             print("%d %.5f %.5f %d: Period is within 5 per." % (objid, coordinate[0], coordinate[1], stats[cnt][0]))
     
@@ -1240,6 +1260,7 @@ for algorithm in algorithms:
         cnt = cnt + 1
 
     periodic_stats_algorithms[algorithm] = data_periodic_stats
+    periodic_stats_algorithms_2[algorithm] = data_periodic_stats_2
 
 with h5py.File(catalogFile, 'w') as hf:
     hf.create_dataset("names",  data=str_stats[:,0])
@@ -1249,6 +1270,8 @@ with h5py.File(catalogFile, 'w') as hf:
     for algorithm in algorithms:
         hf.create_dataset("stats_%s" % algorithm,
                           data=periodic_stats_algorithms[algorithm])
+        hf.create_dataset("stats_2_%s" % algorithm,
+                          data=periodic_stats_algorithms_2[algorithm])
 
     if opts.doBrutus:
         hf.create_dataset("brutus_out",  data=brutus_out)

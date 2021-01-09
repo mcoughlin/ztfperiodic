@@ -138,7 +138,7 @@ def sawtooth_decomposition(t,y,dy,p):
 
     return popt
 
-def fourier_decomposition(t,y,dy,p,maxNterms=5,relative_output=True):
+def fourier_decomposition(t,y,dy,p,maxNterms=5,relative_output=False):
 
     N = np.size(y)
 

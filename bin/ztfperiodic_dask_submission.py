@@ -111,7 +111,6 @@ if __name__ == '__main__':
 
     client = Client(cluster)
     if opts.doSubmit:
-        njobs = 100
         lazy_results = []
         for ii in range(njobs):
             row = df.iloc[ii]
