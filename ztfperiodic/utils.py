@@ -2,6 +2,7 @@
 import os, sys
 import pandas as pd
 import numpy as np
+import h5py
 import tables
 import glob
 import time
@@ -368,7 +369,7 @@ def get_kowalski_external(ra, dec, kow, radius = 5.0):
 def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
                  program_ids = [1, 2,3], min_epochs = 1, name = None):
 
-    tmax = Time('2020-01-01T00:00:00', format='isot', scale='utc').jd
+    tmax = Time('2020-06-30T00:00:00', format='isot', scale='utc').jd
 
     #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20191101": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
     qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20200401": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_g_mean_mag_err': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } } }
@@ -660,7 +661,7 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
     lightcurves, coordinates, filters, ids = [], [], [], []
     absmags, bp_rps = [], []
 
-    tmax = Time('2020-01-01T00:00:00', format='isot', scale='utc').jd
+    tmax = Time('2020-06-30T00:00:00', format='isot', scale='utc').jd
 
     #qu = {"query_type":"find",
     #      "query": {"catalog": 'ZTF_sources_20200401',
@@ -1317,7 +1318,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
                       doPercentile=False,
                       percmin = 10.0, percmax = 90.0):
 
-    tmax = Time('2020-01-01T00:00:00', format='isot', scale='utc').jd
+    tmax = Time('2020-06-30T00:00:00', format='isot', scale='utc').jd
 
     qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
 
@@ -1948,137 +1949,227 @@ def find_matchfile(matchfileDir, objid = 10593142036566):
     return filename
 
 
-def get_matchfile(f, min_epochs = 1, doRemoveHC=False, doHCOnly=False,
-                  Ncatalog = 1, Ncatindex = 0):
+def get_matchfile(kow, filename, min_epochs = 1,
+                  program_ids=[1,2,3],
+                  doRemoveHC=False, doHCOnly=False,
+                  Ncatalog = 1, Ncatindex = 0, max_error = np.inf,
+                  doSigmaClipping=False,
+                  sigmathresh=5.0,
+                  doOutbursting=False,
+                  doPercentile=False,
+                  percmin = 10.0, percmax = 90.0):
     """
     Read matchfile (hdf file) light curves given the filename
     e.g.: f = '/path/to/fr000551-000600/ztf_000593_zr_c04_q3_match.pytable'
     """
+
+    tmax = Time('2020-06-30T00:00:00', format='isot', scale='utc').jd
+
     bands = {'g': 1, 'r': 2, 'i': 3, 'z': 4, 'J': 5}
-    fsplit = f.split("/")[-1].replace(".pytable","").split("_")
-    filt = bands[fsplit[2][1]]
 
-    with tables.open_file(f) as store:
-        for tbl in store.walk_nodes("/", "Table"):
-            if tbl.name in ["sourcedata", "transientdata"]:
-                group = tbl._v_parent
-                break
+    filenameSplit = filename.split("/")[-1].split("_")
+    field_id, ccd_id, q_id = int(filenameSplit[1]), int(filenameSplit[2]), int(filenameSplit[3])
+    filt = filenameSplit[4][1]
+    filt = bands[filt]
 
-        srcdata = pd.DataFrame.from_records(group.sourcedata[:])
-        srcdata.sort_values('matchid', axis=0, inplace=True)
-        # srcdata2 = store.root.matches.sources[:]
-        sources = pd.DataFrame.from_records(store.root.matches.sources.read_where('nobs>%d' % min_epochs))
-        exposures = pd.DataFrame.from_records(store.root.matches.exposures.read_where(('(((programid>1) | ((programid==1) & (obsmjd<58484))| (programpi=="TESS")))')))
-        exposures = pd.DataFrame.from_records(store.root.matches.exposures.read_where(('programid>0')))
-        merged = srcdata.merge(exposures, on="expid")
+    f = h5py.File(filename, 'r')
+    sourcedata = np.array(f['data']['sourcedata'][:])
+    exposures = f['data']['exposures'][:]
+    sources = f['data']['sources'][:]
+    nlightcurves = len(sources)
+    n_exp = len(exposures)
 
-    matchids = sources[:]['matchid'].values
-    matchids_split = np.array_split(matchids, Ncatalog)
-    matchids = matchids_split[Ncatindex]
-
-    if doHCOnly:
-        tt = np.unique(np.sort(merged.obshjd.values))
-        magmat = np.nan*np.ones((len(tt),len(matchids))) # (nepoch x nsources)
-        
     baseline = 0
     names = []
     lightcurves, coordinates, filters, ids = [], [], [], []
     absmags, bp_rps = [], []
     hjds = []
 
-    for ii, k in enumerate(matchids):
-        if np.mod(ii,100) == 0:
-            print("Reading ID %d/%d" % (ii, len(matchids)))
- 
-        df = merged[merged['matchid'] == k]
-        df=df[df.catflags == 0]
-        df2=sources[:][sources[:].matchid == k]
+    kks_split = np.array_split(np.arange(len(sources)),Ncatalog)
+    kks = kks_split[Ncatindex]
 
-        RA=df2.ra.values[0]
-        Dec=df2.dec.values[0]
-        mag = df.mag.values.astype(np.float32)+17.0
-        magerr=df.magerr.values.astype(np.float32)/1000.0
-        obsHJD = df.obshjd
-        hjd = obsHJD.values
+    for kk, source in enumerate(sources):
+        if not np.isin(kk, kks, assume_unique=True): continue
+        if np.mod(kk, 100) == 0:
+            print('Reading source: %d' % kk)
+        idx = kk*n_exp + np.arange(0,n_exp)
+
+        lc = [sourcedata[jj] for jj in idx]
+
+        hjd, mag, magerr, ra, dec, fid = [], [], [], [], [], []
+        for jj, dic in enumerate(lc):
+            if not exposures[jj][2] in program_ids: continue
+            if (exposures[jj][2]==1) and (exposures[jj][1] > tmax): continue
+            if not dic[2] == 0: continue
+
+            hjd.append(exposures[jj][1])
+            mag.append(dic[0])
+            magerr.append(dic[1])
+            ra.append(source[1])
+            dec.append(source[2])
+            fid.append(filt)
+
+        hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
+        ra, dec = np.array(ra), np.array(dec)
+
+        fid = np.array(fid)
+        idx = np.where(~np.isnan(mag) & ~np.isnan(magerr))[0]
+        hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+        fid = fid[idx]
+        ra, dec = ra[idx], dec[idx]
+
+        idx = np.where(magerr<=max_error)[0]
+        hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+        fid = fid[idx]
+        ra, dec = ra[idx], dec[idx]
 
         idx = np.argsort(hjd)
         hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+        fid = fid[idx]
+        ra, dec = ra[idx], dec[idx]
 
         if doRemoveHC:
-            dt = np.diff(hjd)
-            idx = np.setdiff1d(np.arange(len(hjd)),
-                               np.where(dt < 30.0*60.0/86400.0)[0])
+            idx = []
+            for ii, t in enumerate(hjd):
+                if ii == 0:
+                    idx.append(ii)
+                else:
+                    dt = hjd[ii] - hjd[idx[-1]]
+                    if dt >= 30.0*60.0/86400.0:
+                        idx.append(ii)
+            if len(idx) == 0: continue 
             hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
-        elif doHCOnly:
-            dt = np.diff(hjd)
-            idx = np.setdiff1d(np.arange(len(hjd)),
-                               np.where(dt >= 30.0*60.0/86400.0)[0])
-            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            ra, decobj = ra[idx], dec[idx]
+            fid = fid[idx]
 
-            dt = np.diff(hjd)
-            idy = np.where(dt > 1e-2)[0]
-            ddy = np.diff(idy)
-            if len(ddy) > 0:
-                idpeak = np.argmax(ddy)
-                idx = np.arange(idy[idpeak]+1, idy[idpeak+1]-1)
+        elif doHCOnly:
+            idx = []
+            for ii, t in enumerate(hjd):
+                if ii == 0:
+                    idx.append(ii)
+                else:
+                    dt = hjd[ii] - hjd[idx[-1]]
+                    if dt >= 30.0*60.0/86400.0:
+                        idx.append(ii)
+            idx = np.setdiff1d(np.arange(len(hjd)), idx)
+            if len(idx) == 0: continue
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            fid = fid[idx]
+            ra, dec = ra[idx], dec[idx]
+
+            bins = np.arange(np.floor(np.min(hjd)),
+                             np.ceil(np.max(hjd)))
+            hist, bin_edges = np.histogram(hjd, bins=bins)
+            bins = (bin_edges[1:] + bin_edges[:-1])/2.0
+
+            if len(hist) == 0: continue
+
+            idx3 = np.argmax(hist)
+            bin_start, bin_end = bin_edges[idx3], bin_edges[idx3+1]              
+            idx = np.where((hjd >= bin_start) & (hjd <= bin_end))[0]
+
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            ra, decobj = ra[idx], dec[idx]
+            fid = fid[idx]
+
+        if doSigmaClipping or doOutbursting:
+            iqr = np.diff(np.percentile(mag,q=[25,75]))[0]
+            idx = np.where(mag >= np.median(mag)-sigmathresh*iqr)[0]
+            if doOutbursting and (len(idx) == len(mag)):
+                continue
+            if doSigmaClipping:
                 hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
-            elif len(idy) == 1:
-                idx = np.arange(idy[0]-1)
-                hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+                ra, dec = ra[idx], dec[idx]
+                fid = fid[idx]
+
+        if doPercentile:
+            if len(hjd) == 0: continue
+            magmin, magmax = np.percentile(mag, percmin), np.percentile(mag, percmax)
+            idx = np.where((mag >= magmin) & (mag <= magmax))[0]
+            hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+            fid = fid[idx]
+            ra, dec = ra[idx], dec[idx]
 
         if len(hjd) < min_epochs: continue
 
-        if doHCOnly:
-            f = interp.interp1d(hjd, mag, fill_value=np.nan, bounds_error=False)
-            yinterp = f(tt)
-            magmat[:, ii] = yinterp - np.nanmedian(yinterp)
-
-        hjds.append(hjd)
-        hjd = hjd - np.min(hjd)
-
-        coordinate=(RA,Dec)
-        coordinates.append(coordinate)
         lightcurve=(hjd,mag,magerr)
         lightcurves.append(lightcurve)
-        filters.append([filt])
-        ids.append(k)
+        filters.append(np.unique(fid).tolist())
+        nlightcurves = 1
 
-        absmags.append([np.nan, np.nan, np.nan])
-        bp_rps.append([np.nan, np.nan])
+        radius = 5
+        qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": {'test': [np.float64(np.median(ra)),np.float64(np.median(dec))]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"} } }}
 
-        ra_hex, dec_hex = convert_to_hex(RA*24/360.0,delimiter=''), convert_to_hex(Dec,delimiter='')
-        if dec_hex[0] == "-":
-            objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
-        else:
-            objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
-        names.append(objname)
+        r = database_query(kow, qu, nquery = 10)
+
+        coords = SkyCoord(ra=np.median(ra)*u.degree, 
+                          dec=np.median(dec)*u.degree, frame='icrs')
+
+        absmag, bp_rp = [np.nan, np.nan, np.nan], [np.nan, np.nan]
+        if "data" in r:
+            key2 = 'Gaia_DR2'
+            data2 = r["data"][key2]
+            key = list(data2.keys())[0]
+            data2 = data2[key]
+            cat2 = get_catalog(data2)
+            if len(cat2) > 0:
+                idx,sep,_ = coords.match_to_catalog_sky(cat2)
+                dat2 = data2[idx]
+            else:
+                dat2 = {}
+
+            if not "parallax" in dat2:
+                parallax, parallaxerr = None, None
+            else:
+                parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
+            if not "phot_g_mean_mag" in dat2:
+                g_mag = None
+            else:
+                g_mag = dat2["phot_g_mean_mag"]
+
+            if not "phot_bp_mean_mag" in dat2:
+                bp_mag = None
+            else:
+                bp_mag = dat2["phot_bp_mean_mag"]
+
+            if not "phot_rp_mean_mag" in dat2:
+                rp_mag = None
+            else:
+                rp_mag = dat2["phot_rp_mean_mag"]
+
+            if not "phot_bp_mean_flux_over_error" in dat2:
+                bp_mean_flux_over_error = None
+            else:
+                bp_mean_flux_over_error = dat2["phot_bp_mean_flux_over_error"]
+
+            if not "phot_rp_mean_flux_over_error" in dat2:
+                rp_mean_flux_over_error = None
+            else:
+                rp_mean_flux_over_error = dat2["phot_rp_mean_flux_over_error"]
+
+            if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None) or (rp_mean_flux_over_error is None) or (rp_mean_flux_over_error is None)):
+                absmag = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
+                bp_rp = [bp_mag-rp_mag, 2.5/np.log(10) * np.hypot(1/bp_mean_flux_over_error, 1/rp_mean_flux_over_error)]
+
+        for jj in range(nlightcurves):
+            coordinate=(np.median(ra),np.median(dec))
+            coordinates.append(coordinate)
+            ids.append(source[0])
+            absmags.append(absmag)
+            bp_rps.append(bp_rp)
+
+            ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
+            if dec_hex[0] == "-":
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+            else:
+                objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+            names.append(objname)
 
         newbaseline = max(hjd)-min(hjd)
         if newbaseline>baseline:
             baseline=newbaseline
 
-    if doHCOnly:
-        magmat_median = np.nanmedian(magmat, axis=1)
-        f = interp.interp1d(tt, magmat_median, fill_value='extrapolate')
-        lightcurves2 = []
-        for ii in range(len(lightcurves)):
-            magmat_median_array = f(hjds[ii])
-            magmat_median_array[np.isnan(magmat_median_array)] = 0.0
-            lightcurve2 = (lightcurves[ii][0],
-                           lightcurves[ii][1] - magmat_median_array,
-                           lightcurves[ii][2])
-            lightcurves2.append(lightcurve2)
-        lightcurves = lightcurves2
-
-    #plt.figure()
-    #for ii in range(len(lightcurves)):
-    #    plt.plot(lightcurves[ii][0], lightcurves[ii][1])
-    #plt.xlim([0,0.15])
-    #plt.savefig('test.png')
-    #plt.close()
-    #exit(0)
-
-    return lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline
+    return [lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline]
 
 
 def get_matchfile_original(f):
