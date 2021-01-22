@@ -298,9 +298,9 @@ if opts.doQuadrantFile:
         names = ["job_number", "field", "ccd", "quadrant",
                  "Ncatindex", "Ncatalog", "idsFile"]
 
-        df_original = pd.read_csv(opts.quadrant_file, header=0, delimiter=' ',
-                                  names=names)
-        row = df_original.iloc[opts.quadrant_index]
+        df_original = pd.read_csv(opts.quadrant_file, header=None, delimiter=' ', names=names)
+        print(df_original, opts.quadrant_index)
+        row = df_original.iloc[opts.quadrant_index,:]
         field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
         Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
         catalog_file = row["idsFile"]
