@@ -305,15 +305,6 @@ if opts.doQuadrantFile:
         Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
         catalog_file = row["idsFile"]
 
-    elif opts.lightcurve_source == "matchfiles":
-        lines = [line.rstrip('\n') for line in open(quadrant_file)]
-        for line in lines:
-            lineSplit = list(filter(None,line.split(" ")))
-            if int(lineSplit[0]) == opts.quadrant_index:
-                matchFile = lineSplit[1]
-                print("Using matchfile %s" % matchFile)
-                Ncatindex = int(lineSplit[2])
-
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
 inputDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"input")
@@ -662,28 +653,33 @@ if opts.lightcurve_source == "Kowalski":
         exit(0)
 
 elif opts.lightcurve_source == "matchfiles":
-    if ":" in matchFile:
-        matchFile_end = matchFile.split(":")[-1].split("/")[-1]
-        matchFile_out = "/scratch/mcoughlin/%s" % matchFile_end
-        if not os.path.isfile(matchFile_out):
-            print('Fetching %s...' % matchFile)
-            wget_command = "scp -i /home/mcoughlin/.ssh/id_rsa_passwordless %s %s" % (matchFile, matchFile_out)
-            os.system(wget_command)
-        matchFile = matchFile_out
-
     if not os.path.isfile(matchFile):
         print("%s missing..."%matchFile)
-        exit(0)
+        exit(1)
+
+    kow = []
+    nquery = 10
+    cnt = 0
+    while cnt < nquery:
+        try:
+            kow = Kowalski(username=opts.user, password=opts.pwd)
+            break
+        except:
+            time.sleep(5)
+        cnt = cnt + 1
+    if cnt == nquery:
+        raise Exception('Kowalski connection failed...')
 
     matchFile_split = matchFile.replace(".pytable","").replace(".hdf5","").replace(".h5","").split("/")[-1]
     catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(matchFile_split,
                                                            Ncatindex))
     if opts.doSpectra:
-        spectraFile = os.path.join(spectraDir,matchFileEnd)
+        spectraFile = os.path.join(spectraDir,matchFile_split)
 
     #matchFile = find_matchfile(opts.matchfileDir)
     lightcurves, coordinates, filters, ids,\
-    absmags, bp_rps, names, baseline = get_matchfile(matchFile,
+    absmags, bp_rps, names, baseline = get_matchfile(kow, matchFile,
+                                                     program_ids=program_ids,
                                                      min_epochs=min_epochs,
                                                      doRemoveHC=doRemoveHC,
                                                      doHCOnly=doHCOnly,

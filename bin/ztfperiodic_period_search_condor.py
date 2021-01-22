@@ -27,7 +27,7 @@ def parse_commandline():
     parser.add_option("--doCPU",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output")
-    parser.add_option("--matchfileDir",default="/home/mcoughlin/ZTF/matchfiles/")
+    parser.add_option("--matchfileDir",default="/home/mcoughlin/ZTF/ztfperiodic/data/Forced")
     parser.add_option("-b","--batch_size",default=1,type=int)
     parser.add_option("-a","--algorithm",default="CE")
 
@@ -249,29 +249,30 @@ if opts.lightcurve_source == "Kowalski":
             job_number = job_number + 1
 
 elif opts.lightcurve_source == "matchfiles":
-    bands = {1: 'g', 2: 'r', 3: 'i', 4: 'z', 5: 'J'}
-    if opts.doUseMatchfileFile:
-        filename = "../input/matchfiles.txt"
-        filenames = [line.rstrip('\n') for line in open(filename)]
-    else:
-        directory="%s/*/*/*.pytable"%opts.matchfileDir
-        filenames = [f for f in glob.iglob(directory)]
-    for f in filenames:
-        field_id = int(f.split("/")[-1].split("_")[1])
+
+    directory="%s/*.h5"%opts.matchfileDir
+    filenames = [f for f in glob.iglob(directory)]
+    for filename in filenames:
+        filenameSplit = filename.split("/")[-1].split("_")
+        field_id, ccd_id, q_id = int(filenameSplit[1]), int(filenameSplit[2]), int(filenameSplit[3])
+        filt = filenameSplit[4][1]
         if opts.doCutNObs:
             if not field_id in fields_list:
                 continue
-        if not opts.qid is None:
-            if not ("rc%02d"%opts.qid) in f:
-                continue
-        if not opts.fid is None:
-            if not ("z%s"%bands[opts.fid]) in f:
-                continue
+
+        f = h5py.File(filename, 'r')
+        sourcedata = np.array(f['data']['sourcedata'][:])
+        exposures = f['data']['exposures'][:]
+        sources = f['data']['sources'][:]
+        nlightcurves = len(sources)
+        n_exp = len(exposures)
+
+        Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
         for ii in range(Ncatalog):
             if opts.doDocker:
-                fid1.write('nvidia-docker run --runtime=nvidia python-ztfperiodic %s --outputDir %s --matchFile %s -l matchfiles --source_type quadrants --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex %d --matchfileDir %s %s\n'%(cpu_gpu_flag, outputDir, f, opts.algorithm, opts.Ncatalog,ii, matchfileDir, extra_flags))
+                fid1.write('nvidia-docker run --runtime=nvidia python-ztfperiodic %s --outputDir %s --user %s --pwd %s --matchFile %s -l matchfiles --source_type quadrants --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex %d --matchfileDir %s %s\n'%(cpu_gpu_flag, outputDir, opts.user, opts.pwd, filename, opts.algorithm, opts.Ncatalog,ii, matchfileDir, extra_flags))
             else:
-                fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --matchFile %s -l matchfiles --source_type quadrants --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex %d --matchfileDir %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, f, opts.algorithm, opts.Ncatalog,ii, matchfileDir, extra_flags))
+                fid1.write('%s %s/ztfperiodic_period_search.py %s --outputDir %s --user %s --pwd %s --matchFile %s -l matchfiles --source_type quadrants --algorithm %s --doRemoveTerrestrial --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex %d --matchfileDir %s %s\n'%(opts.python, dir_path, cpu_gpu_flag, outputDir, opts.user, opts.pwd, filename, opts.algorithm, opts.Ncatalog,ii, matchfileDir, extra_flags))
 
             fid.write('JOB %d condor.sub\n'%(job_number))
             fid.write('RETRY %d 3\n'%(job_number))
