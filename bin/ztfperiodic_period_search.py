@@ -299,7 +299,6 @@ if opts.doQuadrantFile:
                  "Ncatindex", "Ncatalog", "idsFile"]
 
         df_original = pd.read_csv(opts.quadrant_file, header=None, delimiter=' ', names=names)
-        print(df_original, opts.quadrant_index)
         row = df_original.iloc[opts.quadrant_index,:]
         field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
         Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
@@ -410,7 +409,7 @@ if opts.lightcurve_source == "Kowalski":
                 amaj, amin, phi = [], [], []
             for line in lines:
                 lineSplit = list(filter(None,line.split(" ")))
-                if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file) or ("lamost_mira" in catalog_file) or ("rotators" in catalog_file) or ("ap" in catalog_file):
+                if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file) or ("lamost_mira" in catalog_file) or ("rotators" in catalog_file) or ("ap" in catalog_file) or ("CTTS" in catalog_file):
                     ra_hex, dec_hex = convert_to_hex(float(lineSplit[0])*24/360.0,delimiter=''), convert_to_hex(float(lineSplit[1]),delimiter='')
                     if dec_hex[0] == "-":
                         objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
