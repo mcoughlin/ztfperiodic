@@ -35,7 +35,7 @@ import astropy.io.fits
 
 import ztfperiodic
 from ztfperiodic.period import CE
-from ztfperiodic.lcstats import calc_basic_stats, calc_fourier_stats
+from ztfperiodic.lcstats import calc_basic_stats, calc_fourier_stats, calc_fourier_stats_sidereal
 from ztfperiodic.utils import get_kowalski_bulk
 from ztfperiodic.utils import get_kowalski_list
 from ztfperiodic.utils import get_kowalski_objids
@@ -853,6 +853,7 @@ else:
 
         stat = calc_basic_stats(t, mag, magerr)
         stats.append(stat)
+
 end_time = time.time()
 print('Lightcurve basic statistics took %.2f seconds' % (end_time - start_time))
 
@@ -923,6 +924,12 @@ for algorithm in algorithms:
         from joblib import Parallel, delayed
         periodic_stats = Parallel(n_jobs=opts.Ncore)(delayed(calc_fourier_stats)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,periods_best))
         periodic_stats_2 = Parallel(n_jobs=opts.Ncore)(delayed(calc_fourier_stats)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,2*periods_best))
+
+        #periodic_stats_all = Parallel(n_jobs=opts.Ncore)(delayed(calc_fourier_stats_sidereal)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,periods_best))
+        #periods_best = np.array([a[0] for a in periodic_stats_all])
+        #periodic_stats = [a[1] for a in periodic_stats_all]
+        #periodic_stats_2 = Parallel(n_jobs=opts.Ncore)(delayed(calc_fourier_stats)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,2*periods_best))
+
     else:
         periodic_stats, periodic_stats_2 = [], []
         for ii,data in enumerate(lightcurves):
@@ -933,8 +940,12 @@ for algorithm in algorithms:
             t, mag, magerr = copy[:,0], copy[:,1], copy[:,2]
 
             periodic_stat = calc_fourier_stats(t, mag, magerr, period)
+            #[p, periodic_stat] = calc_fourier_stats_sidereal(t, mag,
+            #                                                 magerr,
+            #                                                 period)
+            #periods_best[ii] = p
             periodic_stats.append(periodic_stat)
-            periodic_stat_2 = calc_fourier_stats(t, mag, magerr, 2*period)
+            periodic_stat_2 = calc_fourier_stats(t, mag, magerr, 2*p)
             periodic_stats_2.append(periodic_stat_2)
 
     end_time = time.time()
