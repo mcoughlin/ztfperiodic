@@ -372,7 +372,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
     tmax = Time('2020-06-30T00:00:00', format='isot', scale='utc').jd
 
     #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20191101": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
-    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20200401": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_g_mean_mag_err': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } } }
+    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20201201": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_g_mean_mag_err': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } } }
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
@@ -383,7 +383,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
         print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec)) 
         return {}
 
-    key1, key2, key3 = 'ZTF_sources_20200401', 'Gaia_DR2', 'ZTF_alerts'
+    key1, key2, key3 = 'ZTF_sources_20201201', 'Gaia_DR2', 'ZTF_alerts'
     data1, data2, data3 = r["data"][key1], r["data"][key2], r["data"][key3]
     key = list(data1.keys())[0]
     data = data1[key]
@@ -664,14 +664,14 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
     tmax = Time('2020-06-30T00:00:00', format='isot', scale='utc').jd
 
     #qu = {"query_type":"find",
-    #      "query": {"catalog": 'ZTF_sources_20200401',
+    #      "query": {"catalog": 'ZTF_sources_20201201',
     #                "filter": {'_id': {'$eq': int(objid)}},
     #                "projection": "{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}"
     #                }
     #     }
 
     qu = {"query_type":"find",
-          "query": {"catalog": 'ZTF_sources_20200401',
+          "query": {"catalog": 'ZTF_sources_20201201',
                     "filter": {'_id': {'$in': objids.tolist()}}, 
                     "projection": "{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}"
                     },
@@ -1320,7 +1320,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
     tmax = Time('2020-06-30T00:00:00', format='isot', scale='utc').jd
 
-    qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
+    qu = {"query_type":"general_search","query":"db['ZTF_sources_20201201'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
@@ -1355,14 +1355,14 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
     for nb in [nb]:
         print("Querying batch number %d/%d..."%(nb, num_batches))
 
-        qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
+        qu = {"query_type":"general_search","query":"db['ZTF_sources_20201201'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
         r = database_query(kow, qu, nquery = 10)
 
         if not "data" in r:
             print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
             continue
 
-        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].find_one({})"}
+        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20201201'].find_one({})"}
         #r = kow.query(query=qu)
 
         datas = r["data"]
@@ -1831,7 +1831,7 @@ def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f',
             print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
             continue
 
-        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20200401'].find_one({})"}
+        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20201201'].find_one({})"}
         #r = kow.query(query=qu)
 
         datas = r["data"]
