@@ -169,6 +169,7 @@ if opts.lightcurve_source == "Kowalski":
         #fields = np.arange(750,800)
         #fields = np.arange(300,305)
         #fields = np.arange(750,751)
+        fields = np.arange(250,400)
 
         job_number = 0
         quadrantfile = os.path.join(qsubDir,'qsub.dat')
@@ -183,7 +184,7 @@ if opts.lightcurve_source == "Kowalski":
                     if opts.doQuadrantScale:
                         qu = {"query_type":"count_documents",
                               "query": {
-                                  "catalog": 'ZTF_sources_20200401',
+                                  "catalog": 'ZTF_sources_20201201',
                                   "filter": {'field': {'$eq': int(field)},
                                              'ccd': {'$eq': int(ccd)},
                                              'quad': {'$eq': int(quadrant)}
