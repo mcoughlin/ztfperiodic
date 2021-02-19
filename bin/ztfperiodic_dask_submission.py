@@ -95,7 +95,7 @@ if __name__ == '__main__':
     names = ["job_number", "field", "ccd", "quadrant",
              "Ncatindex", "Ncatalog", "idsFile"]
     
-    catalogDir = os.path.join(outputDir,'catalog',algorithm)
+    catalogDir = os.path.join(outputDir,'catalog',algorithm.replace(",","_"))
     #quad_out_original = np.loadtxt(quadrantfile)
     df_original = pd.read_csv(quadrantfile, header=0, delimiter=' ',
                               names=names)
