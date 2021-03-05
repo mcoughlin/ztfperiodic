@@ -363,7 +363,9 @@ if opts.lightcurve_source == "Kowalski":
     cnt = 0
     while cnt < nquery:
         try:
-            kow = Kowalski(username=opts.user, password=opts.pwd)
+            TIMEOUT = 60
+            kow = Kowalski(username=opts.user, password=opts.pwd, 
+                           timeout=TIMEOUT)
             break
         except:
             time.sleep(5)
@@ -945,7 +947,7 @@ for algorithm in algorithms:
             #                                                 period)
             #periods_best[ii] = p
             periodic_stats.append(periodic_stat)
-            periodic_stat_2 = calc_fourier_stats(t, mag, magerr, 2*p)
+            periodic_stat_2 = calc_fourier_stats(t, mag, magerr, 2*period)
             periodic_stats_2.append(periodic_stat_2)
 
     end_time = time.time()

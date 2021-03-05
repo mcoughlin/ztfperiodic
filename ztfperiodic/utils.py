@@ -2219,7 +2219,8 @@ def get_matchfile_original(f):
 
 def database_query(kow, qu, nquery = 5):
     r = {}
-    qu["timeout"] = DEFAULT_TIMEOUT
+    if not "timeout" in qu:
+        qu["timeout"] = DEFAULT_TIMEOUT
     cnt = 0
     while cnt < nquery:
         r = kow.query(query=qu)
