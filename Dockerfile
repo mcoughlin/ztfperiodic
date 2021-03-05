@@ -6,6 +6,7 @@ ENV TERM=linux
 
 RUN apt-get update && \
     apt-get -y install --no-install-recommends openssh-client && \
+    apt-get -y install vim && \
     rm -rf /var/lib/apt/lists/*
 
 RUN apt-get update && apt-get -y install \
@@ -39,21 +40,29 @@ ENV LD_LIBRARY_PATH "/usr/local/cuda/lib64/stubs/:${LD_LIBRARY_PATH}$"
 COPY requirements.txt /
 RUN pip3 install --no-cache-dir -r \
     /requirements.txt \
-    git+https://github.com/dmitryduev/broker.git \
-    git+https://github.com/mikekatz04/gce.git \
-    git+https://github.com/mcoughlin/cuvarbase.git
+    git+https://github.com/ejaszewski/periodfind.git
 RUN rm /requirements.txt
 
 COPY . /src
 RUN pip3 install --no-cache-dir /src
-RUN cd /src/ztfperiodic/pyaov && f2py3 -m aov -c aovconst.f90 aovsub.f90 aov.f90 && cp aov.cpython-36m-x86_64-linux-gnu.so /usr/lib/python3/dist-packages/
 
 RUN useradd -mr ztfperiodic
+RUN echo "ztfperiodic ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+ENV HOME /home/ztfperiodic
+
+#COPY id_rsa $HOME/.ssh/id_rsa
+#COPY docker/etc/ssh/ssh_known_hosts $HOME/.ssh/known_hosts
+COPY docker/penquins/penquins.py /usr/local/lib/python3.6/dist-packages/penquins/ 
+RUN chown -R ztfperiodic:ztfperiodic $HOME
+#RUN \
+#    chmod 700 $HOME/.ssh &&\
+#    chmod 600 $HOME/.ssh/id_rsa
+
 USER ztfperiodic:ztfperiodic
 WORKDIR /home/ztfperiodic
+#RUN mkdir -p /home/ztfperiodic/ids
 
-COPY id_rsa /home/ztfperiodic/.ssh/id_rsa
-COPY docker/etc/ssh/ssh_known_hosts /home/ztfperiodic/.ssh/known_hosts
+#RUN ssh-keygen -f "/home/ztfperiodic/.ssh/known_hosts" -R "schoty.caltech.edu"
 
 ENV LD_LIBRARY_PATH "/usr/local/cuda/lib64"
 

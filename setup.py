@@ -69,6 +69,7 @@ install_requires = [
     'fast_histogram',
     'gatspy',
     'h5py',
+    'joblib',
     'matplotlib',
     'numpy',
     'pandas',

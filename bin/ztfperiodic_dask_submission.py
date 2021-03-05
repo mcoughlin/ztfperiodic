@@ -32,22 +32,32 @@ def parse_commandline():
     parser.add_option("-f","--filetype",default="slurm")
     parser.add_option("-c","--CUDA_VISIBLE_DEVICES",default="0,1,2,3,4,5,6,7")
 
+    parser.add_option("-s","--source_type",default="quadrant")
+
     parser.add_option("--doSubmit",  action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
     return opts
 
-def filter_completed(df, catalogDir):
+def filter_completed(df, catalogDir, source_type):
 
     start_time = time.time()
 
     tbd = []
     for ii, (index, row) in enumerate(df.iterrows()):
-        field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
-        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
-        idsFile = row["idsFile"]
-        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
+        if source_type == "quadrant":
+            field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
+            Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+            idsFile = row["idsFile"]
+            catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
+        elif source_type == "catalog":
+            Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+            catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+            catalogFile = os.path.join(catalogDir,"%s" % Ncatindex,
+                                       "%s_%d.h5"%(catalog_file_split,
+                                                   Ncatindex))
+
         if not os.path.isfile(catalogFile):
             tbd.append(ii)
     df = df.iloc[tbd]
@@ -59,12 +69,18 @@ def filter_completed(df, catalogDir):
 
 def run_job(row):
 
-    field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
-    Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
-    idsFile = row["idsFile"]
+    if source_type == "quadrant":
+        field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
+        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+        idsFile = row["idsFile"]
+        print(field, ccd, quadrant, Ncatindex, Ncatalog)
+        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
+    elif source_type == "catalog":
+        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+        catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+        catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(catalog_file_split,
+                                                           Ncatindex))
 
-    print(field, ccd, quadrant, Ncatindex, Ncatalog)
-    catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
     if not os.path.isfile(catalogFile):
         jobstr = jobline.replace("$PBS_ARRAYID","%d"%row["job_number"])
         print(jobstr)
@@ -79,7 +95,8 @@ if __name__ == '__main__':
     
     outputDir = opts.outputDir
     filetype = opts.filetype
-    
+    source_type = opts.source_type    
+
     qsubDir = os.path.join(outputDir,filetype)
     if not os.path.isdir(qsubDir):
         os.makedirs(qsubDir)
@@ -89,17 +106,25 @@ if __name__ == '__main__':
     jobline = lines[-1]
     joblineSplit = list(filter(None,jobline.split("algorithm")[-1].split(" ")))
     algorithm = joblineSplit[0]
-    
+
+    if source_type == "catalog":
+        joblineSplit = list(filter(None,jobline.split("catalog_file")[-1].split(" ")))
+        catalog_file = joblineSplit[0]
+ 
     quadrantfile = os.path.join(qsubDir,'%s.dat' % filetype)
-    
-    names = ["job_number", "field", "ccd", "quadrant",
+
+    if source_type == "quadrant":
+        names = ["job_number", "field", "ccd", "quadrant",
              "Ncatindex", "Ncatalog", "idsFile"]
-    
-    catalogDir = os.path.join(outputDir,'catalog',algorithm)
+    elif source_type == "catalog":
+        names = ["job_number", "Ncatindex", "Ncatalog"]    
+
+    catalogDir = os.path.join(outputDir,'catalog',algorithm.replace(",","_"))
     #quad_out_original = np.loadtxt(quadrantfile)
     df_original = pd.read_csv(quadrantfile, header=0, delimiter=' ',
                               names=names)
-    df = filter_completed(df_original, catalogDir)       
+    df = filter_completed(df_original, catalogDir, source_type)
+
     njobs = len(df)
     print('%d jobs remaining...' % njobs)
     
@@ -111,9 +136,10 @@ if __name__ == '__main__':
 
     client = Client(cluster)
     if opts.doSubmit:
-        njobs = 100
         lazy_results = []
         for ii in range(njobs):
+            #row = df.iloc[ii]
+            #run_job(row)
             row = df.iloc[ii]
             lazy_result = dask.delayed(run_job)(row)
             lazy_results.append(lazy_result)

@@ -25,16 +25,17 @@ matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
 from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 
+from astropy.utils import iers
+iers.conf.auto_download = False  
 from astropy import units as u
 from astropy.table import Table, vstack, hstack
 from astropy.coordinates import SkyCoord
-from astroquery.sdss import SDSS
 import astropy.constants as const
 import astropy.io.fits
 
 import ztfperiodic
 from ztfperiodic.period import CE
-from ztfperiodic.lcstats import calc_basic_stats, calc_fourier_stats
+from ztfperiodic.lcstats import calc_basic_stats, calc_fourier_stats, calc_fourier_stats_sidereal
 from ztfperiodic.utils import get_kowalski_bulk
 from ztfperiodic.utils import get_kowalski_list
 from ztfperiodic.utils import get_kowalski_objids
@@ -297,21 +298,11 @@ if opts.doQuadrantFile:
         names = ["job_number", "field", "ccd", "quadrant",
                  "Ncatindex", "Ncatalog", "idsFile"]
 
-        df_original = pd.read_csv(opts.quadrant_file, header=0, delimiter=' ',
-                                  names=names)
-        row = df_original.iloc[opts.quadrant_index]
+        df_original = pd.read_csv(opts.quadrant_file, header=None, delimiter=' ', names=names)
+        row = df_original.iloc[opts.quadrant_index,:]
         field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
         Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
         catalog_file = row["idsFile"]
-
-    elif opts.lightcurve_source == "matchfiles":
-        lines = [line.rstrip('\n') for line in open(quadrant_file)]
-        for line in lines:
-            lineSplit = list(filter(None,line.split(" ")))
-            if int(lineSplit[0]) == opts.quadrant_index:
-                matchFile = lineSplit[1]
-                print("Using matchfile %s" % matchFile)
-                Ncatindex = int(lineSplit[2])
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
@@ -372,7 +363,9 @@ if opts.lightcurve_source == "Kowalski":
     cnt = 0
     while cnt < nquery:
         try:
-            kow = Kowalski(username=opts.user, password=opts.pwd)
+            TIMEOUT = 60
+            kow = Kowalski(username=opts.user, password=opts.pwd, 
+                           timeout=TIMEOUT)
             break
         except:
             time.sleep(5)
@@ -418,7 +411,7 @@ if opts.lightcurve_source == "Kowalski":
                 amaj, amin, phi = [], [], []
             for line in lines:
                 lineSplit = list(filter(None,line.split(" ")))
-                if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file) or ("lamost_mira" in catalog_file) or ("rotators" in catalog_file) or ("ap" in catalog_file):
+                if ("blue" in catalog_file) or ("uvex" in catalog_file) or ("xraybinary" in catalog_file) or ("lamost_mira" in catalog_file) or ("rotators" in catalog_file) or ("ap" in catalog_file) or ("CTTS" in catalog_file):
                     ra_hex, dec_hex = convert_to_hex(float(lineSplit[0])*24/360.0,delimiter=''), convert_to_hex(float(lineSplit[1]),delimiter='')
                     if dec_hex[0] == "-":
                         objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
@@ -661,28 +654,33 @@ if opts.lightcurve_source == "Kowalski":
         exit(0)
 
 elif opts.lightcurve_source == "matchfiles":
-    if ":" in matchFile:
-        matchFile_end = matchFile.split(":")[-1].split("/")[-1]
-        matchFile_out = "/scratch/mcoughlin/%s" % matchFile_end
-        if not os.path.isfile(matchFile_out):
-            print('Fetching %s...' % matchFile)
-            wget_command = "scp -i /home/mcoughlin/.ssh/id_rsa_passwordless %s %s" % (matchFile, matchFile_out)
-            os.system(wget_command)
-        matchFile = matchFile_out
-
     if not os.path.isfile(matchFile):
         print("%s missing..."%matchFile)
-        exit(0)
+        exit(1)
+
+    kow = []
+    nquery = 10
+    cnt = 0
+    while cnt < nquery:
+        try:
+            kow = Kowalski(username=opts.user, password=opts.pwd)
+            break
+        except:
+            time.sleep(5)
+        cnt = cnt + 1
+    if cnt == nquery:
+        raise Exception('Kowalski connection failed...')
 
     matchFile_split = matchFile.replace(".pytable","").replace(".hdf5","").replace(".h5","").split("/")[-1]
     catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(matchFile_split,
                                                            Ncatindex))
     if opts.doSpectra:
-        spectraFile = os.path.join(spectraDir,matchFileEnd)
+        spectraFile = os.path.join(spectraDir,matchFile_split)
 
     #matchFile = find_matchfile(opts.matchfileDir)
     lightcurves, coordinates, filters, ids,\
-    absmags, bp_rps, names, baseline = get_matchfile(matchFile,
+    absmags, bp_rps, names, baseline = get_matchfile(kow, matchFile,
+                                                     program_ids=program_ids,
                                                      min_epochs=min_epochs,
                                                      doRemoveHC=doRemoveHC,
                                                      doHCOnly=doHCOnly,
@@ -857,6 +855,7 @@ else:
 
         stat = calc_basic_stats(t, mag, magerr)
         stats.append(stat)
+
 end_time = time.time()
 print('Lightcurve basic statistics took %.2f seconds' % (end_time - start_time))
 
@@ -887,6 +886,8 @@ else:
     freqs_to_remove = None
 
 periodic_stats_algorithms = {}
+periodic_stats_algorithms_2 = {}
+
 for algorithm in algorithms:    
     if opts.doGPU and (algorithm == "PDM"):
         from cuvarbase.utils import weights
@@ -924,8 +925,15 @@ for algorithm in algorithms:
     if opts.doParallel:
         from joblib import Parallel, delayed
         periodic_stats = Parallel(n_jobs=opts.Ncore)(delayed(calc_fourier_stats)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,periods_best))
+        periodic_stats_2 = Parallel(n_jobs=opts.Ncore)(delayed(calc_fourier_stats)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,2*periods_best))
+
+        #periodic_stats_all = Parallel(n_jobs=opts.Ncore)(delayed(calc_fourier_stats_sidereal)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,periods_best))
+        #periods_best = np.array([a[0] for a in periodic_stats_all])
+        #periodic_stats = [a[1] for a in periodic_stats_all]
+        #periodic_stats_2 = Parallel(n_jobs=opts.Ncore)(delayed(calc_fourier_stats)(LC[0],LC[1],LC[2],p) for LC,p in zip(lightcurves,2*periods_best))
+
     else:
-        periodic_stats = []
+        periodic_stats, periodic_stats_2 = [], []
         for ii,data in enumerate(lightcurves):
             period = periods_best[ii]
             if np.mod(ii,100) == 0:
@@ -934,7 +942,14 @@ for algorithm in algorithms:
             t, mag, magerr = copy[:,0], copy[:,1], copy[:,2]
 
             periodic_stat = calc_fourier_stats(t, mag, magerr, period)
+            #[p, periodic_stat] = calc_fourier_stats_sidereal(t, mag,
+            #                                                 magerr,
+            #                                                 period)
+            #periods_best[ii] = p
             periodic_stats.append(periodic_stat)
+            periodic_stat_2 = calc_fourier_stats(t, mag, magerr, 2*period)
+            periodic_stats_2.append(periodic_stat_2)
+
     end_time = time.time()
     print('Lightcurve statistics took %.2f seconds' % (end_time - start_time))
     
@@ -982,7 +997,8 @@ for algorithm in algorithms:
     str_stats = np.empty((0,2))
     data_stats = np.empty((0,25))
     data_periodic_stats = np.empty((0,18))
-    
+    data_periodic_stats_2 = np.empty((0,18))   
+ 
     if baseline<10:
         basefolder = os.path.join(outputDir,'%sHC'%algorithm)
     else:
@@ -1028,6 +1044,19 @@ for algorithm in algorithms:
                                           periodic_stats[cnt][12], periodic_stats[cnt][13]]]),
                                axis=0)
     
+        data_periodic_stats_2 = np.append(data_periodic_stats_2,
+                               np.array([[objid,
+                                          period, significance,
+                                          pdot,
+                                          periodic_stats_2[cnt][0], periodic_stats_2[cnt][1],
+                                          periodic_stats_2[cnt][2], periodic_stats_2[cnt][3],
+                                          periodic_stats_2[cnt][4], periodic_stats_2[cnt][5],
+                                          periodic_stats_2[cnt][6], periodic_stats_2[cnt][7],
+                                          periodic_stats_2[cnt][8], periodic_stats_2[cnt][9],
+                                          periodic_stats_2[cnt][10], periodic_stats_2[cnt][11],
+                                          periodic_stats_2[cnt][12], periodic_stats_2[cnt][13]]]),
+                               axis=0)
+
         if opts.doPlots and ((period/(1.0/fmax)) <= 1.05):
             print("%d %.5f %.5f %d: Period is within 5 per." % (objid, coordinate[0], coordinate[1], stats[cnt][0]))
     
@@ -1097,6 +1126,8 @@ for algorithm in algorithms:
     
             spectral_data = {}
             if opts.doSpectra:
+                from astroquery.sdss import SDSS
+
                 coord = SkyCoord(ra=RA*u.degree, dec=Dec*u.degree, frame='icrs')
                 try:
                     xid = SDSS.query_region(coord, spectro=True)
@@ -1280,6 +1311,7 @@ for algorithm in algorithms:
         cnt = cnt + 1
 
     periodic_stats_algorithms[algorithm] = data_periodic_stats
+    periodic_stats_algorithms_2[algorithm] = data_periodic_stats_2
 
 with h5py.File(catalogFile, 'w') as hf:
     hf.create_dataset("names",  data=str_stats[:,0])
@@ -1289,6 +1321,8 @@ with h5py.File(catalogFile, 'w') as hf:
     for algorithm in algorithms:
         hf.create_dataset("stats_%s" % algorithm,
                           data=periodic_stats_algorithms[algorithm])
+        hf.create_dataset("stats_2_%s" % algorithm,
+                          data=periodic_stats_algorithms_2[algorithm])
 
     if opts.doBrutus:
         hf.create_dataset("brutus_out",  data=brutus_out)
@@ -1299,7 +1333,7 @@ if opts.doSpectra:
 
 if opts.doRsyncFiles:
     outputDirSplit = outputDir.split("/")[-1]
-    rsync_command = "rsync -zarvh %s %s" % (outputDir,
-                                            opts.rsync_directory)
+    rsync_command = "rsync -zarvh --chmod=Du+rwx %s/catalog %s" % (outputDir,
+                                                           opts.rsync_directory)
     print(rsync_command)
     os.system(rsync_command)

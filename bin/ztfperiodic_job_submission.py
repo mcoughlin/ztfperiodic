@@ -28,6 +28,7 @@ def parse_commandline():
     parser.add_option("-f","--filetype",default="slurm")
 
     parser.add_option("--doSubmit",  action="store_true", default=False)
+    parser.add_option("--doSubmitLoop",  action="store_true", default=False)
 
     opts, args = parser.parse_args()
 
@@ -64,7 +65,6 @@ def run_job(df, quadrant_index):
     if not os.path.isfile(catalogFile):
         jobstr = jobline.replace("$PBS_ARRAYID","%d"%row["job_number"])
         print(jobstr)
-        print(stop)
         os.system(jobstr)
 
 # Parse command line
@@ -92,8 +92,9 @@ names = ["job_number", "field", "ccd", "quadrant",
 
 catalogDir = os.path.join(outputDir,'catalog',algorithm)
 #quad_out_original = np.loadtxt(quadrantfile)
-df_original = pd.read_csv(quadrantfile, header=0, delimiter=' ',
+df_original = pd.read_csv(quadrantfile, header=None, delimiter=' ',
                           names=names)
+pd.set_option('display.max_columns', None)
 df = filter_completed(df_original, catalogDir)       
 njobs = len(df)
 print('%d jobs remaining...' % njobs)
@@ -112,3 +113,6 @@ if opts.doSubmit:
             df = filter_completed(df, catalogDir)
             njobs = len(df)
             print('%d jobs remaining...' % njobs)
+elif opts.doSubmitLoop:
+    for quadrant_index in range(njobs):
+        run_job(df, quadrant_index)

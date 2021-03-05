@@ -138,7 +138,7 @@ def sawtooth_decomposition(t,y,dy,p):
 
     return popt
 
-def fourier_decomposition(t,y,dy,p,maxNterms=5,relative_output=True):
+def fourier_decomposition(t,y,dy,p,maxNterms=5,relative_output=False):
 
     N = np.size(y)
 
@@ -230,7 +230,22 @@ def make_f(p):
 
         #print(pars)
 
-        #pars = np.array(pars)
+        y = pars[0] + pars[1] * (t-np.min(t))
+        ns = np.arange(1,(len(pars)-2)/2+1,1,dtype=int)
+        if len(ns) == 0:
+            return y
+ 
+        #phi = np.repeat(np.atleast_2d(2*np.pi*t/p), len(ns), axis=0)
+        #ns = np.repeat(np.atleast_2d(ns), len(t), axis=0).T
+        #vals1 = np.repeat(np.atleast_2d(pars[2::2]), len(t), axis=0).T
+        #vals2 = np.repeat(np.atleast_2d(pars[3::2]), len(t), axis=0).T
+
+        #yvals1 = vals1 * np.cos(ns * phi)
+        #yvals2 = vals2 * np.sin(ns * phi)
+
+        #y = y + yvals1.sum(axis=0) + yvals2.sum(axis=0)
+
+        pars = np.array(pars)
         # a offset a[0], and slope
         y = pars[0] + pars[1] * (t-np.min(t))
         # fourier components, loops from 1 to ?
@@ -238,6 +253,7 @@ def make_f(p):
             phi = 2*np.pi*t/p
             y += pars[n*2] * np.cos(n * phi)
             y += pars[n*2+1] * np.sin(n * phi)
+
         return y
     return f
 
@@ -314,6 +330,11 @@ def calc_stats(t,mag,err,p):
 
 def calc_fourier_stats(t,mag,err,p):
 
+    (f1_power,f1_BIC,f1_a,f1_b,f1_amp,f1_phi0,
+    f1_relamp1,f1_relphi1,f1_relamp2,f1_relphi2,
+    f1_relamp3,f1_relphi3,f1_relamp4,f1_relphi5
+    ) = fourier_decomposition(t,mag,err,p)
+
     try:
         # fourier decomposition stuff
         (f1_power,f1_BIC,f1_a,f1_b,f1_amp,f1_phi0,
@@ -332,3 +353,22 @@ def calc_fourier_stats(t,mag,err,p):
     return np.r_[f1_power,f1_BIC,f1_a,f1_b,f1_amp,f1_phi0,
                  f1_relamp1,f1_relphi1,f1_relamp2,f1_relphi2,
                  f1_relamp3,f1_relphi3,f1_relamp4,f1_relphi5] 
+
+def calc_fourier_stats_sidereal(t, mag, err, p):
+
+    tsid = 0.99726957
+    jjs = np.array([0, -3, -2, -1, -0.5, 0.5, 1, 2, 3])
+    periods = np.abs(tsid/((tsid/p) + jjs))
+
+    periodic_stat_all, periodic_stat_bics = [], []
+    for ii, period in enumerate(periods):
+        periodic_stat = calc_fourier_stats(t, mag, err, period)
+
+        periodic_stat_all.append(periodic_stat)
+        periodic_stat_bics.append(periodic_stat[0])
+
+    idx = np.argmax(periodic_stat_bics)
+    periodic_stat = periodic_stat_all[idx]
+    period = periods[idx]
+
+    return [period, periodic_stat]

@@ -2,6 +2,7 @@
 import os, sys
 import glob
 import optparse
+import subprocess
 
 import tables
 import pandas as pd
@@ -120,13 +121,16 @@ batch_size = opts.batch_size
 Ncatalog = opts.Ncatalog
 algorithm = opts.algorithm
 
-catalogDir = os.path.join(outputDir,'catalog',algorithm)
+host = subprocess.check_output(['hostname','-f']).decode().replace("\n","")
+
+catalogDir = os.path.join(outputDir,'catalog',"_".join(algorithm.split(",")))
 
 qsubDir = os.path.join(outputDir,'qsub')
 if not os.path.isdir(qsubDir):
     os.makedirs(qsubDir)
 
 idsDir = os.path.join(qsubDir,'ids')
+#idsDir = "/home/michael.coughlin/ZTF/output_quadrants_Primary_DR4/condor/ids"
 if not os.path.isdir(idsDir):
     os.makedirs(idsDir)
 
@@ -142,7 +146,7 @@ if opts.doCutNObs:
     nobs_data = nobs_data[idx,:]
     fields_list = nobs_data[:,0]
 
-if opts.doQuadrantScale:
+if opts.doQuadrantScale or ("fermi" in opts.catalog_file):
     kow = Kowalski(username=opts.user, password=opts.pwd)
 
 if opts.lightcurve_source == "Kowalski":
@@ -155,15 +159,18 @@ if opts.lightcurve_source == "Kowalski":
         fields3 = [851,848,797,761,721,508,352,355,364,379]
         fields4 = [1866,1834,1835,1804,1734,1655,1565]
 
-        fields_complete = fields1 + fields2 + fields3 + fields4
-        fields = np.arange(1600,1700)
-        fields = np.setdiff1d(fields,fields_complete)
+        fields = fields1 + fields2
+        #fields_complete = fields1 + fields2 + fields3 + fields4
+        #fields = np.arange(1600,1700)
+        #fields = np.setdiff1d(fields,fields_complete)
 
-        fields = [400]
-        fields = np.arange(250,882)
-        fields = np.arange(600,700)
-        fields = np.arange(750,800)
+        #fields = [400]
+        #fields = np.arange(250,882)
+        #fields = np.arange(600,700)
+        #fields = np.arange(750,800)
         #fields = np.arange(300,305)
+        #fields = np.arange(750,751)
+        fields = np.arange(250,400)
 
         job_number = 0
         quadrantfile = os.path.join(qsubDir,'qsub.dat')
@@ -183,8 +190,8 @@ if opts.lightcurve_source == "Kowalski":
                                              'ccd': {'$eq': int(ccd)},
                                              'quad': {'$eq': int(quadrant)}
                                              }
-                                       } 
-                             }                                            
+                                       }
+                             }
                         r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
                         if not "data" in r: continue
                         nlightcurves = r['data']
@@ -193,9 +200,8 @@ if opts.lightcurve_source == "Kowalski":
 
                         idsFile = os.path.join(idsDir,"%d_%d_%d.npy"%(field, ccd, quadrant))
                         if not os.path.isfile(idsFile):
-                            print(idsFile)
                             qu = {"query_type":"find",
-                                  "query": {"catalog": 'ZTF_sources_20200401',
+                                  "query": {"catalog": 'ZTF_sources_20201201',
                                             "filter": {'field': {'$eq': int(field)},
                                                        'ccd': {'$eq': int(ccd)},
                                                        'quad': {'$eq': int(quadrant)}
@@ -207,7 +213,10 @@ if opts.lightcurve_source == "Kowalski":
                             for obj in r['data']:
                                 objids.append(obj['_id'])
                             np.save(idsFile, objids)
-                    
+
+                    objids = np.load(idsFile) 
+                    nlightcurves = len(objids)
+                    Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
                     for ii in range(Ncatalog):
                         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant, ii))
                         if os.path.isfile(catalogFile):
@@ -218,6 +227,47 @@ if opts.lightcurve_source == "Kowalski":
     
                         job_number = job_number + 1
         fid.close()
+    elif opts.source_type == "catalog":
+        lines = [line.rstrip('\n') for line in open(opts.catalog_file)]
+        names, ras, decs, errs = [], [], [], []
+        if ("fermi" in opts.catalog_file):
+            amaj, amin, phi = [], [], []
+        for line in lines:
+            lineSplit = list(filter(None,line.split(" ")))
+            if ("fermi" in opts.catalog_file):
+                names.append(lineSplit[0])
+                ras.append(float(lineSplit[1]))
+                decs.append(float(lineSplit[2]))
+                err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
+                errs.append(err)
+                amaj.append(float(lineSplit[3]))
+                amin.append(float(lineSplit[4]))
+                phi.append(float(lineSplit[5]))
+
+        for ii in range(len(names)):
+            ra, dec, radius = ras[ii], decs[ii], errs[ii]
+
+            idsFile = os.path.join(idsDir,"%d.npy"%(ii))
+            #if not os.path.isfile(idsFile):
+            if False:
+                qu = { "query_type": "cone_search",
+                       "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" },
+                                 "catalogs": { "ZTF_sources_20201201": { "filter": "{}", "projection": "{'_id': 1}"}}}}
+                r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
+                objids = []
+                r = r["data"]["ZTF_sources_20201201"]
+                for obj in r['test']:
+                    objids.append(obj['_id'])
+                np.save(idsFile, objids)
+
+        quadrantfile = os.path.join(qsubDir,'qsub.dat')
+        fid = open(quadrantfile,'w')
+        job_number = 0
+        for ii in range(Ncatalog):
+            fid.write('%d %d %d\n' % (job_number, ii, Ncatalog))
+            job_number = job_number + 1
+        fid.close()
+
 elif opts.lightcurve_source == "matchfiles":
     bands = {1: 'g', 2: 'r', 3: 'i', 4: 'z', 5: 'J'}
     directory="%s/*/*/*.pytable"%opts.matchfileDir
@@ -239,11 +289,12 @@ elif opts.lightcurve_source == "matchfiles":
 
 fid = open(os.path.join(qsubDir,'qsub.sub'),'w')
 fid.write('#!/bin/bash\n')
-fid.write('#PBS -l walltime=23:59:59,nodes=1:ppn=24:gpus=1,pmem=5290mb -q k40\n')
-fid.write('#PBS -m abe\n')
-fid.write('#PBS -M cough052@umn.edu\n')
-fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
-fid.write('cd $PBS_O_WORKDIR\n')
+if not opts.filetype == "slurm":
+    fid.write('#PBS -l walltime=23:59:59,nodes=1:ppn=24:gpus=1,pmem=5290mb -q k40\n')
+    fid.write('#PBS -m abe\n')
+    fid.write('#PBS -M cough052@umn.edu\n')
+    fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
+    fid.write('cd $PBS_O_WORKDIR\n')
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
         fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type objid --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,algorithm,extra_flags))
@@ -255,21 +306,32 @@ fid.close()
 
 fid = open(os.path.join(qsubDir,'qsub_submission.sub'),'w')
 fid.write('#!/bin/bash\n')
-if opts.queue_type == "v100":
-    fid.write('#PBS -l walltime=23:59:59,nodes=1:ppn=24:gpus=1,pmem=3000mb -q v100\n')
-elif opts.queue_type == "k40":
-    fid.write('#PBS -l walltime=23:59:59,nodes=1:ppn=24:gpus=1,pmem=5290mb -q k40\n')
+if opts.filetype == "slurm":
+    fid.write('#sbatch -t 48:00:00 -p GPU-shared --gpus=v100:1 qsub_submission.sub\n')
+elif opts.filetype == "qsub":
+    if opts.queue_type == "v100":
+        fid.write('#PBS -l walltime=23:59:59,nodes=1:ppn=24:gpus=1,pmem=3000mb -q v100\n')
+    elif opts.queue_type == "k40":
+        fid.write('#PBS -l walltime=23:59:59,nodes=1:ppn=24:gpus=1,pmem=5290mb -q k40\n')
+    else:
+        print('queue_type must be v100 or k40')
+        exit(0)
+    fid.write('#PBS -m abe\n')
+    fid.write('#PBS -M cough052@umn.edu\n')
+    fid.write('cd $PBS_O_WORKDIR\n')
+if "bridges" in host:
+    fid.write('source /ocean/projects/ast200014p/mcoughli/ZTF/ztfperiodic/setup.sh\n')
 else:
-    print('queue_type must be v100 or k40')
-    exit(0)
-fid.write('#PBS -m abe\n')
-fid.write('#PBS -M cough052@umn.edu\n')
-fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
-fid.write('cd $PBS_O_WORKDIR\n')
+    fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
         if opts.filetype == "dask":
-            fid.write('CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 %s/ztfperiodic_dask_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, opts.filetype))
+            fid.write('CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 %s/ztfperiodic_dask_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, 'qsub'))
         else:
             fid.write('%s/ztfperiodic_job_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, opts.filetype))
+    elif opts.source_type == "catalog":
+        if opts.filetype == "dask":
+            fid.write('CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 %s/ztfperiodic_dask_submission.py --outputDir %s --filetype %s --source_type %s --doSubmit\n' % (dir_path, outputDir, 'qsub', opts.source_type))
+        else:
+            fid.write('%s/ztfperiodic_job_submission.py --outputDir %s --filetype %s --source_type %s --doSubmit\n' % (dir_path, outputDir, opts.filetype, opts.source_type))
 fid.close()
