@@ -2097,74 +2097,76 @@ def get_matchfile(kow, filename, min_epochs = 1,
         filters.append(np.unique(fid).tolist())
         nlightcurves = 1
 
-        radius = 5
-        qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": {'test': [np.float64(np.median(ra)),np.float64(np.median(dec))]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"} } }}
+        if not kow is None:
+            radius = 5
+            qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": {'test': [np.float64(np.median(ra)),np.float64(np.median(dec))]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"} } }}
 
-        r = database_query(kow, qu, nquery = 10)
+            r = database_query(kow, qu, nquery = 10)
 
         coords = SkyCoord(ra=np.median(ra)*u.degree, 
                           dec=np.median(dec)*u.degree, frame='icrs')
 
         absmag, bp_rp = [np.nan, np.nan, np.nan], [np.nan, np.nan]
-        if "data" in r:
-            key2 = 'Gaia_DR2'
-            data2 = r["data"][key2]
-            key = list(data2.keys())[0]
-            data2 = data2[key]
-            cat2 = get_catalog(data2)
-            if len(cat2) > 0:
-                idx,sep,_ = coords.match_to_catalog_sky(cat2)
-                dat2 = data2[idx]
-            else:
-                dat2 = {}
-
-            if not "parallax" in dat2:
-                parallax, parallaxerr = None, None
-            else:
-                parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
-            if not "phot_g_mean_mag" in dat2:
-                g_mag = None
-            else:
-                g_mag = dat2["phot_g_mean_mag"]
-
-            if not "phot_bp_mean_mag" in dat2:
-                bp_mag = None
-            else:
-                bp_mag = dat2["phot_bp_mean_mag"]
-
-            if not "phot_rp_mean_mag" in dat2:
-                rp_mag = None
-            else:
-                rp_mag = dat2["phot_rp_mean_mag"]
-
-            if not "phot_bp_mean_flux_over_error" in dat2:
-                bp_mean_flux_over_error = None
-            else:
-                bp_mean_flux_over_error = dat2["phot_bp_mean_flux_over_error"]
-
-            if not "phot_rp_mean_flux_over_error" in dat2:
-                rp_mean_flux_over_error = None
-            else:
-                rp_mean_flux_over_error = dat2["phot_rp_mean_flux_over_error"]
-
-            if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None) or (rp_mean_flux_over_error is None) or (rp_mean_flux_over_error is None)):
-                absmag = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
-                bp_rp = [bp_mag-rp_mag, 2.5/np.log(10) * np.hypot(1/bp_mean_flux_over_error, 1/rp_mean_flux_over_error)]
-
+        if not kow is None:
+            if "data" in r:
+                key2 = 'Gaia_DR2'
+                data2 = r["data"][key2]
+                key = list(data2.keys())[0]
+                data2 = data2[key]
+                cat2 = get_catalog(data2)
+                if len(cat2) > 0:
+                    idx,sep,_ = coords.match_to_catalog_sky(cat2)
+                    dat2 = data2[idx]
+                else:
+                    dat2 = {}
+    
+                if not "parallax" in dat2:
+                    parallax, parallaxerr = None, None
+                else:
+                    parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
+                if not "phot_g_mean_mag" in dat2:
+                    g_mag = None
+                else:
+                    g_mag = dat2["phot_g_mean_mag"]
+    
+                if not "phot_bp_mean_mag" in dat2:
+                    bp_mag = None
+                else:
+                    bp_mag = dat2["phot_bp_mean_mag"]
+    
+                if not "phot_rp_mean_mag" in dat2:
+                    rp_mag = None
+                else:
+                    rp_mag = dat2["phot_rp_mean_mag"]
+    
+                if not "phot_bp_mean_flux_over_error" in dat2:
+                    bp_mean_flux_over_error = None
+                else:
+                    bp_mean_flux_over_error = dat2["phot_bp_mean_flux_over_error"]
+    
+                if not "phot_rp_mean_flux_over_error" in dat2:
+                    rp_mean_flux_over_error = None
+                else:
+                    rp_mean_flux_over_error = dat2["phot_rp_mean_flux_over_error"]
+    
+                if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None) or (rp_mean_flux_over_error is None) or (rp_mean_flux_over_error is None)):
+                    absmag = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
+                    bp_rp = [bp_mag-rp_mag, 2.5/np.log(10) * np.hypot(1/bp_mean_flux_over_error, 1/rp_mean_flux_over_error)]
+    
         for jj in range(nlightcurves):
             coordinate=(np.median(ra),np.median(dec))
             coordinates.append(coordinate)
             ids.append(source[0])
             absmags.append(absmag)
             bp_rps.append(bp_rp)
-
+    
             ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
             if dec_hex[0] == "-":
                 objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
             else:
                 objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
             names.append(objname)
-
+    
         newbaseline = max(hjd)-min(hjd)
         if newbaseline>baseline:
             baseline=newbaseline

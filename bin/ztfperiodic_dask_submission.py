@@ -33,6 +33,7 @@ def parse_commandline():
     parser.add_option("-c","--CUDA_VISIBLE_DEVICES",default="0,1,2,3,4,5,6,7")
 
     parser.add_option("-s","--source_type",default="quadrant")
+    parser.add_option("-l","--lightcurve_source",default="Kowalski")
 
     parser.add_option("--doSubmit",  action="store_true", default=False)
 
@@ -83,6 +84,8 @@ def run_job(row):
 
     if not os.path.isfile(catalogFile):
         jobstr = jobline.replace("$PBS_ARRAYID","%d"%row["job_number"])
+        if lightcurve_source == "matchfiles":
+            jobstr = jobstr + " -m %s" % idsFile        
         print(jobstr)
         os.system(jobstr)
 
@@ -96,6 +99,7 @@ if __name__ == '__main__':
     outputDir = opts.outputDir
     filetype = opts.filetype
     source_type = opts.source_type    
+    lightcurve_source = opts.lightcurve_source
 
     qsubDir = os.path.join(outputDir,filetype)
     if not os.path.isdir(qsubDir):
@@ -113,11 +117,16 @@ if __name__ == '__main__':
  
     quadrantfile = os.path.join(qsubDir,'%s.dat' % filetype)
 
-    if source_type == "quadrant":
-        names = ["job_number", "field", "ccd", "quadrant",
-             "Ncatindex", "Ncatalog", "idsFile"]
-    elif source_type == "catalog":
-        names = ["job_number", "Ncatindex", "Ncatalog"]    
+    if lightcurve_source == "Kowalski":
+        if source_type == "quadrant":
+            names = ["job_number", "field", "ccd", "quadrant",
+                     "Ncatindex", "Ncatalog", "idsFile"]
+        elif source_type == "catalog":
+            names = ["job_number", "Ncatindex", "Ncatalog"]    
+    elif lightcurve_source == "matchfiles":
+        if source_type == "quadrant":
+            names = ["job_number", "field", "ccd", "quadrant",
+                     "Ncatindex", "Ncatalog", "idsFile"]
 
     catalogDir = os.path.join(outputDir,'catalog',algorithm.replace(",","_"))
     #quad_out_original = np.loadtxt(quadrantfile)

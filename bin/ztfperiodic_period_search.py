@@ -303,6 +303,15 @@ if opts.doQuadrantFile:
         field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
         Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
         catalog_file = row["idsFile"]
+    elif opts.lightcurve_source == "matchfiles":
+        names = ["job_number", "field", "ccd", "quadrant",
+                 "Ncatindex", "Ncatalog", "idsFile"]
+
+        df_original = pd.read_csv(opts.quadrant_file, header=None, delimiter=' ', names=names)
+        row = df_original.iloc[opts.quadrant_index,:]
+        field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
+        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+        matchFile = row["idsFile"]
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
@@ -659,7 +668,7 @@ elif opts.lightcurve_source == "matchfiles":
         exit(1)
 
     kow = []
-    nquery = 10
+    nquery = 1
     cnt = 0
     while cnt < nquery:
         try:
@@ -669,7 +678,9 @@ elif opts.lightcurve_source == "matchfiles":
             time.sleep(5)
         cnt = cnt + 1
     if cnt == nquery:
-        raise Exception('Kowalski connection failed...')
+        print('No Kowalski for matchfiles... will do our best.')
+        kow = None
+        #raise Exception('Kowalski connection failed...')
 
     matchFile_split = matchFile.replace(".pytable","").replace(".hdf5","").replace(".h5","").split("/")[-1]
     catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(matchFile_split,
