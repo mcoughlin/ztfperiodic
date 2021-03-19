@@ -997,7 +997,7 @@ for algorithm in algorithms:
             elif algorithm == "EAOV":
                 sigthresh = 15
             elif algorithm == "ELS":
-                sigthresh = 15
+                sigthresh = 50
             else:
                 sigthresh = 7
     
@@ -1214,7 +1214,8 @@ for algorithm in algorithms:
             ymin = y10 - 7*ystd
             ymax = y90 + 7*ystd
             ax1.set_ylim([ymin,ymax])
-            ax1.invert_yaxis()
+            if not opts.lightcurve_source == "matchfiles_kevin":
+                ax1.invert_yaxis()
             asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
             hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
             print(bp_rp)

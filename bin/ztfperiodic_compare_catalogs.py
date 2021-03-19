@@ -48,20 +48,25 @@ def parse_commandline():
     parser.add_option("--doField",  action="store_true", default=False)
     parser.add_option("-f","--field",default=853,type=int)
 
-    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3/catalog/compare")
-    parser.add_option("-c","--catalog",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3/catalog/ECE_ELS_EAOV")
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_forced_Fermi_known_DR4/catalog/compare")
+    parser.add_option("-c","--catalog",default="/home/michael.coughlin/ZTF/output_forced_Fermi_known_DR4/catalog/ECE_ELS_EAOV")
 
-    parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/LS")
-    parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants/catalog/CE")
+    parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_forced_Fermi_known_DR4/catalog/ECE_ELS_EAOV")
+    parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_forced_Fermi_known_DR4/catalog/ECE_ELS_EAOV")
 
     parser.add_option("--object_file",default="/home/michael.coughlin/ZTF/output_phenomenological_ids_DR2/catalog/compare/bw/info/objs.dat")   
     parser.add_option("--catalog_file",default="../catalogs/fermi.dat")    
+    parser.add_option("--catalog_file_2",default="../catalogs/chandra.dat")
 
-    parser.add_option("--algorithm1",default="ECE")
-    parser.add_option("--algorithm2",default="ELS")
+    parser.add_option("--algorithm1",default="EAOV")
+    parser.add_option("--algorithm2",default="EAOV")
 
-    parser.add_option("--sig1",default=7.0,type=float)
-    parser.add_option("--sig2",default=10.0,type=float)    
+    parser.add_option("--sig1",default=15.0,type=float)
+    parser.add_option("--sig2",default=15.0,type=float)    
+
+    parser.add_option("--doPeriodCut",  action="store_true", default=False)
+    parser.add_option("--period_min",default=1.0/24.0,type=float)
+    parser.add_option("--period_max",default=6.0/24.0,type=float)
 
     parser.add_option("--crossmatch_distance",default=1.0,type=float)
 
@@ -78,7 +83,7 @@ def read_catalog(catalog_file):
         lines = [line.rstrip('\n') for line in open(catalog_file)]
         names, ras, decs, errs = [], [], [], []
         periods, classifications, mags = [], [], []
-        if ("fermi" in catalog_file):
+        if ("fermi" in catalog_file) or ("chandra" in catalog_file):
             amaj, amin, phi = [], [], []
         for line in lines:
             lineSplit = list(filter(None,line.split(" ")))
@@ -105,6 +110,15 @@ def read_catalog(catalog_file):
                 decs.append(float(lineSplit[2]))
                 err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
                 errs.append(err)
+            elif ("chandra" in catalog_file):
+                names.append(lineSplit[0])
+                ras.append(float(lineSplit[1]))
+                decs.append(float(lineSplit[2]))
+                err = np.sqrt(float(lineSplit[3])**2 + float(lineSplit[4])**2)*3600.0
+                errs.append(err/3600)
+                amaj.append(float(lineSplit[3])/3600 + 3.0/3600)
+                amin.append(float(lineSplit[4])/3600 + 3.0/3600)
+                phi.append(float(lineSplit[5]))
             elif ("fermi" in catalog_file):
                 names.append(lineSplit[0])
                 ras.append(float(lineSplit[1]))
@@ -127,8 +141,11 @@ def read_catalog(catalog_file):
                 errs.append(default_err)
         names = np.array(names)
         ras, decs, errs = np.array(ras), np.array(decs), np.array(errs)
-        if ("fermi" in catalog_file):
+        if ("fermi" in catalog_file) or ("chandra" in catalog_file):
             amaj, amin, phi = np.array(amaj), np.array(amin), np.array(phi)
+        else:
+            amaj, amin = errs, errs
+            phi = np.zeros(errs.shape)
 
         columns = ["name", "ra", "dec", "amaj", "amin", "phi"]
         tab = Table([names, ras, decs, amaj, amin, phi],
@@ -184,7 +201,7 @@ def load_catalog(catalog,doFermi=False,doSimbad=False,
     else:
         filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1] + \
                     sorted(glob.glob(os.path.join(catalog,"*.h5")))[::-1]
-                     
+                  
     h5names = ["objid", "ra", "dec",
                "stats0", "stats1", "stats2", "stats3", "stats4",
                "stats5", "stats6", "stats7", "stats8", "stats9",
@@ -217,6 +234,7 @@ def load_catalog(catalog,doFermi=False,doSimbad=False,
                 periodic_stats = f['stats_%s' % algorithm].value
         except:
             continue
+
         data_tmp = Table(rows=stats, names=h5names)
         data_tmp['name'] = name
         data_tmp['filt'] = filters
@@ -312,7 +330,14 @@ else:
         cat1 = Table.read(cat1file, format='fits')
     idx1 = np.where(cat1["sig"] >= opts.sig1)[0]
     print('Keeping %.5f %% of objects in catalog 1' % (100*len(idx1)/len(cat1)))
+    cat1 = cat1[idx1]
+
+    if opts.doPeriodCut:
+        idx1 = np.where((cat1["period"] >= opts.period_min) & (cat1["period"] <= opts.period_max))[0]
+        cat1 = cat1[idx1]
+
 catalog1 = SkyCoord(ra=cat1["ra"]*u.degree, dec=cat1["dec"]*u.degree, frame='icrs')
+
 
 if opts.doCrossMatch:
     if not os.path.isfile(cat2file):
@@ -320,6 +345,7 @@ if opts.doCrossMatch:
         cat2.write(cat2file, format='fits')
     else:
         cat2 = Table.read(cat2file, format='fits')
+
 else:
     if not os.path.isfile(cat2file):
         cat2 = load_catalog(opts.catalog2,doFermi=opts.doFermi,
@@ -332,20 +358,35 @@ else:
 
     idx2 = np.where(cat2["sig"] >= opts.sig2)[0]
     print('Keeping %.5f %% of objects in catalog 2' % (100*len(idx2)/len(cat2)))
+    cat2 = cat2[idx2]
 
 if opts.doCrossMatch:
+    cat3 = read_catalog(opts.catalog_file_2)
     for row2 in cat2:
         dist = angular_distance(row2["ra"], row2["dec"], cat1["ra"], cat1["dec"])
+        idx = np.where(dist <= row2["amaj"])[0]
+        if len(idx) == 0: continue
+
         ellipse = patches.Ellipse((row2["ra"], row2["dec"]),
                                   row2["amaj"], row2["amin"],
                                   angle=row2["phi"])
-        idx = np.where(dist <= row2["amaj"])[0]
-        if len(idx) == 0: continue
         print('For source %s' % row2["name"])
         for jj in idx:
             if not ellipse.contains_point((cat1["ra"][jj],cat1["dec"][jj])):
                 continue
-            print(cat1["objid"][jj], cat1["ra"][jj], cat1["dec"][jj])
+            print('%d' % cat1["objid"][jj], cat1["ra"][jj], cat1["dec"][jj], cat1["sig"][jj], cat1["period"][jj])
+
+            dist = angular_distance(cat1["ra"][jj], cat1["dec"][jj], cat3["ra"], cat3["dec"])
+            idy = np.where(dist <= cat3["amaj"])[0]
+            if len(idy) == 0: continue
+
+            for kk in idy:
+                 ellipse = patches.Ellipse((cat3["ra"][kk], cat3["dec"][kk]),
+                                            cat3["amaj"][kk], cat3["amin"][kk],
+                                            angle=cat3["phi"][kk])
+                 if not ellipse.contains_point((cat1["ra"][jj],cat1["dec"][jj])):
+                     continue
+                 print('chandra', cat3["ra"][kk], cat3["dec"][kk])
 
 
 catalog2 = SkyCoord(ra=cat2["ra"]*u.degree, dec=cat2["dec"]*u.degree, frame='icrs')
