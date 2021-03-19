@@ -191,8 +191,8 @@ def touch(fname):
 # Parse command line
 opts = parse_commandline()
 
-if not opts.lightcurve_source in ["matchfiles","h5files","Kowalski"]:
-    print("--lightcurve_source must be either matchfiles, h5files, or Kowalski")
+if not opts.lightcurve_source in ["matchfiles","matchfiles_kevin","h5files","Kowalski"]:
+    print("--lightcurve_source must be either matchfiles, matchfiles_kevin, h5files, or Kowalski")
     exit(0)
 
 if not (opts.doCPU or opts.doGPU):
@@ -310,6 +310,13 @@ if opts.doQuadrantFile:
         df_original = pd.read_csv(opts.quadrant_file, header=None, delimiter=' ', names=names)
         row = df_original.iloc[opts.quadrant_index,:]
         field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
+        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+        matchFile = row["idsFile"]
+    elif opts.lightcurve_source == "matchfiles_kevin":
+        names = ["job_number", "Ncatindex", "Ncatalog", "idsFile"]
+
+        df_original = pd.read_csv(opts.quadrant_file, header=None, delimiter=' ', names=names)
+        row = df_original.iloc[opts.quadrant_index,:]
         Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
         matchFile = row["idsFile"]
 
@@ -662,7 +669,7 @@ if opts.lightcurve_source == "Kowalski":
         print("Source type unknown...")
         exit(0)
 
-elif opts.lightcurve_source == "matchfiles":
+elif opts.lightcurve_source in ["matchfiles", "matchfiles_kevin"]:
     if not os.path.isfile(matchFile):
         print("%s missing..."%matchFile)
         exit(1)
@@ -688,6 +695,12 @@ elif opts.lightcurve_source == "matchfiles":
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,matchFile_split)
 
+
+    if opts.lightcurve_source == "matchfiles":
+        matchfileType = 'forced'
+    elif opts.lightcurve_source == "matchfiles_kevin":  
+        matchfileType = 'kevin'
+
     #matchFile = find_matchfile(opts.matchfileDir)
     lightcurves, coordinates, filters, ids,\
     absmags, bp_rps, names, baseline = get_matchfile(kow, matchFile,
@@ -696,7 +709,8 @@ elif opts.lightcurve_source == "matchfiles":
                                                      doRemoveHC=doRemoveHC,
                                                      doHCOnly=doHCOnly,
                                                      Ncatalog=Ncatalog,
-                                                     Ncatindex=Ncatindex)
+                                                     Ncatindex=Ncatindex,
+                                                     matchfileType=matchfileType)
 
     if opts.doRemoveBrightStars:
         lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\

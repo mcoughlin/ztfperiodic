@@ -47,18 +47,25 @@ def filter_completed(df, catalogDir, source_type):
 
     tbd = []
     for ii, (index, row) in enumerate(df.iterrows()):
-        if source_type == "quadrant":
-            field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
-            Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
-            idsFile = row["idsFile"]
-            catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
-        elif source_type == "catalog":
-            Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
-            catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
-            catalogFile = os.path.join(catalogDir,"%s" % Ncatindex,
-                                       "%s_%d.h5"%(catalog_file_split,
-                                                   Ncatindex))
-
+        
+        if lightcurve_source == "matchfiles_kevin":
+            if source_type == "quadrant":
+                Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+                idsFile = row["idsFile"]
+                catalogFile = os.path.join(catalogDir,"%d.h5"%(Ncatindex))
+        else:
+            if source_type == "quadrant":
+                field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
+                Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+                idsFile = row["idsFile"]
+                catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
+            elif source_type == "catalog":
+                Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+                catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+                catalogFile = os.path.join(catalogDir,"%s" % Ncatindex,
+                                           "%s_%d.h5"%(catalog_file_split,
+                                                       Ncatindex))
+    
         if not os.path.isfile(catalogFile):
             tbd.append(ii)
     df = df.iloc[tbd]
@@ -70,21 +77,26 @@ def filter_completed(df, catalogDir, source_type):
 
 def run_job(row):
 
-    if source_type == "quadrant":
-        field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
-        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
-        idsFile = row["idsFile"]
-        print(field, ccd, quadrant, Ncatindex, Ncatalog)
-        catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
-    elif source_type == "catalog":
-        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
-        catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
-        catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(catalog_file_split,
-                                                           Ncatindex))
-
+    if lightcurve_source == "matchfiles_kevin":
+        if source_type == "quadrant":
+            Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+            idsFile = row["idsFile"]
+            catalogFile = os.path.join(catalogDir,"%d.h5"%(Ncatindex))
+    else:
+        if source_type == "quadrant":
+            field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
+            Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+            idsFile = row["idsFile"]
+            print(field, ccd, quadrant, Ncatindex, Ncatalog)
+            catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
+        elif source_type == "catalog":
+            Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+            catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+            catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(catalog_file_split,
+                                                               Ncatindex))
     if not os.path.isfile(catalogFile):
         jobstr = jobline.replace("$PBS_ARRAYID","%d"%row["job_number"])
-        if lightcurve_source == "matchfiles":
+        if lightcurve_source in ["matchfiles","matchfiles_kevin"]:
             jobstr = jobstr + " -m %s" % idsFile        
         print(jobstr)
         os.system(jobstr)
@@ -127,6 +139,9 @@ if __name__ == '__main__':
         if source_type == "quadrant":
             names = ["job_number", "field", "ccd", "quadrant",
                      "Ncatindex", "Ncatalog", "idsFile"]
+    elif lightcurve_source == "matchfiles_kevin":
+        if source_type == "quadrant":
+            names = ["job_number", "Ncatindex", "Ncatalog", "idsFile"]
 
     catalogDir = os.path.join(outputDir,'catalog',algorithm.replace(",","_"))
     #quad_out_original = np.loadtxt(quadrantfile)

@@ -312,6 +312,36 @@ elif opts.lightcurve_source == "matchfiles":
             job_number = job_number + 1
     fid.close()
 
+elif opts.lightcurve_source == "matchfiles_kevin":
+
+    job_number = 0
+    quadrantfile = os.path.join(qsubDir,'qsub.dat')
+    fid = open(quadrantfile,'w')
+
+    print(opts.matchfileDir)
+    directory="%s/*.h5"%opts.matchfileDir
+    filenames = [f for f in glob.iglob(directory)]
+    for jj, filename in enumerate(filenames):
+        if np.mod(jj, 100) == 0:
+            print('%d/%d' % (jj, len(filenames)))
+
+        f = h5py.File(filename, 'r')
+        sources = f['Objects']
+        nlightcurves = len(sources)
+        print(nlightcurves)
+
+        Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
+        for ii in range(Ncatalog):
+            catalogFile = os.path.join(catalogDir,"%d.h5"%(ii))
+            if os.path.isfile(catalogFile):
+                print('%s already exists... continuing.' % catalogFile)
+                continue
+
+            fid.write('%d %d %d %s\n' % (job_number, ii, Ncatalog, filename))
+
+            job_number = job_number + 1
+    fid.close()
+
 fid = open(os.path.join(qsubDir,'qsub.sub'),'w')
 fid.write('#!/bin/bash\n')
 if not opts.filetype == "slurm":
@@ -325,7 +355,7 @@ if opts.lightcurve_source == "Kowalski":
         fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type objid --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,algorithm,extra_flags))
     elif opts.source_type == "catalog":
         fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,algorithm,extra_flags))
-elif opts.lightcurve_source == "matchfiles":
+elif opts.lightcurve_source in ["matchfiles", "matchfiles_kevin"]:
     fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d -l matchfiles --doRemoveTerrestrial --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,quadrantfile,opts.Ncatalog,algorithm,extra_flags))
 fid.close()
 
@@ -350,7 +380,7 @@ elif "nasa" in host:
     fid.write('source /home4/mwcoughl/ZTF/ztfperiodic/setup.sh\n')
 else:
     fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
-if opts.lightcurve_source in ["Kowalski", "matchfiles"]:
+if opts.lightcurve_source in ["Kowalski", "matchfiles", "matchfiles_kevin"]:
     if opts.source_type == "quadrant":
         if opts.filetype == "dask":
             fid.write('CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 %s/ztfperiodic_dask_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, 'qsub'))
