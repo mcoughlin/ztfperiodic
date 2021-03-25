@@ -28,7 +28,7 @@ def parse_commandline():
     parser.add_option("--doCPU",  action="store_true", default=False)
 
     parser.add_option("-o","--outputDir",default="/home/mcoughlin/ZTF/output")
-    parser.add_option("--matchfileDir",default="/home/mcoughlin/ZTF/matchfiles/")
+    parser.add_option("--matchfileDir",default="/nobackup/mwcoughl/matchfiles")
     parser.add_option("-b","--batch_size",default=1,type=int)
     parser.add_option("-a","--algorithm",default="CE")
 
@@ -269,21 +269,76 @@ if opts.lightcurve_source == "Kowalski":
         fid.close()
 
 elif opts.lightcurve_source == "matchfiles":
-    bands = {1: 'g', 2: 'r', 3: 'i', 4: 'z', 5: 'J'}
-    directory="%s/*/*/*.pytable"%opts.matchfileDir
+
+    fields = np.arange(250,400)
+
     job_number = 0
     quadrantfile = os.path.join(qsubDir,'qsub.dat')
     fid = open(quadrantfile,'w')
-    for f in glob.iglob(directory):
-        if not opts.qid is None:
-            if not ("rc%02d"%opts.qid) in f:
-                continue
-        if not opts.fid is None:
-            if not ("z%s"%bands[opts.fid]) in f:
-                continue
-        for ii in range(Ncatalog):    
-            fid.write('%d %s %d\n' % (job_number, f, ii))
+
+    print(opts.matchfileDir)
+    directory="%s/*/*.h5"%opts.matchfileDir
+    filenames = [f for f in glob.iglob(directory)]
+    for jj, filename in enumerate(filenames):
+        if np.mod(jj, 100) == 0:
+            print('%d/%d' % (jj, len(filenames)))
+
+        filenameSplit = filename.split("/")[-1].split("_")
+        field_id, ccd_id, q_id = int(filenameSplit[1]), int(filenameSplit[2]), int(filenameSplit[3])
+        filt = filenameSplit[4][1]
+        
+        if not field_id in fields: continue
  
+        if opts.doCutNObs:
+            if not field_id in fields_list:
+                continue
+
+        f = h5py.File(filename, 'r')
+        sourcedata = np.array(f['data']['sourcedata'][:])
+        exposures = f['data']['exposures'][:]
+        sources = f['data']['sources'][:]
+        nlightcurves = len(sources)
+        n_exp = len(exposures)
+
+        Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
+        for ii in range(Ncatalog):
+            catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field_id, ccd_id, q_id, ii))
+            if os.path.isfile(catalogFile):
+                print('%s already exists... continuing.' % catalogFile)
+                continue
+
+            fid.write('%d %d %d %d %d %d %s\n' % (job_number, field_id, ccd_id, q_id, ii, Ncatalog, filename))
+
+            job_number = job_number + 1
+    fid.close()
+
+elif opts.lightcurve_source == "matchfiles_kevin":
+
+    job_number = 0
+    quadrantfile = os.path.join(qsubDir,'qsub.dat')
+    fid = open(quadrantfile,'w')
+
+    print(opts.matchfileDir)
+    directory="%s/*.h5"%opts.matchfileDir
+    filenames = [f for f in glob.iglob(directory)]
+    for jj, filename in enumerate(filenames):
+        if np.mod(jj, 100) == 0:
+            print('%d/%d' % (jj, len(filenames)))
+
+        f = h5py.File(filename, 'r')
+        sources = f['Objects']
+        nlightcurves = len(sources)
+        print(nlightcurves)
+
+        Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
+        for ii in range(Ncatalog):
+            catalogFile = os.path.join(catalogDir,"%d.h5"%(ii))
+            if os.path.isfile(catalogFile):
+                print('%s already exists... continuing.' % catalogFile)
+                continue
+
+            fid.write('%d %d %d %s\n' % (job_number, ii, Ncatalog, filename))
+
             job_number = job_number + 1
     fid.close()
 
@@ -300,7 +355,7 @@ if opts.lightcurve_source == "Kowalski":
         fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type objid --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,quadrantfile,algorithm,extra_flags))
     elif opts.source_type == "catalog":
         fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d --user %s --pwd %s -l Kowalski --doSaveMemory --doRemoveTerrestrial --source_type catalog --catalog_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --Ncatindex $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,opts.user,opts.pwd,opts.catalog_file,opts.Ncatalog,algorithm,extra_flags))
-elif opts.lightcurve_source == "matchfiles":
+elif opts.lightcurve_source in ["matchfiles", "matchfiles_kevin"]:
     fid.write('%s/ztfperiodic_period_search.py %s --outputDir %s --batch_size %d -l matchfiles --doRemoveTerrestrial --doQuadrantFile --quadrant_file %s --doRemoveBrightStars --stardist 13.0 --program_ids 1,2,3 --Ncatalog %d --quadrant_index $PBS_ARRAYID --algorithm %s %s\n'%(dir_path,cpu_gpu_flag,outputDir,batch_size,quadrantfile,opts.Ncatalog,algorithm,extra_flags))
 fid.close()
 
@@ -321,9 +376,11 @@ elif opts.filetype == "qsub":
     fid.write('cd $PBS_O_WORKDIR\n')
 if "bridges" in host:
     fid.write('source /ocean/projects/ast200014p/mcoughli/ZTF/ztfperiodic/setup.sh\n')
+elif "nasa" in host:
+    fid.write('source /home4/mwcoughl/ZTF/ztfperiodic/setup.sh\n')
 else:
     fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
-if opts.lightcurve_source == "Kowalski":
+if opts.lightcurve_source in ["Kowalski", "matchfiles", "matchfiles_kevin"]:
     if opts.source_type == "quadrant":
         if opts.filetype == "dask":
             fid.write('CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 %s/ztfperiodic_dask_submission.py --outputDir %s --filetype %s --doSubmit\n' % (dir_path, outputDir, 'qsub'))

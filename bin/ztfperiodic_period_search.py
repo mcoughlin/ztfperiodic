@@ -191,8 +191,8 @@ def touch(fname):
 # Parse command line
 opts = parse_commandline()
 
-if not opts.lightcurve_source in ["matchfiles","h5files","Kowalski"]:
-    print("--lightcurve_source must be either matchfiles, h5files, or Kowalski")
+if not opts.lightcurve_source in ["matchfiles","matchfiles_kevin","h5files","Kowalski"]:
+    print("--lightcurve_source must be either matchfiles, matchfiles_kevin, h5files, or Kowalski")
     exit(0)
 
 if not (opts.doCPU or opts.doGPU):
@@ -303,6 +303,22 @@ if opts.doQuadrantFile:
         field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
         Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
         catalog_file = row["idsFile"]
+    elif opts.lightcurve_source == "matchfiles":
+        names = ["job_number", "field", "ccd", "quadrant",
+                 "Ncatindex", "Ncatalog", "idsFile"]
+
+        df_original = pd.read_csv(opts.quadrant_file, header=None, delimiter=' ', names=names)
+        row = df_original.iloc[opts.quadrant_index,:]
+        field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
+        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+        matchFile = row["idsFile"]
+    elif opts.lightcurve_source == "matchfiles_kevin":
+        names = ["job_number", "Ncatindex", "Ncatalog", "idsFile"]
+
+        df_original = pd.read_csv(opts.quadrant_file, header=None, delimiter=' ', names=names)
+        row = df_original.iloc[opts.quadrant_index,:]
+        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+        matchFile = row["idsFile"]
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
@@ -653,13 +669,13 @@ if opts.lightcurve_source == "Kowalski":
         print("Source type unknown...")
         exit(0)
 
-elif opts.lightcurve_source == "matchfiles":
+elif opts.lightcurve_source in ["matchfiles", "matchfiles_kevin"]:
     if not os.path.isfile(matchFile):
         print("%s missing..."%matchFile)
         exit(1)
 
     kow = []
-    nquery = 10
+    nquery = 1
     cnt = 0
     while cnt < nquery:
         try:
@@ -669,13 +685,21 @@ elif opts.lightcurve_source == "matchfiles":
             time.sleep(5)
         cnt = cnt + 1
     if cnt == nquery:
-        raise Exception('Kowalski connection failed...')
+        print('No Kowalski for matchfiles... will do our best.')
+        kow = None
+        #raise Exception('Kowalski connection failed...')
 
     matchFile_split = matchFile.replace(".pytable","").replace(".hdf5","").replace(".h5","").split("/")[-1]
     catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(matchFile_split,
                                                            Ncatindex))
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,matchFile_split)
+
+
+    if opts.lightcurve_source == "matchfiles":
+        matchfileType = 'forced'
+    elif opts.lightcurve_source == "matchfiles_kevin":  
+        matchfileType = 'kevin'
 
     #matchFile = find_matchfile(opts.matchfileDir)
     lightcurves, coordinates, filters, ids,\
@@ -685,7 +709,8 @@ elif opts.lightcurve_source == "matchfiles":
                                                      doRemoveHC=doRemoveHC,
                                                      doHCOnly=doHCOnly,
                                                      Ncatalog=Ncatalog,
-                                                     Ncatindex=Ncatindex)
+                                                     Ncatindex=Ncatindex,
+                                                     matchfileType=matchfileType)
 
     if opts.doRemoveBrightStars:
         lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\
@@ -972,7 +997,7 @@ for algorithm in algorithms:
             elif algorithm == "EAOV":
                 sigthresh = 15
             elif algorithm == "ELS":
-                sigthresh = 15
+                sigthresh = 50
             else:
                 sigthresh = 7
     
@@ -1189,7 +1214,8 @@ for algorithm in algorithms:
             ymin = y10 - 7*ystd
             ymax = y90 + 7*ystd
             ax1.set_ylim([ymin,ymax])
-            ax1.invert_yaxis()
+            if not opts.lightcurve_source == "matchfiles_kevin":
+                ax1.invert_yaxis()
             asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
             hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
             print(bp_rp)

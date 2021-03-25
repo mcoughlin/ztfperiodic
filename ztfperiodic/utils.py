@@ -1957,7 +1957,8 @@ def get_matchfile(kow, filename, min_epochs = 1,
                   sigmathresh=5.0,
                   doOutbursting=False,
                   doPercentile=False,
-                  percmin = 10.0, percmax = 90.0):
+                  percmin = 10.0, percmax = 90.0,
+                  matchfileType = 'forced'):
     """
     Read matchfile (hdf file) light curves given the filename
     e.g.: f = '/path/to/fr000551-000600/ztf_000593_zr_c04_q3_match.pytable'
@@ -1967,17 +1968,24 @@ def get_matchfile(kow, filename, min_epochs = 1,
 
     bands = {'g': 1, 'r': 2, 'i': 3, 'z': 4, 'J': 5}
 
-    filenameSplit = filename.split("/")[-1].split("_")
-    field_id, ccd_id, q_id = int(filenameSplit[1]), int(filenameSplit[2]), int(filenameSplit[3])
-    filt = filenameSplit[4][1]
-    filt = bands[filt]
-
-    f = h5py.File(filename, 'r')
-    sourcedata = np.array(f['data']['sourcedata'][:])
-    exposures = f['data']['exposures'][:]
-    sources = f['data']['sources'][:]
-    nlightcurves = len(sources)
-    n_exp = len(exposures)
+    if matchfileType == 'forced':
+        filenameSplit = filename.split("/")[-1].split("_")
+        field_id, ccd_id, q_id = int(filenameSplit[1]), int(filenameSplit[2]), int(filenameSplit[3])
+        filt = filenameSplit[4][1]
+        filt = bands[filt]
+    
+        f = h5py.File(filename, 'r')
+        sourcedata = np.array(f['data']['sourcedata'][:])
+        exposures = f['data']['exposures'][:]
+        sources = f['data']['sources'][:]
+        nlightcurves = len(sources)
+        n_exp = len(exposures)
+    elif matchfileType == 'kevin':
+        f = h5py.File(filename, 'r')
+        sources = [str(WD) for WD in f['Objects']]
+    else:
+        print('I do not know that match file type... exiting.')
+        raise Exception
 
     baseline = 0
     names = []
@@ -1992,27 +2000,46 @@ def get_matchfile(kow, filename, min_epochs = 1,
         if not np.isin(kk, kks, assume_unique=True): continue
         if np.mod(kk, 100) == 0:
             print('Reading source: %d' % kk)
-        idx = kk*n_exp + np.arange(0,n_exp)
 
-        lc = [sourcedata[jj] for jj in idx]
+        if matchfileType == 'forced':
+            hjd, mag, magerr, ra, dec, fid = [], [], [], [], [], []
 
-        hjd, mag, magerr, ra, dec, fid = [], [], [], [], [], []
-        for jj, dic in enumerate(lc):
-            if not exposures[jj][2] in program_ids: continue
-            if (exposures[jj][2]==1) and (exposures[jj][1] > tmax): continue
-            if not dic[2] == 0: continue
+            idx = kk*n_exp + np.arange(0,n_exp)
+            lc = [sourcedata[jj] for jj in idx]
+            for jj, dic in enumerate(lc):
+                if not exposures[jj][2] in program_ids: continue
+                if (exposures[jj][2]==1) and (exposures[jj][1] > tmax): continue
+                if not dic[2] == 0: continue
+    
+                hjd.append(exposures[jj][1])
+                mag.append(dic[0])
+                magerr.append(dic[1])
+                ra.append(source[1])
+                dec.append(source[2])
+                fid.append(filt)
 
-            hjd.append(exposures[jj][1])
-            mag.append(dic[0])
-            magerr.append(dic[1])
-            ra.append(source[1])
-            dec.append(source[2])
-            fid.append(filt)
+            hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
+            ra, dec = np.array(ra), np.array(dec)
+            fid = np.array(fid)
 
-        hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
-        ra, dec = np.array(ra), np.array(dec)
+        elif matchfileType == 'kevin':
+            LC=f['Objects'][source]
+            hjd=LC[:,0]
+            mag=LC[:,1]
+            magerr=LC[:,2]
+            RA=f['Objects'][source].attrs['RA']
+            Dec=f['Objects'][source].attrs['Dec']
+            ref_flux=f['Objects'][source].attrs['ref_r_flux']
+            parallax=f['Objects'][source].attrs['parallax']
+            parallaxerr=f['Objects'][source].attrs['parallax_error']
+            bprp=f['Objects'][source].attrs['bp_rp']
+            G=f['Objects'][source].attrs['G']
+            pm=f['Objects'][source].attrs['pm']
+ 
+            ra = RA*np.ones(hjd.shape)
+            dec = Dec*np.ones(hjd.shape)
+            fid = np.ones(hjd.shape)
 
-        fid = np.array(fid)
         idx = np.where(~np.isnan(mag) & ~np.isnan(magerr))[0]
         hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
         fid = fid[idx]
@@ -2097,74 +2124,86 @@ def get_matchfile(kow, filename, min_epochs = 1,
         filters.append(np.unique(fid).tolist())
         nlightcurves = 1
 
-        radius = 5
-        qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": {'test': [np.float64(np.median(ra)),np.float64(np.median(dec))]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"} } }}
+        if not kow is None:
+            radius = 5
+            qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": {'test': [np.float64(np.median(ra)),np.float64(np.median(dec))]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"} } }}
 
-        r = database_query(kow, qu, nquery = 10)
+            r = database_query(kow, qu, nquery = 10)
 
         coords = SkyCoord(ra=np.median(ra)*u.degree, 
                           dec=np.median(dec)*u.degree, frame='icrs')
 
         absmag, bp_rp = [np.nan, np.nan, np.nan], [np.nan, np.nan]
-        if "data" in r:
-            key2 = 'Gaia_DR2'
-            data2 = r["data"][key2]
-            key = list(data2.keys())[0]
-            data2 = data2[key]
-            cat2 = get_catalog(data2)
-            if len(cat2) > 0:
-                idx,sep,_ = coords.match_to_catalog_sky(cat2)
-                dat2 = data2[idx]
-            else:
-                dat2 = {}
 
-            if not "parallax" in dat2:
-                parallax, parallaxerr = None, None
-            else:
-                parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
-            if not "phot_g_mean_mag" in dat2:
-                g_mag = None
-            else:
-                g_mag = dat2["phot_g_mean_mag"]
+        if matchfileType == 'kevin':
+            absmag = [G+5*(np.log10(np.abs(parallax))-2),G+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(G+5*(np.log10(np.abs(parallax))-2)),G+5*(np.log10(np.abs(parallax))-2)-(G+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
+            bp_rp = [bprp, np.abs(bprp*0.01)]
 
-            if not "phot_bp_mean_mag" in dat2:
-                bp_mag = None
-            else:
-                bp_mag = dat2["phot_bp_mean_mag"]
-
-            if not "phot_rp_mean_mag" in dat2:
-                rp_mag = None
-            else:
-                rp_mag = dat2["phot_rp_mean_mag"]
-
-            if not "phot_bp_mean_flux_over_error" in dat2:
-                bp_mean_flux_over_error = None
-            else:
-                bp_mean_flux_over_error = dat2["phot_bp_mean_flux_over_error"]
-
-            if not "phot_rp_mean_flux_over_error" in dat2:
-                rp_mean_flux_over_error = None
-            else:
-                rp_mean_flux_over_error = dat2["phot_rp_mean_flux_over_error"]
-
-            if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None) or (rp_mean_flux_over_error is None) or (rp_mean_flux_over_error is None)):
-                absmag = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
-                bp_rp = [bp_mag-rp_mag, 2.5/np.log(10) * np.hypot(1/bp_mean_flux_over_error, 1/rp_mean_flux_over_error)]
-
+        if not kow is None:
+            if "data" in r:
+                key2 = 'Gaia_DR2'
+                data2 = r["data"][key2]
+                key = list(data2.keys())[0]
+                data2 = data2[key]
+                cat2 = get_catalog(data2)
+                if len(cat2) > 0:
+                    idx,sep,_ = coords.match_to_catalog_sky(cat2)
+                    dat2 = data2[idx]
+                else:
+                    dat2 = {}
+    
+                if not "parallax" in dat2:
+                    parallax, parallaxerr = None, None
+                else:
+                    parallax, parallaxerr = dat2["parallax"], dat2["parallax_error"]
+                if not "phot_g_mean_mag" in dat2:
+                    g_mag = None
+                else:
+                    g_mag = dat2["phot_g_mean_mag"]
+    
+                if not "phot_bp_mean_mag" in dat2:
+                    bp_mag = None
+                else:
+                    bp_mag = dat2["phot_bp_mean_mag"]
+    
+                if not "phot_rp_mean_mag" in dat2:
+                    rp_mag = None
+                else:
+                    rp_mag = dat2["phot_rp_mean_mag"]
+    
+                if not "phot_bp_mean_flux_over_error" in dat2:
+                    bp_mean_flux_over_error = None
+                else:
+                    bp_mean_flux_over_error = dat2["phot_bp_mean_flux_over_error"]
+    
+                if not "phot_rp_mean_flux_over_error" in dat2:
+                    rp_mean_flux_over_error = None
+                else:
+                    rp_mean_flux_over_error = dat2["phot_rp_mean_flux_over_error"]
+    
+                if not ((parallax is None) or (g_mag is None) or (bp_mag is None) or (rp_mag is None) or (rp_mean_flux_over_error is None) or (rp_mean_flux_over_error is None)):
+                    absmag = [g_mag+5*(np.log10(np.abs(parallax))-2),g_mag+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(g_mag+5*(np.log10(np.abs(parallax))-2)),g_mag+5*(np.log10(np.abs(parallax))-2)-(g_mag+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
+                    bp_rp = [bp_mag-rp_mag, 2.5/np.log(10) * np.hypot(1/bp_mean_flux_over_error, 1/rp_mean_flux_over_error)]
+    
         for jj in range(nlightcurves):
             coordinate=(np.median(ra),np.median(dec))
             coordinates.append(coordinate)
-            ids.append(source[0])
+
+            if matchfileType == 'forced':
+                ids.append(source[0])
+            elif matchfileType == 'kevin':
+                ids.append(int(source[1:-1]))
+
             absmags.append(absmag)
             bp_rps.append(bp_rp)
-
+    
             ra_hex, dec_hex = convert_to_hex(np.median(ra)*24/360.0,delimiter=''), convert_to_hex(np.median(dec),delimiter='')
             if dec_hex[0] == "-":
                 objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
             else:
                 objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
             names.append(objname)
-
+    
         newbaseline = max(hjd)-min(hjd)
         if newbaseline>baseline:
             baseline=newbaseline
