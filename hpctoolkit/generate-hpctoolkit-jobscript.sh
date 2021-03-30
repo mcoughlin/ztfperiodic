@@ -170,7 +170,7 @@ case "${cluster}" in
     fi
     echo -n "How many GPUs per resource set? "
     read ngpus
-    echo -n "Enable GPU MPS? (Y/N) "
+    echo -n "Enable GPU Multi-Process Service? (Y/N) "
     read ans
     case "${ans}" in
       "y" | "Y" ) export allocflags='#BSUB -alloc_flags "smt4 gpumps"' ;;
@@ -212,14 +212,30 @@ case "${cluster}" in
   "Cori-Haswell" | "Cori-KNL" )
     export infoline1="echo \"\`date\` Launching ${exe} with ${ntasks} tasks per node\""
     export infoline2="echo \"Each task contains 1 MPI rank, ${nthreads} threads\""
+    export profline="${parline} hpcprof-mpi -S \"${exe}.hpcstruct\" -o \"hpctoolkit-${exe}.d\""
+    export tarline="tar cJf \"${cluster}-hpctoolkit-${exe}-profile.tar.xz\" ${jobtitle}.${SLURM_JOB_ID} \"hpctoolkit-${exe}.d\""
     ;;
   "Cori-GPU" )
     export infoline1="echo \"\`date\` Launching ${exe} with ${ntasks} tasks per node\""
     export infoline2="echo \"Each task contains 1 MPI rank, ${nthreads} threads, ${ngpus} GPU(s)\""
+    export gpuline1="echo \"\`date\` Analyzing program structure information with hpcstruct (GPU part)\""
+    export gpuline2="${serial} hpcstruct --gpucfg no \"hpctoolkit-${exe}.m\""
+    export gpuline3="echo \"\`date\` Done\""
+    export profline="${parline} hpcprof-mpi -S \"${exe}.hpcstruct\" -o \"hpctoolkit-${exe}.d\" \"hpctoolkit-${exe}.m\""
+    export tarline="tar cJf \"${cluster}-hpctoolkit-${exe}-profile.tar.xz\" ${jobtitle}.${SLURM_JOB_ID} \"hpctoolkit-${exe}.d\""
     ;;
   "Summit" )
     export infoline1="echo \"\`date\` Launching ${exe} with ${nrs} resource sets per node\""
     export infoline2="echo \"Each resource set contains ${ncpus} ranks, ${smtlv} threads, ${ngpus} GPU(s)\""
+    export tarline="tar cJf \"${cluster}-hpctoolkit-${exe}-profile.tar.xz\" ${jobtitle}.${LSB_JOBID} \"hpctoolkit-${exe}.d\""
+    if [ ${ngpus} -gt 0 ]; then
+      export gpuline1="echo \"\`date\` Analyzing program structure information with hpcstruct (GPU part)\""
+      export gpuline2="${serial} hpcstruct --gpucfg no \"hpctoolkit-${exe}.m\""
+      export gpuline3="echo \"\`date\` Done\""
+      export profline="${parline} hpcprof-mpi -S \"${exe}.hpcstruct\" -o \"hpctoolkit-${exe}.d\" \"hpctoolkit-${exe}.m\""
+    else
+      export profline="${parline} hpcprof-mpi -S \"${exe}.hpcstruct\" -o \"hpctoolkit-${exe}.d\""
+    fi
     ;;
 esac
 
@@ -239,13 +255,20 @@ echo "\`date\` Analyzing program structure information with hpcstruct (CPU part)
 ${serial} hpcstruct -j ${nthreads} -o "${exe}.hpcstruct" ${exe}
 echo "\`date\` Done"
 
-echo "\`date\` Analyzing program structure information with hpcstruct (GPU part)"
-${serial} hpcstruct --gpucfg no "hpctoolkit-${exe}.m"
-echo "\`date\` Done"
+${gpuline1}
+${gpuline2}
+${gpuline3}
 
 echo "\`date\` Analyzing profiles"
-${serial} hpcprof -S "${exe}.hpcstruct" -o "hpctoolkit-${exe}.d" "hpctoolkit-${exe}.m"
+${profline}
 echo "\`date\` Done"
+
+echo "\`date\` Compressing profile data"
+export XZ_DEFAULTS="-T 0"
+${tarline}
+cp "${cluster}-hpctoolkit-${exe}-profile.tar.xz" ${HOME}/
+echo "\`date\` Done"
+
 _EOF_
 
 echo "Successfully written a job script for ${cluster} to ${jobfile}"
