@@ -58,7 +58,12 @@ def filter_completed(df, catalogDir, source_type):
                 field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
                 Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
                 idsFile = row["idsFile"]
-                catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
+                if lightcurve_source == "matchfiles":
+                    matchFile_split = idsFile.replace(".pytable","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+                    catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(matchFile_split,
+                                                           Ncatindex))
+                else:
+                    catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
             elif source_type == "catalog":
                 Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
                 catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
@@ -87,8 +92,13 @@ def run_job(row):
             field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
             Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
             idsFile = row["idsFile"]
-            print(field, ccd, quadrant, Ncatindex, Ncatalog)
-            catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
+
+            if lightcurve_source == "matchfiles":
+                matchFile_split = idsFile.replace(".pytable","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+                catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(matchFile_split,
+                                                       Ncatindex))
+            else:
+                catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant,Ncatindex))
         elif source_type == "catalog":
             Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
             catalog_file_split = catalog_file.replace(".dat","").replace(".hdf5","").replace(".h5","").split("/")[-1]
