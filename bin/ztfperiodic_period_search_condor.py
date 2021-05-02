@@ -175,8 +175,8 @@ if opts.lightcurve_source == "Kowalski":
         #fields = [700]
         fields = np.arange(250,882)
         fields = np.arange(750,800)
-        #fields = np.arange(250,300)
-        fields = [400]
+        fields = np.arange(200,880)
+        #fields = [400]
 
         for field in fields:
             if opts.doCutNObs:
@@ -188,7 +188,7 @@ if opts.lightcurve_source == "Kowalski":
                     if opts.doQuadrantScale:
                         qu = {"query_type":"count_documents",
                               "query": {
-                                  "catalog": 'ZTF_sources_20200401',
+                                  "catalog": 'ZTF_sources_20201201',
                                   "filter": {'field': {'$eq': int(field)},
                                              'ccd': {'$eq': int(ccd)},
                                              'quad': {'$eq': int(quadrant)}
@@ -198,6 +198,7 @@ if opts.lightcurve_source == "Kowalski":
                         r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
                         if not "data" in r: continue
                         nlightcurves = r['data']
+                        if nlightcurves == 0: continue
 
                         Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
 
@@ -205,14 +206,17 @@ if opts.lightcurve_source == "Kowalski":
                         if not os.path.isfile(idsFile):
                             print(idsFile)
                             qu = {"query_type":"find",
-                                  "query": {"catalog": 'ZTF_sources_20200401',
+                                  "query": {"catalog": 'ZTF_sources_20201201',
                                             "filter": {'field': {'$eq': int(field)},
                                                        'ccd': {'$eq': int(ccd)},
                                                        'quad': {'$eq': int(quadrant)}
                                                       },
                                             "projection": "{'_id': 1}"},
                                  }
-                            r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
+                            r = {}
+                            r['data'] = []
+                            while len(r['data']) == 0:
+                                r = ztfperiodic.utils.database_query(kow, qu, nquery = 100)
                             objids = []
                             for obj in r['data']:
                                 objids.append(obj['_id'])

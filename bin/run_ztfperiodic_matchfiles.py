@@ -2,14 +2,10 @@
 import os, sys
 import numpy as np
 
-filenames = ["../input/3-10.dat","../input/10-50.dat","../input/50-baseline.dat","../input/12_72hours.dat"]
-filenames = ["../input/12_72hours.dat","../input/4_12hours.dat"]
-filenames = ["../input/pure.dat"]
-outputDir = '../output/pure'
-filenames = ["../input/obsDBSP.dat"]
-outputDir = '../output/dbsp'
+filedirs = glob.glob("../data/1027/*")
+outdir = "../output"
 
-for filename in filenames:
+for filedir in filedirs:
     lines = [line.rstrip('\n') for line in open(filename)]
     for line in lines:
         row = line.split(" ")

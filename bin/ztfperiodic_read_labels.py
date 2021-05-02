@@ -10,6 +10,7 @@ from functools import reduce
 import traceback
 
 import numpy as np
+np.random.seed(0)
 import pandas as pd
 
 import matplotlib
@@ -41,7 +42,8 @@ def parse_commandline():
     parser = optparse.OptionParser()
     #parser.add_option("--doUpload",  action="store_true", default=False)
 
-    parser.add_option("-o","--outfile",default="/home/mcoughlin/ZTF/labels/golden_sets/delta_scuti.dat")
+    parser.add_option("-o","--outfile",default="/home/mcoughlin/ZTF/labels/golden_sets/delta_scuti.csv")
+    parser.add_option("-d","--hdf",default="/home/mcoughlin/ZTF/labels/golden_sets/dataset.csv")
     parser.add_option("-l","--labels",default="/home/mcoughlin/ZTF/labels/dataset.d12.csv")
 
     parser.add_option("-t","--type",default="Delta Scu")
@@ -59,9 +61,14 @@ data_out = pd.read_csv(opts.labels)
 idx = np.where(data_out[opts.type] == 1)[0]
 idx = np.random.choice(idx, size=opts.N)
 
+#keys = list(data_out.columns)
+#keys.remove('dmdt')
+#idx = np.random.choice(np.arange(len(data_out)), size=70000)
+#data_out[keys].iloc[idx].to_csv(opts.hdf)
+
 ras, decs = data_out.iloc[idx]["ra"], data_out.iloc[idx]["dec"]
 fid = open(opts.outfile, 'w')
 fid.write('ra,dec\n')
 for ra, dec in zip(ras, decs):
-    fid.write('%.10f,%.10f\n' % (ra, dec))
+    fid.write('%.7f,%.7f\n' % (ra, dec))
 fid.close()

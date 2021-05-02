@@ -252,8 +252,8 @@ def save_source(zvmarshal, source, zvm_program_id, verbose = False,
                     labels.append({'type': 'phenomenological',
                                    'label': 'sawtooth',
                                    'value': 1.0})
-                    labels.append({'type': 'pulsator',
-                                   'label': 'sawtooth',
+                    labels.append({'type': 'intrinsic',
+                                   'label': 'pulsator',
                                    'value': 1.0})
                     if classification == "RR":
                         labels.append({'type': 'intrinsic',
@@ -370,7 +370,7 @@ if os.path.isfile(compareFile):
 
         else:
             data_out = Table.read(compareFile, format='ascii',
-                                  names=('objids', 'periods', 'classifications'))
+                                  names=('objids', 'periods', 'tmp', 'classifications'))
 
             objids, periods = data_out["objids"].tolist(), data_out["periods"].tolist()
             classifications = data_out["classifications"].tolist()
@@ -403,7 +403,7 @@ else:
             objids.append(int(filenameSplit))
             periods.append(-1)
 
-print(objids, periods)
+print(objids, periods, classifications)
 
 objids = np.array(objids)
 periods = np.array(periods)
@@ -415,6 +415,9 @@ if classifications is not None:
 fid = open(os.path.join(infoDir, 'objs.dat'), 'w')
 
 for ii, (objid, period) in enumerate(zip(objids, periods)):
+    if classifications is not None and not classifications[ii] == "OTHER":
+        continue
+
     if np.mod(ii, 50) == 0:
         print('Pushed %d/%d' % (ii, len(objids)))
 
@@ -430,7 +433,7 @@ for ii, (objid, period) in enumerate(zip(objids, periods)):
             fid.write('%d %.10f %.10f %.10f\n' % (objid,
                                                   source['ra'], source['dec'],
                                                   source['period'])) 
-    
+
     if opts.doUpload:
         if classifications is not None: 
             save_source(zvmarshal, source, zvm_program_id, verbose = True,

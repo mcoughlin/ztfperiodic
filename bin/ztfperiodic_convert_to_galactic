@@ -30,23 +30,28 @@ def parse_commandline():
 # Parse command line
 opts = parse_commandline()
 
-data_out = Table.read(opts.catalog, format='ascii',
-                      names=('objid', 'ra', 'dec', 'period'))
+if "sinusoidal" in opts.catalog:
+    data_out = Table.read(opts.catalog, format='ascii',
+                          names=('ra', 'dec'))
+    data_out['period'] = -1
+else:
+    data_out = Table.read(opts.catalog, format='ascii',
+                          names=('objid', 'ra', 'dec', 'period'))
 ra_dec = ["%.3f_%.3f" % (row["ra"], row["dec"]) for row in data_out]
 data_out["ra_dec"] = ra_dec
 data_out = unique(data_out, keys=['ra_dec'])
 
 fid = open(opts.catalog + '.slice', 'w')
 for row in data_out:
-    objid = row["objid"]
+    #objid = row["objid"]
     ra, dec, period = row["ra"], row["dec"], row["period"]
 
     ang = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
     l, b = ang.galactic.l.deg, ang.galactic.b.deg
 
-    #if l > 180: continue
-    #print(ra, dec, l, b)
-    print(ra, dec)
+    if l > 180: continue
+    print(ra, dec, l, b)
+    #print(ra, dec)
 
     fid.write('%.10f %.10f\n' % (ra, dec))
 fid.close()

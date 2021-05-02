@@ -71,7 +71,7 @@ def parse_commandline():
 
     parser.add_option("-r", "--ra", default=237.3234518, type=float)
     parser.add_option("-d", "--declination", default=39.8249067, type=float)
-    parser.add_option("--filt", default="r")
+    parser.add_option("--filt", default="1,2,3")
 
     parser.add_option("-u", "--user")
     parser.add_option("-w", "--pwd")
@@ -104,7 +104,7 @@ def parse_commandline():
     parser.add_option("--doRemoveTerrestrial",  action="store_true", default=False)
 
     parser.add_option("--doExternalLightcurve", action="store_true", default=False)
-    parser.add_option("--lightcurve_file", default="../data/asassn/light_curve_ebaf8149-7882-4a6b-876e-7d68299518f3.csv")
+    parser.add_option("--lightcurve_file", default="../data/asassn/light_curve_5ae6e502-9dd9-4768-93cb-9a0bf160fcba.csv")
 
     parser.add_option("--doFourierDecomposition", action="store_true", default=False)
     parser.add_option("--doFeatures", action="store_true", default=False)
@@ -151,6 +151,8 @@ if galex:
     print(galex)
 gaia = gaia_query(opts.ra, opts.declination, 5/3600.0)
 if gaia:
+    print(gaia)
+
     Plx = gaia['Plx'].data.data[0] # mas
     e_Plx = gaia['e_Plx'].data.data[0] # mas
     RA = gaia['RA_ICRS'].data.data[0]    
@@ -388,7 +390,25 @@ if opts.lightcurve_source == "Kowalski":
                                    program_ids=program_ids,
                                    min_epochs=min_epochs,
                                    radius = 2.0)
-    lightcurves_combined = combine_lcs(lightcurves_all)
+    if len(lightcurves_all) > 0:
+        lightcurves_combined = combine_lcs(lightcurves_all)
+
+    if not opts.doExternalLightcurve and (len(lightcurves_all.keys()) == 0):
+        print("No objects... sorry.")
+        exit(0)
+
+    if len(lightcurves_all) > 0:
+        key = list(lightcurves_combined.keys())[0]
+
+        hjd, mag, magerr = lightcurves_combined[key]["hjd"], lightcurves_combined[key]["mag"], lightcurves_combined[key]["magerr"]
+        fid = lightcurves_combined[key]["fid"]
+        ra, dec = lightcurves_combined[key]["ra"], lightcurves_combined[key]["dec"]
+        absmag, bp_rp = lightcurves_combined[key]["absmag"], lightcurves_combined[key]["bp_rp"]
+    else:
+        hjd, mag, magerr, fid = np.array([]), np.array([]), np.array([]), np.array([])
+        ra, dec = np.array([]), np.array([])
+        absmag = [np.nan, np.nan, np.nan]
+        bp_rp = [np.nan, np.nan]
 
     if opts.doFeatures:
         ids, features = get_kowalski_features_ind(opts.ra,
@@ -396,7 +416,7 @@ if opts.lightcurve_source == "Kowalski":
                                                   oid=opts.objid,
                                                   featuresetname=featuresetname)
         if len(features) > 0:
-            modelFiles = glob.glob(os.path.join(modelPath, "d11*.%s.*model" % featuresetname))
+            modelFiles = glob.glob(os.path.join(modelPath, "d11*.%s.*model" % featuresetname)) + glob.glob(os.path.join(modelPath, "d12*.%s.*model" % featuresetname))
             for modelFile in modelFiles:
                 modelName = modelFile.replace(".model","").split("/")[-1]
                 pred = classify(classification_algorithm, features.to_numpy(),
@@ -405,16 +425,6 @@ if opts.lightcurve_source == "Kowalski":
                     if not pr: continue
                     print(objid, modelName, pr)
                     print("%d %s %.5f" % (objid, modelName, pr))
-
-    if len(lightcurves_all.keys()) == 0:
-        print("No objects... sorry.")
-        exit(0)
-    key = list(lightcurves_combined.keys())[0]
-    
-    hjd, mag, magerr = lightcurves_combined[key]["hjd"], lightcurves_combined[key]["mag"], lightcurves_combined[key]["magerr"]
-    fid = lightcurves_combined[key]["fid"]
-    ra, dec = lightcurves_combined[key]["ra"], lightcurves_combined[key]["dec"]
-    absmag, bp_rp = lightcurves_combined[key]["absmag"], lightcurves_combined[key]["bp_rp"]
 
     if opts.doExternalLightcurve:
         bands = {'g': 1, 'r': 2, 'i': 3, 'z': 4, 'J': 5, 'V': 6}
@@ -445,8 +455,11 @@ if opts.lightcurve_source == "Kowalski":
             lightcurves_tmp[key]["mag"].append(mag_tmp)
             lightcurves_tmp[key]["magerr"].append(magerr_tmp)
             lightcurves_tmp[key]["fid"].append(bands[filt])
-            lightcurves_tmp[key]["ra"].append(np.mean(ra))
-            lightcurves_tmp[key]["dec"].append(np.mean(dec))
+            lightcurves_tmp[key]["ra"].append(opts.ra)
+            lightcurves_tmp[key]["dec"].append(opts.declination)
+
+        if len(lightcurves_all) == 0:
+            lightcurves_all = lightcurves_tmp
 
         for key1 in lightcurves_tmp:
             for key2 in lightcurves_tmp[key1]:
@@ -460,6 +473,17 @@ if opts.lightcurve_source == "Kowalski":
             ra = np.append(ra, lightcurves_tmp[key1]["ra"])
             dec = np.append(dec, lightcurves_tmp[key1]["dec"])
 
+    idx = np.argsort(hjd)
+    hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+    ra, dec = ra[idx], dec[idx]
+    fid = fid[idx]
+
+    idx = []
+    filts = [int(x) for x in opts.filt.split(",")]
+    for ii in range(len(fid)):
+        if int(fid[ii]) in filts:
+            idx.append(ii)
+    idx = np.array(idx)
     idx = np.argsort(hjd)
     hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
     ra, dec = ra[idx], dec[idx]
@@ -569,15 +593,13 @@ if not (opts.doCPU or opts.doGPU):
     print("--doCPU or --doGPU required")
     exit(0)
 
+
+
 lightcurves = []
 lightcurve=(hjd,mag,magerr)
 lightcurves.append(lightcurve)
 
 data_out = period_search_ls(hjd, mag, magerr, data_out={}, remove_harmonics = True)
-if opts.doPhase:
-    period = opts.phase
-else:
-    period = data_out["period"]
 
 if opts.doLCFile:
     colors = ['g','r','y']
@@ -658,6 +680,93 @@ if opts.doLCFile:
                 filed.write('%s %.10f %.10f\n' % (x, y, yerr))
         filed.close()
 
+if opts.doPeriodSearch:
+    baseline = max(hjd)-min(hjd)
+    if baseline<10:
+        if opts.doLongPeriod:
+            fmin, fmax = 18, 48
+        else:
+            fmin, fmax = 18, 1440
+    else:
+        if opts.doLongPeriod:
+            fmin, fmax = 2/baseline, 48
+            fmin, fmax = 2/30.0, 48
+        else:
+            fmin, fmax = 2/baseline, 480
+
+    samples_per_peak = 3
+
+    df = 1./(samples_per_peak * baseline)
+    nf = int(np.ceil((fmax - fmin) / df))
+    freqs = fmin + df * np.arange(nf)
+
+    if opts.doRemoveTerrestrial:
+        freqs_to_remove = [[3e-2,4e-2], [47.99,48.01], [46.99,47.01], [45.99,46.01], [0.199,0.201], [0.332,0.334], [3.95,4.05], [2.95,3.05], [1.95,2.05], [0.95,1.05], [0.48, 0.52], [0.66, 0.67]]
+    else:
+        freqs_to_remove = None
+
+    print('Cataloging lightcurves...')
+    catalogFile = os.path.join(path_out_dir,'catalog.dat')
+    fid2 = open(catalogFile,'w')
+    for algorithm in algorithms:
+        periods_best, significances, pdots = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU, doRemoveTerrestrial=opts.doRemoveTerrestrial, freqs_to_remove=freqs_to_remove)
+        period, significance = periods_best[0], significances[0]
+        stat = calc_stats(hjd, mag, magerr, period)
+
+        print(period, significance)
+
+        fid2.write('%s %.10f %.10f ' % (algorithm, period, significance))
+        fid2.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stat[0], stat[1], stat[2], stat[3], stat[4], stat[5], stat[6], stat[7], stat[8], stat[9], stat[10], stat[11], stat[12], stat[13], stat[14], stat[15], stat[16], stat[17], stat[18], stat[19], stat[20], stat[21], stat[22], stat[23], stat[24], stat[25], stat[26], stat[27], stat[28], stat[29], stat[30], stat[31], stat[32], stat[33], stat[34], stat[35]))
+    fid2.close()
+
+    if opts.doFindPeriodError:
+        from gcex.gce import ConditionalEntropy
+
+        batch_size = 1
+        pdot = np.array([0.0])
+
+        phase_bins=20
+        mag_bins=10
+        ce = ConditionalEntropy(phase_bins=phase_bins, mag_bins=mag_bins)
+
+        lightcurves_stack = []
+        for lightcurve in lightcurves:
+            idx = np.argsort(lightcurve[0])
+            tmin = np.min(lightcurve[0])
+            lightcurve = (lightcurve[0][idx]-tmin,
+                          lightcurve[1][idx],
+                          lightcurve[2][idx])
+
+            lightcurve_stack = np.vstack((lightcurve[0],
+                                          lightcurve[1])).T
+            lightcurves_stack.append(lightcurve_stack)
+
+        samples_per_peak = 100
+
+        df = 1./(samples_per_peak * baseline)
+        nf = int(np.ceil((fmax - fmin) / df))
+        freqs = np.arange(1./period - 1000*df, 1./period + 1000*df, df)
+
+        results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdot, show_progress=False)
+        periods = 1./freqs
+        periods = periods*86400.0
+
+        for jj, (lightcurve, entropies2) in enumerate(zip(lightcurves,results)):
+            for kk, entropies in enumerate(entropies2):
+                significances = np.abs(np.mean(entropies)-entropies)/np.std(entropies)
+                period = periods[np.argmin(entropies)]
+                idx_peak = np.argmax(significances)
+                idx_2 = np.where(significances <= np.max(significances)/2.0)[0]
+                idx_low = np.max(idx_2[idx_2<idx_peak])
+                idx_high = np.min(idx_2[idx_2>idx_peak])
+
+                ppeak, plow, phigh = periods[idx_peak], periods[idx_high], periods[idx_low]
+                print('$P(T_{0})$ & $%.2f^{+%.2f}_{-%.2f}\\,\\rm s$  \\\\' % (ppeak, phigh-ppeak, ppeak-plow))
+elif opts.doPhase:
+    period = opts.phase
+else:
+    period = data_out["period"]
+
 if opts.doFourierDecomposition:
     for ii, key in enumerate(lightcurves_all.keys()):
         lc = lightcurves_all[key]
@@ -698,6 +807,7 @@ if opts.doPlots:
     fids = [1,2,3]
     bands = {1: 'g', 2: 'r', 3: 'i'}
     plotName = os.path.join(path_out_dir,'phot_color.pdf')
+    ylims = [np.inf,-np.inf]
     plt.figure(figsize=(7,5))
     for myfid, color, symbol in zip(fids, colors, symbols):
         for ii, key in enumerate(lightcurves_all.keys()):
@@ -708,6 +818,21 @@ if opts.doPlots:
 
             if opts.doFourierDecomposition:
                 plt.plot(lc["hjd"]-hjd[0],lc["fourier"],'--',color=color)
+
+            ymed = np.nanmedian(lc["mag"])
+            y10, y90 = np.nanpercentile(lc["mag"],5), np.nanpercentile(lc["mag"],95)
+            y10, y90 = np.nanmin(lc["mag"]), np.nanmax(lc["mag"])
+
+            ystd = np.nanmedian(lc["magerr"])
+
+            ymin = y10 - 5*ystd
+            ymax = y90 + 5*ystd
+
+            if ymin < ylims[0]:
+                ylims[0] = ymin
+            if ymax > ylims[1]:
+                ylims[1] = ymax
+    plt.ylim(ylims)
 
     plt.xlabel('Time from %.5f [days]'%hjd[0])
     plt.ylabel('Magnitude [ab]')
@@ -728,8 +853,7 @@ if opts.doPlots:
     ylims = ax.get_ylim()
     ax.set_ylim(1e-3, max(ylims[1], power+0.07))
     ax.arrow(1/period, power+0.06, 0, -0.03, color='r', head_length=0.02, head_width=0.04)
-    if opts.doPhase:
-        ax.plot([1/phase,1/phase], [1e-3, power], 'm:')
+    ax.plot([1/period,1/period], [1e-3, power], 'm:')
     plt.xlabel("Freq [1/day]")
     plt.ylabel("Power")
     ax.set_title("sig = %.2f, FAP_Neff = %.4f"%(data_out["significance"], 
@@ -868,8 +992,8 @@ if opts.doPlots:
     fig.savefig(plotName, bbox_inches='tight')
     plt.close()
 
-    if opts.doPhase:
-        hjd_mod = np.mod(hjd,phase)/(phase)
+    if opts.doPhase or opts.doPeriodSearch:
+        hjd_mod = np.mod(hjd,period)/(period)
         idx = np.argsort(hjd_mod)
         hjd_mod = hjd_mod[idx]
         mag_mod = mag[idx]
@@ -903,20 +1027,36 @@ if opts.doPlots:
         plt.figure(figsize=(8,6))
         ax = plt.gca()
         bands_count = np.zeros((len(fids),1))
+        ylims = [np.inf, -np.inf]
         for jj, (fid, color, symbol) in enumerate(zip(fids, colors, symbols)):
             for ii, key in enumerate(lightcurves_all.keys()):
                 lc = lightcurves_all[key]
                 if not lc["fid"][0] == fid: continue
                 idx = np.where(lc["fid"][0] == fids)[0]
                 if bands_count[idx] == 0:
-                    plt.errorbar(np.mod(lc["hjd"]-T0, 2.0*phase)/(2.0*phase), lc["mag"],yerr=lc["magerr"],fmt='%s%s' % (color,symbol), label=bands[fid])
+                    plt.errorbar(np.mod(lc["hjd"]-T0, 2.0*period)/(2.0*period), lc["mag"],yerr=lc["magerr"],fmt='%s%s' % (color,symbol), label=bands[fid])
                 else:
-                    plt.errorbar(np.mod(lc["hjd"]-T0, 2.0*phase)/(2.0*phase), lc["mag"],yerr=lc["magerr"],fmt='%s%s' % (color,symbol))
+                    plt.errorbar(np.mod(lc["hjd"]-T0, 2.0*period)/(2.0*period), lc["mag"],yerr=lc["magerr"],fmt='%s%s' % (color,symbol))
                 bands_count[idx] = bands_count[idx] + 1
+
+                ymed = np.nanmedian(lc["mag"])
+                y10, y90 = np.nanpercentile(lc["mag"],5), np.nanpercentile(lc["mag"],95)
+                y90 = np.nanmax(lc["mag"])
+                ystd = np.nanmedian(lc["magerr"])
+
+                ymin = y10 - 5*ystd
+                ymax = y90 + 5*ystd
+
+                if ymin < ylims[0]:
+                    ylims[0] = ymin
+                if ymax > ylims[1]:
+                    ylims[1] = ymax
+        plt.ylim(ylims)
+
         plt.xlabel('Phase', fontsize = fs)
         plt.ylabel('Magnitude [ab]', fontsize = fs)
         plt.legend(prop={'size': 20})
-        plt.title("Period = %.3f days"%phase, fontsize = fs)
+        plt.title("Period = %.3f days"%period, fontsize = fs)
         ax.tick_params(axis='both', which='major', labelsize=fs)
         ax.tick_params(axis='both', which='minor', labelsize=fs)
         plt.gca().invert_yaxis()
@@ -925,83 +1065,3 @@ if opts.doPlots:
         plotName = os.path.join(path_out_dir,'phase_color.png')
         plt.savefig(plotName)
         plt.close()
-
-if opts.doPeriodSearch:
-    baseline = max(hjd)-min(hjd)
-    if baseline<10:
-        if opts.doLongPeriod:
-            fmin, fmax = 18, 48
-        else:
-            fmin, fmax = 18, 1440
-    else:
-        if opts.doLongPeriod:
-            fmin, fmax = 2/baseline, 48
-        else:
-            fmin, fmax = 2/baseline, 480
- 
-    samples_per_peak = 3
-    
-    df = 1./(samples_per_peak * baseline)
-    nf = int(np.ceil((fmax - fmin) / df))
-    freqs = fmin + df * np.arange(nf)
-   
-    if opts.doRemoveTerrestrial:
-        freqs_to_remove = [[3e-2,4e-2], [47.99,48.01], [46.99,47.01], [45.99,46.01], [3.95,4.05], [2.95,3.05], [1.95,2.05], [0.95,1.05], [0.48, 0.52]]
-    else:
-        freqs_to_remove = None
- 
-    print('Cataloging lightcurves...')
-    catalogFile = os.path.join(path_out_dir,'catalog.dat')
-    fid = open(catalogFile,'w')
-    for algorithm in algorithms:
-        periods_best, significances, pdots = find_periods(algorithm, lightcurves, freqs, doGPU=opts.doGPU, doCPU=opts.doCPU, doRemoveTerrestrial=opts.doRemoveTerrestrial, freqs_to_remove=freqs_to_remove)
-        period, significance = periods_best[0], significances[0]
-        stat = calc_stats(hjd, mag, magerr, period)
-    
-        fid.write('%s %.10f %.10f ' % (algorithm, period, significance))
-        fid.write("%.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f %.10f\n"%(stat[0], stat[1], stat[2], stat[3], stat[4], stat[5], stat[6], stat[7], stat[8], stat[9], stat[10], stat[11], stat[12], stat[13], stat[14], stat[15], stat[16], stat[17], stat[18], stat[19], stat[20], stat[21], stat[22], stat[23], stat[24], stat[25], stat[26], stat[27], stat[28], stat[29], stat[30], stat[31], stat[32], stat[33], stat[34], stat[35]))
-    fid.close()
-
-    if opts.doFindPeriodError:
-        from gcex.gce import ConditionalEntropy
-
-        batch_size = 1
-        pdot = np.array([0.0])
-
-        phase_bins=20
-        mag_bins=10
-        ce = ConditionalEntropy(phase_bins=phase_bins, mag_bins=mag_bins)
-
-        lightcurves_stack = []
-        for lightcurve in lightcurves:
-            idx = np.argsort(lightcurve[0])
-            tmin = np.min(lightcurve[0])
-            lightcurve = (lightcurve[0][idx]-tmin,
-                          lightcurve[1][idx],
-                          lightcurve[2][idx])
-
-            lightcurve_stack = np.vstack((lightcurve[0],
-                                          lightcurve[1])).T
-            lightcurves_stack.append(lightcurve_stack)
-
-        samples_per_peak = 100
-
-        df = 1./(samples_per_peak * baseline)
-        nf = int(np.ceil((fmax - fmin) / df))
-        freqs = np.arange(1./period - 1000*df, 1./period + 1000*df, df)
-
-        results = ce.batched_run_const_nfreq(lightcurves_stack, batch_size, freqs, pdot, show_progress=False)
-        periods = 1./freqs
-        periods = periods*86400.0
-
-        for jj, (lightcurve, entropies2) in enumerate(zip(lightcurves,results)):
-            for kk, entropies in enumerate(entropies2):
-                significances = np.abs(np.mean(entropies)-entropies)/np.std(entropies)
-                period = periods[np.argmin(entropies)]
-                idx_peak = np.argmax(significances)
-                idx_2 = np.where(significances <= np.max(significances)/2.0)[0]
-                idx_low = np.max(idx_2[idx_2<idx_peak])
-                idx_high = np.min(idx_2[idx_2>idx_peak])
-
-                ppeak, plow, phigh = periods[idx_peak], periods[idx_high], periods[idx_low]
-                print('$P(T_{0})$ & $%.2f^{+%.2f}_{-%.2f}\\,\\rm s$  \\\\' % (ppeak, phigh-ppeak, ppeak-plow))
