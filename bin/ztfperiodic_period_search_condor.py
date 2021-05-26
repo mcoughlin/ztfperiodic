@@ -155,7 +155,9 @@ fid1 = open(condorsh,'w')
 job_number = 0
 
 if opts.doQuadrantScale:
-    kow = Kowalski(username=opts.user, password=opts.pwd)
+    protocol, host, port = "https", "gloria.caltech.edu", 443
+    kow = Kowalski(username=opts.user, password=opts.pwd,
+                   protocol=protocol, host=host, port=port)
 
 if opts.lightcurve_source == "Kowalski":
 
@@ -188,7 +190,7 @@ if opts.lightcurve_source == "Kowalski":
                     if opts.doQuadrantScale:
                         qu = {"query_type":"count_documents",
                               "query": {
-                                  "catalog": 'ZTF_sources_20201201',
+                                  "catalog": 'ZTF_sources_20210401',
                                   "filter": {'field': {'$eq': int(field)},
                                              'ccd': {'$eq': int(ccd)},
                                              'quad': {'$eq': int(quadrant)}
@@ -206,7 +208,7 @@ if opts.lightcurve_source == "Kowalski":
                         if not os.path.isfile(idsFile):
                             print(idsFile)
                             qu = {"query_type":"find",
-                                  "query": {"catalog": 'ZTF_sources_20201201',
+                                  "query": {"catalog": 'ZTF_sources_20210401',
                                             "filter": {'field': {'$eq': int(field)},
                                                        'ccd': {'$eq': int(ccd)},
                                                        'quad': {'$eq': int(quadrant)}

@@ -384,12 +384,14 @@ if opts.doPlots and len(list(spectral_data.keys()))>0:
     plt.close()
 
 if opts.lightcurve_source == "Kowalski":
-    kow = Kowalski(username=opts.user, password=opts.pwd)
+    protocol, host, port = "https", "gloria.caltech.edu", 443
+    kow = Kowalski(username=opts.user, password=opts.pwd,
+                   protocol=protocol, host=host, port=port)
     lightcurves_all = get_kowalski(opts.ra, opts.declination, kow, 
                                    oid=opts.objid,
                                    program_ids=program_ids,
                                    min_epochs=min_epochs,
-                                   radius = 2.0)
+                                   radius = 5.0)
     if len(lightcurves_all) > 0:
         lightcurves_combined = combine_lcs(lightcurves_all)
 
@@ -484,6 +486,9 @@ if opts.lightcurve_source == "Kowalski":
         if int(fid[ii]) in filts:
             idx.append(ii)
     idx = np.array(idx)
+    hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
+    ra, dec = ra[idx], dec[idx]
+    fid = fid[idx]
     idx = np.argsort(hjd)
     hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
     ra, dec = ra[idx], dec[idx]

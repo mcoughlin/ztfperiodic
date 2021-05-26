@@ -380,8 +380,10 @@ if opts.lightcurve_source == "Kowalski":
     while cnt < nquery:
         try:
             TIMEOUT = 60
+            protocol, host, port = "https", "gloria.caltech.edu", 443
             kow = Kowalski(username=opts.user, password=opts.pwd, 
-                           timeout=TIMEOUT)
+                           timeout=TIMEOUT,
+                           protocol=protocol, host=host, port=port)
             break
         except:
             time.sleep(5)
