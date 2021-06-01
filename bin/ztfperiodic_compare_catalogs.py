@@ -47,6 +47,7 @@ def parse_commandline():
 
     parser.add_option("--doField",  action="store_true", default=False)
     parser.add_option("-f","--field",default=853,type=int)
+    parser.add_option("-g","--filt",default="g")
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_forced_Fermi_known_DR4/catalog/compare")
     parser.add_option("-c","--catalog",default="/home/michael.coughlin/ZTF/output_forced_Fermi_known_DR4/catalog/ECE_ELS_EAOV")
@@ -184,7 +185,7 @@ def read_catalog(catalog_file):
 
 def load_catalog(catalog,doFermi=False,doSimbad=False,
                          doField=False,field=-1,
-                         algorithm='ECE'):
+                         algorithm='ECE',filt="g"):
 
     customSimbad=Simbad() 
     customSimbad.add_votable_fields("otype(V)")
@@ -197,7 +198,8 @@ def load_catalog(catalog,doFermi=False,doSimbad=False,
                     sorted(glob.glob(os.path.join(catalog,"*/*.h5")))[::-1]
     elif doField:
         filenames = sorted(glob.glob(os.path.join(catalog,"%d_*.dat" % field)))[::-1] + \
-                    sorted(glob.glob(os.path.join(catalog,"%d_*.h5" % field)))[::-1]
+                    sorted(glob.glob(os.path.join(catalog,"%d_*.h5" % field)))[::-1] + \
+                    sorted(glob.glob(os.path.join(catalog,"data_%04d_*.h5" % field)))[::-1]
     else:
         filenames = sorted(glob.glob(os.path.join(catalog,"*.dat")))[::-1] + \
                     sorted(glob.glob(os.path.join(catalog,"*.h5")))[::-1]
@@ -216,7 +218,10 @@ def load_catalog(catalog,doFermi=False,doSimbad=False,
                      "periodicstats9", "periodicstats10", "periodicstats11",
                      "periodicstats12", "periodicstats13"]
 
+    bands = {'g': 1, 'r': 2, 'i': 3}
+    filter_id = bands[filt]
     cnt = 0
+    data = []
     #filenames = filenames[:500]
     for ii, filename in enumerate(filenames):
         if np.mod(ii,100) == 0:
@@ -228,10 +233,10 @@ def load_catalog(catalog,doFermi=False,doSimbad=False,
 
         try:
             with h5py.File(filename, 'r') as f:
-                name = f['names'].value
-                filters = f['filters'].value
-                stats = f['stats'].value 
-                periodic_stats = f['stats_%s' % algorithm].value
+                name = f['names'][()]
+                filters = f['filters'][()]
+                stats = f['stats'][()]
+                periodic_stats = f['stats_%s' % algorithm][()]
         except:
             continue
 
@@ -242,6 +247,12 @@ def load_catalog(catalog,doFermi=False,doSimbad=False,
         data_period_tmp.remove_column('objid')
         data_tmp = hstack([data_tmp, data_period_tmp], join_type='inner')
         if len(data_tmp) == 0: continue
+
+        #data_tmp.add_index('name')
+        if doField:
+            idx = np.where(filter_id != data_tmp['filt'].astype(int))[0]
+            data_tmp.remove_rows(idx)
+            if len(data_tmp) == 0: continue
 
         data_tmp['name'] = data_tmp['name'].astype(str)
         data_tmp['filt'] = data_tmp['filt'].astype(str)
@@ -314,8 +325,12 @@ name1, name2 = opts.algorithm1, opts.algorithm2
 if opts.doCrossMatch:
     name2 = list(filter(None,opts.catalog_file.split("/")))[-1].replace(".dat","").replace(".hdf5","")
 
-cat1file = os.path.join(outputDir,'catalog_%s.fits' % name1)
-cat2file = os.path.join(outputDir,'catalog_%s.fits' % name2)
+if opts.doField:
+    cat1file = os.path.join(outputDir,'catalog_%s_%s.fits' % (name1, opts.filt))
+    cat2file = os.path.join(outputDir,'catalog_%s_%s.fits' % (name2, opts.filt))
+else:
+    cat1file = os.path.join(outputDir,'catalog_%s.fits' % name1)
+    cat2file = os.path.join(outputDir,'catalog_%s.fits' % name2)
 
 if opts.doObjectFile:
     cat1 = Table.read(opts.object_file, format='ascii',
@@ -324,7 +339,8 @@ else:
     if not os.path.isfile(cat1file):
         cat1 = load_catalog(opts.catalog1,doFermi=opts.doFermi,doSimbad=opts.doSimbad,
                                     doField=opts.doField,field=opts.field,
-                                    algorithm=opts.algorithm1)
+                                    algorithm=opts.algorithm1,
+                                    filt=opts.filt)
         cat1.write(cat1file, format='fits')
     else:
         cat1 = Table.read(cat1file, format='fits')
@@ -351,7 +367,8 @@ else:
         cat2 = load_catalog(opts.catalog2,doFermi=opts.doFermi,
                             doSimbad=opts.doSimbad,
                             doField=opts.doField,field=opts.field,
-                            algorithm=opts.algorithm2)
+                            algorithm=opts.algorithm2,
+                            filt=opts.filt)
         cat2.write(cat2file, format='fits')
     else:
         cat2 = Table.read(cat2file, format='fits')
@@ -402,13 +419,16 @@ filename = os.path.join(outputDir,'catalog.dat')
 fid = open(filename,'w')
 for i,ii,s in zip(np.arange(len(sep)),idx,sep):
     if s.arcsec > opts.crossmatch_distance: continue
-  
+ 
     catnum = cat1["catnum"][i]
     objid = cat1["objid"][i]
     ra1, dec1 = cat1["ra"][i], cat1["dec"][i]
     ra2, dec2 = cat2["ra"][ii], cat2["dec"][ii]
     radiff = (ra1 - ra2)*3600.0
     decdiff = (dec1 - dec2)*3600.0
+
+    if s.arcsec > 0:
+        print(ra1, dec1, ra2, dec2)
 
     if opts.doCrossMatch:
         sig1, sigsort1 = cat1["sig"][i], cat1["sigsort"][i]

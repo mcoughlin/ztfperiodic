@@ -38,15 +38,12 @@ def parse_commandline():
     parser = optparse.OptionParser()
     parser.add_option("--doPlots",  action="store_true", default=False)
 
-    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3_HC/catalog/compare/HC_vs_normal")
-    parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3_HC/catalog/compare/*/catalog_EAOV.fits")
-    parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3/catalog/compare/*/catalog_EAOV.fits")
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3_HC/catalog/compare/HC_vs_normal/360")
+    parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3_HC/catalog/compare/360/catalog_EAOV.fits")
+    parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3/catalog/compare/360/catalog_EAOV.fits")
 
-    parser.add_option("--sig1",default=10.0,type=float)
-    parser.add_option("--sig2",default=13.0,type=float)
-
-    parser.add_option("--per1",default=240.0/86400,type=float)
-    parser.add_option("--per2",default=0.0,type=float)
+    parser.add_option("--sig1",default=30.0,type=float)
+    parser.add_option("--sig2",default=30.0,type=float)
 
     parser.add_option("--crossmatch_distance",default=1.0,type=float)
    
@@ -70,42 +67,15 @@ if not os.path.isdir(outputDir):
 filename = os.path.join(outputDir,'catalog.dat')
 if not os.path.isfile(filename):
 
-    catalog1files = glob.glob(catalog1)
-    for ii, catalog1 in enumerate(catalog1files):
-        if ii == 0:
-            cat1 = Table.read(catalog1, format='fits')
-            idx1 = np.where(cat1["sig"] >= opts.sig1)[0]
-            cat1 = cat1[idx1]
-            idx1 = np.where(cat1["period"] >= opts.per1)[0]
-            cat1 = cat1[idx1]
-        else:
-            cat1_tmp = Table.read(catalog1, format='fits')
-            idx1 = np.where(cat1_tmp["sig"] >= opts.sig1)[0]
-            cat1_tmp = cat1_tmp[idx1]
-            idx1 = np.where(cat1_tmp["period"] >= opts.per1)[0]
-            cat1_tmp = cat1_tmp[idx1]
-            cat1 = vstack([cat1, cat1_tmp])
-
-    catalog2files = glob.glob(catalog2)
-    for ii, catalog2 in enumerate(catalog2files):
-        if ii == 0:
-            cat2 = Table.read(catalog2, format='fits')
-            idx2 = np.where(cat2["sig"] >= opts.sig2)[0]
-            cat2 = cat2[idx2]
-            idx2 = np.where(cat2["period"] >= opts.per2)[0]
-            cat2 = cat2[idx2]
-        else:
-            cat2_tmp = Table.read(catalog2, format='fits')
-            idx2 = np.where(cat2_tmp["sig"] >= opts.sig2)[0]
-            cat2_tmp = cat2_tmp[idx2]
-            idx2 = np.where(cat2_tmp["period"] >= opts.per2)[0]
-            cat2_tmp = cat2_tmp[idx2]
-            cat2 = vstack([cat2, cat2_tmp])
-
-    print(len(cat1))
-    print(len(cat2))
-
+    cat1 = Table.read(catalog1, format='fits')
+    cat2 = Table.read(catalog2, format='fits')
+    
+    idx1 = np.where(cat1["sig"] >= opts.sig1)[0]
+    print('Keeping %.5f %% of objects in catalog 1' % (100*len(idx1)/len(cat1)))
     catalog1 = SkyCoord(ra=cat1["ra"]*u.degree, dec=cat1["dec"]*u.degree, frame='icrs')
+    
+    idx2 = np.where(cat2["sig"] >= opts.sig2)[0]
+    print('Keeping %.5f %% of objects in catalog 2' % (100*len(idx2)/len(cat2)))
     catalog2 = SkyCoord(ra=cat2["ra"]*u.degree, dec=cat2["dec"]*u.degree, frame='icrs')
     idx,sep,_ = catalog1.match_to_catalog_sky(catalog2)
     
@@ -126,6 +96,9 @@ if not os.path.isfile(filename):
         sigsort1, sigsort2 = cat1["sigsort"][i], cat2["sigsort"][ii]
     
         period1, period2 = cat1["period"][i],cat2["period"][ii]
+    
+        if sig1 < opts.sig1: continue
+        if sig2 < opts.sig2: continue
     
         xs.append(1.0/period1)
         ys.append(1.0/period2)
@@ -158,10 +131,10 @@ if opts.doPlots:
     pdffile = os.path.join(outputDir,'periods.pdf')
     cmap = cm.autumn
 
-    #xedges = np.logspace(np.log10(0.02),3.0,100)
-    xedges = np.logspace(0,5.0,100)
-    #yedges = np.logspace(np.log10(0.02),3.0,100)
-    yedges = np.logspace(-3,2.0,100)
+    xedges = np.logspace(np.log10(0.02),3.0,100)
+    #xedges = np.logspace(1,5.0,100)
+    yedges = np.logspace(np.log10(0.02),3.0,100)
+    #yedges = np.logspace(-3,2.0,100)
    
     H, xedges, yedges = np.histogram2d(xs, ys, bins=(xedges, yedges))
     print(np.min(xs), np.max(xs))
@@ -174,7 +147,7 @@ if opts.doPlots:
     cmap = matplotlib.cm.viridis
     cmap.set_bad('white',0)
 
-    fig = plt.figure(figsize=(8,8))
+    fig = plt.figure(figsize=(10,10))
     ax=fig.add_subplot(1,1,1)
     c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm(),
                        cmap=cmap)
@@ -182,10 +155,10 @@ if opts.doPlots:
     #print(np.logspace(-3,5,500))
     ax.set_xscale('log')
     ax.set_yscale('log')
-    #plt.xlim([0.02, 50])
-    plt.xlim([5, 500])
+    plt.xlim([0.005, 100])
+    #plt.xlim([10, 2*1000])
     #plt.ylim([0.02, 50])
-    plt.ylim([0.1, 50])
+    plt.ylim([0.005, 100])
     #plt.fill_between([0.02, 10],[0.02,0.02],[500,500],color='gray',alpha=0.5)
     plt.xlabel('Frequency [1/days]', fontsize=24)
     plt.ylabel('Frequency [1/days]', fontsize=24)
@@ -202,10 +175,10 @@ if opts.doPlots:
 
     #xedges = np.logspace(np.log10(0.02),3.0,100)
     xedges = np.logspace(np.log10(0.02),4.0,100)
-    #yedges = np.logspace(np.log10(0.02),3.0,100)
-    yedges = np.logspace(-3,1.0,100)
+    yedges = np.logspace(np.log10(0.02),4.0,100)
+    #yedges = np.logspace(-3,1.0,100)
 
-    diff = np.abs(ys-xs)/ys
+    diff = np.abs(ys-xs)/np.min(np.vstack((ys,xs)),axis=0)
     diff[diff < 1e-3] = 1e-3
 
     H, xedges, yedges = np.histogram2d(xs, diff, bins=(xedges, yedges))
@@ -217,7 +190,6 @@ if opts.doPlots:
     ax=fig.add_subplot(1,1,1)
     c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm(),
                        cmap=cmap)
-    print(np.logspace(-3,5,500))
     ax.set_xscale('log')
     ax.set_yscale('log')
     #plt.xlim([0.02, 50])

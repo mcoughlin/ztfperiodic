@@ -271,12 +271,19 @@ if opts.lightcurve_source == "Kowalski":
 elif opts.lightcurve_source == "matchfiles":
 
     fields = np.arange(250,400)
+    fields1 = [683,853,487,718,372,842,359,778,699,296]
+    fields2 = [841,852,682,717,488,423,424,563,562,297,700,777]
+    fields3 = [851,848,797,761,721,508,352,355,364,379]
+    fields4 = [1866,1834,1835,1804,1734,1655,1565]
+
+    fields = fields1 + fields2
+
+    fields = np.arange(250,400)
 
     job_number = 0
     quadrantfile = os.path.join(qsubDir,'qsub.dat')
     fid = open(quadrantfile,'w')
 
-    print(opts.matchfileDir)
     directory="%s/*/*.h5"%opts.matchfileDir
     filenames = [f for f in glob.iglob(directory)]
     for jj, filename in enumerate(filenames):
@@ -302,7 +309,9 @@ elif opts.lightcurve_source == "matchfiles":
 
         Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
         for ii in range(Ncatalog):
-            catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field_id, ccd_id, q_id, ii))
+            matchFile_split = filename.replace(".pytable","").replace(".hdf5","").replace(".h5","").split("/")[-1]
+            catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(matchFile_split,
+                                                              ii))
             if os.path.isfile(catalogFile):
                 print('%s already exists... continuing.' % catalogFile)
                 continue
