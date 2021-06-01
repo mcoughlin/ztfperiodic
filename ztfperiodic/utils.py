@@ -593,7 +593,8 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
     objids_split = np.array_split(objids, Ncatalog)
 
     data_out = []
-    if doParallel:
+    if False: # parallel not working currently...
+    #if doParallel:
         from joblib import Parallel, delayed
         data_out = Parallel(n_jobs=Ncore)(delayed(get_kowalski_objid)(objids_tmp,kow,program_ids=program_ids,min_epochs=min_epochs,doRemoveHC=doRemoveHC,doExtinction=doExtinction,doSigmaClipping=doSigmaClipping,sigmathresh=sigmathresh,doOutbursting=doOutbursting,doPercentile=doPercentile,percmin = percmin, percmax = percmax, doHCOnly=doHCOnly) for objids_tmp in objids_split)
     else:

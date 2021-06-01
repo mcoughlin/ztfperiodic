@@ -38,6 +38,7 @@ def parse_commandline():
     parser.add_option("--doUsePDot",  action="store_true", default=False)
     parser.add_option("--doSpectra",  action="store_true", default=False)
     parser.add_option("--doQuadrantScale",  action="store_true", default=False)
+    parser.add_option("--doLoadIDFile",  action="store_true", default=False)
 
     parser.add_option("-l","--lightcurve_source",default="Kowalski")
     parser.add_option("-s","--source_type",default="quadrant")
@@ -155,8 +156,10 @@ fid1 = open(condorsh,'w')
 job_number = 0
 
 if opts.doQuadrantScale:
+    TIMEOUT = 60
     protocol, host, port = "https", "gloria.caltech.edu", 443
     kow = Kowalski(username=opts.user, password=opts.pwd,
+                   timeout=TIMEOUT,
                    protocol=protocol, host=host, port=port)
 
 if opts.lightcurve_source == "Kowalski":
@@ -175,9 +178,9 @@ if opts.lightcurve_source == "Kowalski":
         #fields = np.setdiff1d(fields,fields_complete)
 
         #fields = [700]
-        fields = np.arange(250,882)
-        fields = np.arange(750,800)
-        fields = np.arange(200,880)
+        #fields = np.arange(250,882)
+        fields = np.arange(250,500)
+        #fields = np.arange(686,880)
         #fields = [400]
 
         for field in fields:
@@ -188,41 +191,49 @@ if opts.lightcurve_source == "Kowalski":
             for ccd in ccds:
                 for quadrant in quadrants:
                     if opts.doQuadrantScale:
-                        qu = {"query_type":"count_documents",
-                              "query": {
-                                  "catalog": 'ZTF_sources_20210401',
-                                  "filter": {'field': {'$eq': int(field)},
-                                             'ccd': {'$eq': int(ccd)},
-                                             'quad': {'$eq': int(quadrant)}
-                                             }
-                                       }
-                             }
-                        r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
-                        if not "data" in r: continue
-                        nlightcurves = r['data']
-                        if nlightcurves == 0: continue
-
-                        Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
-
-                        idsFile = os.path.join(idsDir,"%d_%d_%d.npy"%(field, ccd, quadrant))
-                        if not os.path.isfile(idsFile):
-                            print(idsFile)
-                            qu = {"query_type":"find",
-                                  "query": {"catalog": 'ZTF_sources_20210401',
-                                            "filter": {'field': {'$eq': int(field)},
-                                                       'ccd': {'$eq': int(ccd)},
-                                                       'quad': {'$eq': int(quadrant)}
-                                                      },
-                                            "projection": "{'_id': 1}"},
+                        if opts.doLoadIDFile:
+                            idsFile = os.path.join(idsDir,"%d_%d_%d.npy"%(field, ccd, quadrant))
+                            if not os.path.isfile(idsFile):
+                                continue
+                            objids = np.load(idsFile)
+                            nlightcurves = len(objids) 
+                            Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
+                        else:
+                            qu = {"query_type":"count_documents",
+                                  "query": {
+                                      "catalog": 'ZTF_sources_20210401',
+                                      "filter": {'field': {'$eq': int(field)},
+                                                 'ccd': {'$eq': int(ccd)},
+                                                 'quad': {'$eq': int(quadrant)}
+                                                 }
+                                           }
                                  }
-                            r = {}
-                            r['data'] = []
-                            while len(r['data']) == 0:
-                                r = ztfperiodic.utils.database_query(kow, qu, nquery = 100)
-                            objids = []
-                            for obj in r['data']:
-                                objids.append(obj['_id'])
-                            np.save(idsFile, objids)
+                            r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
+                            if not "data" in r: continue
+                            nlightcurves = r['data']
+                            if nlightcurves == 0: continue
+    
+                            Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
+    
+                            idsFile = os.path.join(idsDir,"%d_%d_%d.npy"%(field, ccd, quadrant))
+                            if not os.path.isfile(idsFile):
+                                print(idsFile)
+                                qu = {"query_type":"find",
+                                      "query": {"catalog": 'ZTF_sources_20210401',
+                                                "filter": {'field': {'$eq': int(field)},
+                                                           'ccd': {'$eq': int(ccd)},
+                                                           'quad': {'$eq': int(quadrant)}
+                                                          },
+                                                "projection": "{'_id': 1}"},
+                                     }
+                                r = {}
+                                r['data'] = []
+                                while len(r['data']) == 0:
+                                    r = ztfperiodic.utils.database_query(kow, qu, nquery = 100)
+                                objids = []
+                                for obj in r['data']:
+                                    objids.append(obj['_id'])
+                                np.save(idsFile, objids)
 
                     for ii in range(Ncatalog):
                         catalogFile = os.path.join(catalogDir,"%d_%d_%d_%d.h5"%(field, ccd, quadrant, ii))
