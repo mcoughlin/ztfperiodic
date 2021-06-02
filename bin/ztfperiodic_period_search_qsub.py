@@ -39,6 +39,7 @@ def parse_commandline():
     parser.add_option("--doUsePDot",  action="store_true", default=False)
     parser.add_option("--doSpectra",  action="store_true", default=False)
     parser.add_option("--doQuadrantScale",  action="store_true", default=False)
+    parser.add_option("--doLoadIDFile",  action="store_true", default=False)
 
     parser.add_option("--doVariability",  action="store_true", default=False)
     parser.add_option("--doCutNObs",  action="store_true", default=False)
@@ -147,7 +148,11 @@ if opts.doCutNObs:
     fields_list = nobs_data[:,0]
 
 if opts.doQuadrantScale or ("fermi" in opts.catalog_file):
-    kow = Kowalski(username=opts.user, password=opts.pwd)
+    TIMEOUT = 60
+    protocol, host, port = "https", "gloria.caltech.edu", 443
+    kow = Kowalski(username=opts.user, password=opts.pwd,
+                   timeout=TIMEOUT,
+                   protocol=protocol, host=host, port=port)
 
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
@@ -170,7 +175,7 @@ if opts.lightcurve_source == "Kowalski":
         #fields = np.arange(750,800)
         #fields = np.arange(300,305)
         #fields = np.arange(750,751)
-        fields = np.arange(250,400)
+        fields = np.arange(500,600)
 
         job_number = 0
         quadrantfile = os.path.join(qsubDir,'qsub.dat')
@@ -183,36 +188,41 @@ if opts.lightcurve_source == "Kowalski":
             for ccd in ccds:
                 for quadrant in quadrants:
                     if opts.doQuadrantScale:
-                        qu = {"query_type":"count_documents",
-                              "query": {
-                                  "catalog": 'ZTF_sources_20200401',
-                                  "filter": {'field': {'$eq': int(field)},
-                                             'ccd': {'$eq': int(ccd)},
-                                             'quad': {'$eq': int(quadrant)}
-                                             }
-                                       }
-                             }
-                        r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
-                        if not "data" in r: continue
-                        nlightcurves = r['data']
-
-                        Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
-
-                        idsFile = os.path.join(idsDir,"%d_%d_%d.npy"%(field, ccd, quadrant))
-                        if not os.path.isfile(idsFile):
-                            qu = {"query_type":"find",
-                                  "query": {"catalog": 'ZTF_sources_20201201',
-                                            "filter": {'field': {'$eq': int(field)},
-                                                       'ccd': {'$eq': int(ccd)},
-                                                       'quad': {'$eq': int(quadrant)}
-                                                      },
-                                            "projection": "{'_id': 1}"},
+                        if opts.doLoadIDFile:
+                            idsFile = os.path.join(idsDir,"%d_%d_%d.npy"%(field, ccd, quadrant))
+                            if not os.path.isfile(idsFile):
+                                continue
+                        else:
+                            qu = {"query_type":"count_documents",
+                                  "query": {
+                                      "catalog": 'ZTF_sources_20210401',
+                                      "filter": {'field': {'$eq': int(field)},
+                                                 'ccd': {'$eq': int(ccd)},
+                                                 'quad': {'$eq': int(quadrant)}
+                                                 }
+                                           }
                                  }
                             r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
-                            objids = []
-                            for obj in r['data']:
-                                objids.append(obj['_id'])
-                            np.save(idsFile, objids)
+                            if not "data" in r: continue
+                            nlightcurves = r['data']
+    
+                            Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
+    
+                            idsFile = os.path.join(idsDir,"%d_%d_%d.npy"%(field, ccd, quadrant))
+                            if not os.path.isfile(idsFile):
+                                qu = {"query_type":"find",
+                                      "query": {"catalog": 'ZTF_sources_20210401',
+                                                "filter": {'field': {'$eq': int(field)},
+                                                           'ccd': {'$eq': int(ccd)},
+                                                           'quad': {'$eq': int(quadrant)}
+                                                          },
+                                                "projection": "{'_id': 1}"},
+                                     }
+                                r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
+                                objids = []
+                                for obj in r['data']:
+                                    objids.append(obj['_id'])
+                                np.save(idsFile, objids)
 
                     objids = np.load(idsFile) 
                     nlightcurves = len(objids)
@@ -252,7 +262,7 @@ if opts.lightcurve_source == "Kowalski":
             if False:
                 qu = { "query_type": "cone_search",
                        "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" },
-                                 "catalogs": { "ZTF_sources_20201201": { "filter": "{}", "projection": "{'_id': 1}"}}}}
+                                 "catalogs": { "ZTF_sources_20210401": { "filter": "{}", "projection": "{'_id': 1}"}}}}
                 r = ztfperiodic.utils.database_query(kow, qu, nquery = 10)
                 objids = []
                 r = r["data"]["ZTF_sources_20201201"]
