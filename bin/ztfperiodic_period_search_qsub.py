@@ -397,6 +397,10 @@ if "bridges" in host:
     fid.write('source /ocean/projects/ast200014p/mcoughli/ZTF/ztfperiodic/setup.sh\n')
 elif "nasa" in host:
     fid.write('source /home4/mwcoughl/ZTF/ztfperiodic/setup.sh\n')
+elif "comet" in host:
+    fid.write('#sbatch -p gpu --gres=gpu:p100:4 --account=umn131 --nodes=1 --ntasks-per-node=8 -t 48:00:00 --wait=0 --export=ALL qsub_submission.sub\n')
+elif "expanse" in host:
+    fid.write('#sbatch -p gpu --gpus=4 --account=umn131 --nodes=1 --ntasks-per-node=8 -t 48:00:00 --wait=0 --export=ALL qsub_submission.sub\n')
 else:
     fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
 if opts.lightcurve_source in ["Kowalski", "matchfiles", "matchfiles_kevin"]:
