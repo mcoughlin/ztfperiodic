@@ -271,6 +271,7 @@ if opts.lightcurve_source == "Kowalski":
 elif opts.lightcurve_source == "matchfiles":
 
     fields = np.arange(250,400)
+    fields = np.arange(600,700)
 
     job_number = 0
     quadrantfile = os.path.join(qsubDir,'qsub.dat')
@@ -278,7 +279,7 @@ elif opts.lightcurve_source == "matchfiles":
 
     print(opts.matchfileDir)
     directory="%s/*/*.h5"%opts.matchfileDir
-    filenames = [f for f in glob.iglob(directory)]
+    filenames = sorted([f for f in glob.iglob(directory)])
     for jj, filename in enumerate(filenames):
         if np.mod(jj, 100) == 0:
             print('%d/%d' % (jj, len(filenames)))
@@ -307,7 +308,7 @@ elif opts.lightcurve_source == "matchfiles":
                 print('%s already exists... continuing.' % catalogFile)
                 continue
 
-            fid.write('%d %d %d %d %d %d %s\n' % (job_number, field_id, ccd_id, q_id, ii, Ncatalog, filename))
+            print('%d %d %d %d %d %d %s' % (job_number, field_id, ccd_id, q_id, ii, Ncatalog, filename), file=fid, flush=True)
 
             job_number = job_number + 1
     fid.close()
