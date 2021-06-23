@@ -191,8 +191,8 @@ def touch(fname):
 # Parse command line
 opts = parse_commandline()
 
-if not opts.lightcurve_source in ["matchfiles","h5files","Kowalski"]:
-    print("--lightcurve_source must be either matchfiles, h5files, or Kowalski")
+if not opts.lightcurve_source in ["matchfiles","matchfiles_kevin","h5files","Kowalski"]:
+    print("--lightcurve_source must be either matchfiles, matchfiles_kevin, h5files, or Kowalski")
     exit(0)
 
 if not (opts.doCPU or opts.doGPU):
@@ -312,6 +312,13 @@ if opts.doQuadrantFile:
         field, ccd, quadrant = row["field"], row["ccd"], row["quadrant"]
         Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
         matchFile = row["idsFile"]
+    elif opts.lightcurve_source == "matchfiles_kevin":
+        names = ["job_number", "Ncatindex", "Ncatalog", "idsFile"]
+
+        df_original = pd.read_csv(opts.quadrant_file, header=None, delimiter=' ', names=names)
+        row = df_original.iloc[opts.quadrant_index,:]
+        Ncatindex, Ncatalog = row["Ncatindex"], row["Ncatalog"]
+        matchFile = row["idsFile"]
 
 scriptpath = os.path.realpath(__file__)
 starCatalogDir = os.path.join("/".join(scriptpath.split("/")[:-2]),"catalogs")
@@ -373,8 +380,10 @@ if opts.lightcurve_source == "Kowalski":
     while cnt < nquery:
         try:
             TIMEOUT = 60
+            protocol, host, port = "https", "gloria.caltech.edu", 443
             kow = Kowalski(username=opts.user, password=opts.pwd, 
-                           timeout=TIMEOUT)
+                           timeout=TIMEOUT,
+                           protocol=protocol, host=host, port=port)
             break
         except:
             time.sleep(5)
@@ -662,7 +671,7 @@ if opts.lightcurve_source == "Kowalski":
         print("Source type unknown...")
         exit(0)
 
-elif opts.lightcurve_source == "matchfiles":
+elif opts.lightcurve_source in ["matchfiles", "matchfiles_kevin"]:
     if not os.path.isfile(matchFile):
         print("%s missing..."%matchFile)
         exit(1)
@@ -688,6 +697,12 @@ elif opts.lightcurve_source == "matchfiles":
     if opts.doSpectra:
         spectraFile = os.path.join(spectraDir,matchFile_split)
 
+
+    if opts.lightcurve_source == "matchfiles":
+        matchfileType = 'forced'
+    elif opts.lightcurve_source == "matchfiles_kevin":  
+        matchfileType = 'kevin'
+
     #matchFile = find_matchfile(opts.matchfileDir)
     lightcurves, coordinates, filters, ids,\
     absmags, bp_rps, names, baseline = get_matchfile(kow, matchFile,
@@ -696,7 +711,8 @@ elif opts.lightcurve_source == "matchfiles":
                                                      doRemoveHC=doRemoveHC,
                                                      doHCOnly=doHCOnly,
                                                      Ncatalog=Ncatalog,
-                                                     Ncatindex=Ncatindex)
+                                                     Ncatindex=Ncatindex,
+                                                     matchfileType=matchfileType)
 
     if opts.doRemoveBrightStars:
         lightcurves, coordinates, filters, ids, absmags, bp_rps, names =\
@@ -892,7 +908,7 @@ freqs = fmin + df * np.arange(nf)
 
 if opts.doRemoveTerrestrial:
     #freqs_to_remove = [[3e-2,4e-2], [47.99,48.01], [46.99,47.01], [45.99,46.01], [3.95,4.05], [2.95,3.05], [1.95,2.05], [0.95,1.05], [0.48, 0.52]]
-    freqs_to_remove = [[3e-2,4e-2], [3.95,4.05], [2.95,3.05], [1.95,2.05], [0.95,1.05], [0.48, 0.52]]
+    freqs_to_remove = [[3e-2,4e-2], [3.95,4.05], [2.95,3.05], [1.95,2.05], [0.95,1.05], [0.48, 0.52], [0.32, 0.34]]
 else:
     freqs_to_remove = None
 
@@ -983,7 +999,7 @@ for algorithm in algorithms:
             elif algorithm == "EAOV":
                 sigthresh = 15
             elif algorithm == "ELS":
-                sigthresh = 15
+                sigthresh = 50
             else:
                 sigthresh = 7
     
@@ -1200,7 +1216,8 @@ for algorithm in algorithms:
             ymin = y10 - 7*ystd
             ymax = y90 + 7*ystd
             ax1.set_ylim([ymin,ymax])
-            ax1.invert_yaxis()
+            if not opts.lightcurve_source == "matchfiles_kevin":
+                ax1.invert_yaxis()
             asymmetric_error = np.atleast_2d([absmag[1], absmag[2]]).T
             hist2 = ax2.hist2d(bprpWD,absmagWD, bins=100,zorder=0,norm=LogNorm())
             print(bp_rp)

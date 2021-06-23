@@ -50,20 +50,7 @@ def gaia_query(ra_deg, dec_deg, rad_deg, maxmag=25,
     https://gea.esac.esa.int/archive/documentation/GDR2/Gaia_archive/chap_datamodel/sec_dm_main_tables/ssec_dm_gaia_source.html
     
     """
-    vquery = Vizier(columns=['Source', 'RA_ICRS', 'DE_ICRS',
-                             'e_RA_ICRS', 'e_DE_ICRS',
-                             'phot_g_mean_mag','phot_r_mean_mag',
-                             'BPmag', 'Gmag', 'RPmag',
-                             'e_BPmag', 'e_Gmag', 'e_RPmag',
-                             'Plx', 'e_Plx', 
-                'gofAL', #Goodness of fit statistic of model wrt along-scan observations, 
-                # it should approximately follow a normal distribution with zero mean value and unit standard deviation, > 3 are suspicious
-                'chi2AL', 
-                'epsi',
-                'sepsi', # astrometric_excess_noise_sig should be zero in half of the cases and approximately follow the positive half of a normal distribution with zero mean and unit standard deviation for the other half.
-                             'BP-RP', 'e_BPmag', 'e_RPmag',
-                             'Teff', 'Rad', 'Lum'],
-                    column_filters={"phot_g_mean_mag":
+    vquery = Vizier(columns=['all'], column_filters={"phot_g_mean_mag":
                                     ("<%f" % maxmag),
                                    "phot_r_mean_mag":
                                     ("<%f" % maxmag)},
@@ -372,7 +359,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
     tmax = Time('2020-06-30T00:00:00', format='isot', scale='utc').jd
 
     #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20191101": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
-    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20201201": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_g_mean_mag_err': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } } }
+    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20210401": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_DR2": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_g_mean_mag_err': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } } }
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
@@ -383,7 +370,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
         print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec)) 
         return {}
 
-    key1, key2, key3 = 'ZTF_sources_20201201', 'Gaia_DR2', 'ZTF_alerts'
+    key1, key2, key3 = 'ZTF_sources_20210401', 'Gaia_DR2', 'ZTF_alerts'
     data1, data2, data3 = r["data"][key1], r["data"][key2], r["data"][key3]
     key = list(data1.keys())[0]
     data = data1[key]
@@ -606,7 +593,8 @@ def get_kowalski_objids(objids, kow, program_ids = [1,2,3], min_epochs = 1,
     objids_split = np.array_split(objids, Ncatalog)
 
     data_out = []
-    if doParallel:
+    if False: # parallel not working currently...
+    #if doParallel:
         from joblib import Parallel, delayed
         data_out = Parallel(n_jobs=Ncore)(delayed(get_kowalski_objid)(objids_tmp,kow,program_ids=program_ids,min_epochs=min_epochs,doRemoveHC=doRemoveHC,doExtinction=doExtinction,doSigmaClipping=doSigmaClipping,sigmathresh=sigmathresh,doOutbursting=doOutbursting,doPercentile=doPercentile,percmin = percmin, percmax = percmax, doHCOnly=doHCOnly) for objids_tmp in objids_split)
     else:
@@ -664,14 +652,14 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
     tmax = Time('2020-06-30T00:00:00', format='isot', scale='utc').jd
 
     #qu = {"query_type":"find",
-    #      "query": {"catalog": 'ZTF_sources_20201201',
+    #      "query": {"catalog": 'ZTF_sources_20210401',
     #                "filter": {'_id': {'$eq': int(objid)}},
     #                "projection": "{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}"
     #                }
     #     }
 
     qu = {"query_type":"find",
-          "query": {"catalog": 'ZTF_sources_20201201',
+          "query": {"catalog": 'ZTF_sources_20210401',
                     "filter": {'_id': {'$in': objids.tolist()}}, 
                     "projection": "{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}"
                     },
@@ -1320,7 +1308,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
     tmax = Time('2020-06-30T00:00:00', format='isot', scale='utc').jd
 
-    qu = {"query_type":"general_search","query":"db['ZTF_sources_20201201'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
+    qu = {"query_type":"general_search","query":"db['ZTF_sources_20210401'].count_documents({'field':%d,'ccd':%d,'quad':%d})"%(field,ccd,quadrant)}
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
@@ -1355,14 +1343,14 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
     for nb in [nb]:
         print("Querying batch number %d/%d..."%(nb, num_batches))
 
-        qu = {"query_type":"general_search","query":"db['ZTF_sources_20201201'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
+        qu = {"query_type":"general_search","query":"db['ZTF_sources_20210401'].find({'field':%d,'ccd':%d,'quad':%d},{'_id':1,'data.programid':1,'data.hjd':1,'data.mag':1,'data.magerr':1,'data.ra':1,'data.dec':1,'filter':1,'data.catflags':1}).skip(%d).limit(%d)"%(field,ccd,quadrant,int(nb*batch_size),int(batch_size))}
         r = database_query(kow, qu, nquery = 10)
 
         if not "data" in r:
             print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
             continue
 
-        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20201201'].find_one({})"}
+        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20210401'].find_one({})"}
         #r = kow.query(query=qu)
 
         datas = r["data"]
@@ -1831,7 +1819,7 @@ def get_kowalski_features(kow, num_batches=1, nb=0, featuresetname='f',
             print("Query for batch number %d/%d failed... continuing."%(nb, num_batches))
             continue
 
-        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20201201'].find_one({})"}
+        #qu = {"query_type":"general_search","query":"db['ZTF_sources_20210401'].find_one({})"}
         #r = kow.query(query=qu)
 
         datas = r["data"]
@@ -1957,7 +1945,8 @@ def get_matchfile(kow, filename, min_epochs = 1,
                   sigmathresh=5.0,
                   doOutbursting=False,
                   doPercentile=False,
-                  percmin = 10.0, percmax = 90.0):
+                  percmin = 10.0, percmax = 90.0,
+                  matchfileType = 'forced'):
     """
     Read matchfile (hdf file) light curves given the filename
     e.g.: f = '/path/to/fr000551-000600/ztf_000593_zr_c04_q3_match.pytable'
@@ -1967,17 +1956,24 @@ def get_matchfile(kow, filename, min_epochs = 1,
 
     bands = {'g': 1, 'r': 2, 'i': 3, 'z': 4, 'J': 5}
 
-    filenameSplit = filename.split("/")[-1].split("_")
-    field_id, ccd_id, q_id = int(filenameSplit[1]), int(filenameSplit[2]), int(filenameSplit[3])
-    filt = filenameSplit[4][1]
-    filt = bands[filt]
-
-    f = h5py.File(filename, 'r')
-    sourcedata = np.array(f['data']['sourcedata'][:])
-    exposures = f['data']['exposures'][:]
-    sources = f['data']['sources'][:]
-    nlightcurves = len(sources)
-    n_exp = len(exposures)
+    if matchfileType == 'forced':
+        filenameSplit = filename.split("/")[-1].split("_")
+        field_id, ccd_id, q_id = int(filenameSplit[1]), int(filenameSplit[2]), int(filenameSplit[3])
+        filt = filenameSplit[4][1]
+        filt = bands[filt]
+    
+        f = h5py.File(filename, 'r')
+        sourcedata = np.array(f['data']['sourcedata'][:])
+        exposures = f['data']['exposures'][:]
+        sources = f['data']['sources'][:]
+        nlightcurves = len(sources)
+        n_exp = len(exposures)
+    elif matchfileType == 'kevin':
+        f = h5py.File(filename, 'r')
+        sources = [str(WD) for WD in f['Objects']]
+    else:
+        print('I do not know that match file type... exiting.')
+        raise Exception
 
     baseline = 0
     names = []
@@ -1992,27 +1988,46 @@ def get_matchfile(kow, filename, min_epochs = 1,
         if not np.isin(kk, kks, assume_unique=True): continue
         if np.mod(kk, 100) == 0:
             print('Reading source: %d' % kk)
-        idx = kk*n_exp + np.arange(0,n_exp)
 
-        lc = [sourcedata[jj] for jj in idx]
+        if matchfileType == 'forced':
+            hjd, mag, magerr, ra, dec, fid = [], [], [], [], [], []
 
-        hjd, mag, magerr, ra, dec, fid = [], [], [], [], [], []
-        for jj, dic in enumerate(lc):
-            if not exposures[jj][2] in program_ids: continue
-            if (exposures[jj][2]==1) and (exposures[jj][1] > tmax): continue
-            if not dic[2] == 0: continue
+            idx = kk*n_exp + np.arange(0,n_exp)
+            lc = [sourcedata[jj] for jj in idx]
+            for jj, dic in enumerate(lc):
+                if not exposures[jj][2] in program_ids: continue
+                if (exposures[jj][2]==1) and (exposures[jj][1] > tmax): continue
+                if not dic[2] == 0: continue
+    
+                hjd.append(exposures[jj][1])
+                mag.append(dic[0])
+                magerr.append(dic[1])
+                ra.append(source[1])
+                dec.append(source[2])
+                fid.append(filt)
 
-            hjd.append(exposures[jj][1])
-            mag.append(dic[0])
-            magerr.append(dic[1])
-            ra.append(source[1])
-            dec.append(source[2])
-            fid.append(filt)
+            hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
+            ra, dec = np.array(ra), np.array(dec)
+            fid = np.array(fid)
 
-        hjd, mag, magerr = np.array(hjd),np.array(mag),np.array(magerr)
-        ra, dec = np.array(ra), np.array(dec)
+        elif matchfileType == 'kevin':
+            LC=f['Objects'][source]
+            hjd=LC[:,0]
+            mag=LC[:,1]
+            magerr=LC[:,2]
+            RA=f['Objects'][source].attrs['RA']
+            Dec=f['Objects'][source].attrs['Dec']
+            ref_flux=f['Objects'][source].attrs['ref_r_flux']
+            parallax=f['Objects'][source].attrs['parallax']
+            parallaxerr=f['Objects'][source].attrs['parallax_error']
+            bprp=f['Objects'][source].attrs['bp_rp']
+            G=f['Objects'][source].attrs['G']
+            pm=f['Objects'][source].attrs['pm']
+ 
+            ra = RA*np.ones(hjd.shape)
+            dec = Dec*np.ones(hjd.shape)
+            fid = np.ones(hjd.shape)
 
-        fid = np.array(fid)
         idx = np.where(~np.isnan(mag) & ~np.isnan(magerr))[0]
         hjd, mag, magerr = hjd[idx], mag[idx], magerr[idx]
         fid = fid[idx]
@@ -2107,6 +2122,11 @@ def get_matchfile(kow, filename, min_epochs = 1,
                           dec=np.median(dec)*u.degree, frame='icrs')
 
         absmag, bp_rp = [np.nan, np.nan, np.nan], [np.nan, np.nan]
+
+        if matchfileType == 'kevin':
+            absmag = [G+5*(np.log10(np.abs(parallax))-2),G+5*(np.log10(np.abs(parallax+parallaxerr))-2)-(G+5*(np.log10(np.abs(parallax))-2)),G+5*(np.log10(np.abs(parallax))-2)-(G+5*(np.log10(np.abs(parallax-parallaxerr))-2))]
+            bp_rp = [bprp, np.abs(bprp*0.01)]
+
         if not kow is None:
             if "data" in r:
                 key2 = 'Gaia_DR2'
@@ -2156,7 +2176,12 @@ def get_matchfile(kow, filename, min_epochs = 1,
         for jj in range(nlightcurves):
             coordinate=(np.median(ra),np.median(dec))
             coordinates.append(coordinate)
-            ids.append(source[0])
+
+            if matchfileType == 'forced':
+                ids.append(source[0])
+            elif matchfileType == 'kevin':
+                ids.append(int(source[1:-1]))
+
             absmags.append(absmag)
             bp_rps.append(bp_rp)
     

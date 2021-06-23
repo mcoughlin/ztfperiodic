@@ -1,0 +1,71 @@
+
+import os, sys, pickle
+import glob
+import optparse
+
+import tables
+import pandas as pd
+import numpy as np
+from astropy.time import Time
+
+import matplotlib
+matplotlib.use('Agg')
+matplotlib.rcParams.update({'font.size': 28})
+matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
+import matplotlib.pyplot as plt
+
+def parse_commandline():
+    """
+    Parse the options given on the command-line.
+    """
+    parser = optparse.OptionParser()
+
+    parser.add_option("-c","--condorDir",default="/home/michael.coughlin/ZTF/output_ontological_ids_DR2/condor/")
+
+    opts, args = parser.parse_args()
+
+    return opts
+
+# Parse command line
+opts = parse_commandline()
+
+outputDir = os.path.join(opts.condorDir,"performance")
+if not os.path.isdir(outputDir):
+    os.makedirs(outputDir)
+
+condorfile = os.path.join(opts.condorDir, 'condor.dag.dagman.out')
+with open(condorfile) as f:
+    output = f.readlines()
+logs = []
+
+for jj, line in enumerate(output):
+    if not "Done" in line: continue
+    line_test = output[jj+2]
+    line_test = line_test.rstrip()
+    line_split = list(filter(None,line_test.split(" ")))
+    month, day, year = line_split[0].split("/")
+
+    mjd = Time('20%s-%s-%s %s' % (year, month, day, line_split[1]),
+            format='iso').mjd
+
+    done = int(line_split[2])
+    queued = int(line_split[4])
+    ready = int(line_split[6])
+    failed = int(line_split[8])
+    logs.append([mjd, done, queued, ready, failed])
+
+logs = np.array(logs)
+t0 = np.min(logs[:,0])
+logs[:,0] = logs[:,0] - t0
+
+plotName = os.path.join(outputDir, "%s.png" % 'performance')
+plt.figure(figsize=(12,8))
+plt.plot(logs[:,0],logs[:,1], 'b--', label='Done')
+plt.plot(logs[:,0],logs[:,3], 'g.-', label='Ready')
+plt.plot(logs[:,0],logs[:,4], 'r', label='Failed')
+plt.xlabel("Days from %s" % (Time(t0,format='mjd').datetime))
+plt.ylabel("Jobs")
+plt.legend()
+plt.savefig(plotName)
+plt.close('all')
+

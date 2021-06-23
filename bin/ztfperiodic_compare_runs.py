@@ -42,8 +42,8 @@ def parse_commandline():
     parser.add_option("--catalog1",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3_HC/catalog/compare/360/catalog_EAOV.fits")
     parser.add_option("--catalog2",default="/home/michael.coughlin/ZTF/output_quadrants_Primary_DR3/catalog/compare/360/catalog_EAOV.fits")
 
-    parser.add_option("--sig1",default=7.5,type=float)
-    parser.add_option("--sig2",default=13.0,type=float)
+    parser.add_option("--sig1",default=30.0,type=float)
+    parser.add_option("--sig2",default=30.0,type=float)
 
     parser.add_option("--crossmatch_distance",default=1.0,type=float)
    
@@ -131,10 +131,10 @@ if opts.doPlots:
     pdffile = os.path.join(outputDir,'periods.pdf')
     cmap = cm.autumn
 
-    #xedges = np.logspace(np.log10(0.02),3.0,100)
-    xedges = np.logspace(1,5.0,100)
-    #yedges = np.logspace(np.log10(0.02),3.0,100)
-    yedges = np.logspace(-3,2.0,100)
+    xedges = np.logspace(np.log10(0.02),3.0,100)
+    #xedges = np.logspace(1,5.0,100)
+    yedges = np.logspace(np.log10(0.02),3.0,100)
+    #yedges = np.logspace(-3,2.0,100)
    
     H, xedges, yedges = np.histogram2d(xs, ys, bins=(xedges, yedges))
     print(np.min(xs), np.max(xs))
@@ -155,8 +155,8 @@ if opts.doPlots:
     #print(np.logspace(-3,5,500))
     ax.set_xscale('log')
     ax.set_yscale('log')
-    #plt.xlim([0.02, 50])
-    plt.xlim([10, 2*1000])
+    plt.xlim([0.005, 100])
+    #plt.xlim([10, 2*1000])
     #plt.ylim([0.02, 50])
     plt.ylim([0.005, 100])
     #plt.fill_between([0.02, 10],[0.02,0.02],[500,500],color='gray',alpha=0.5)
@@ -175,10 +175,10 @@ if opts.doPlots:
 
     #xedges = np.logspace(np.log10(0.02),3.0,100)
     xedges = np.logspace(np.log10(0.02),4.0,100)
-    #yedges = np.logspace(np.log10(0.02),3.0,100)
-    yedges = np.logspace(-3,1.0,100)
+    yedges = np.logspace(np.log10(0.02),4.0,100)
+    #yedges = np.logspace(-3,1.0,100)
 
-    diff = np.abs(ys-xs)/ys
+    diff = np.abs(ys-xs)/np.min(np.vstack((ys,xs)),axis=0)
     diff[diff < 1e-3] = 1e-3
 
     H, xedges, yedges = np.histogram2d(xs, diff, bins=(xedges, yedges))
@@ -190,7 +190,6 @@ if opts.doPlots:
     ax=fig.add_subplot(1,1,1)
     c = plt.pcolormesh(X, Y, H, vmin=1.0,vmax=np.max(H),norm=LogNorm(),
                        cmap=cmap)
-    print(np.logspace(-3,5,500))
     ax.set_xscale('log')
     ax.set_yscale('log')
     #plt.xlim([0.02, 50])
