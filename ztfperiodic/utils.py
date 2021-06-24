@@ -1952,6 +1952,8 @@ def get_matchfile(kow, filename, min_epochs = 1,
     e.g.: f = '/path/to/fr000551-000600/ztf_000593_zr_c04_q3_match.pytable'
     """
 
+    start = time.time()
+
     tmax = Time('2020-06-30T00:00:00', format='isot', scale='utc').jd
 
     bands = {'g': 1, 'r': 2, 'i': 3, 'z': 4, 'J': 5}
@@ -2195,6 +2197,10 @@ def get_matchfile(kow, filename, min_epochs = 1,
         newbaseline = max(hjd)-min(hjd)
         if newbaseline>baseline:
             baseline=newbaseline
+
+    end = time.time()
+    loadtime = end - start
+    print('Loaded %d lightcurves in %.5f seconds' % (len(lightcurves), loadtime))
 
     return [lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline]
 

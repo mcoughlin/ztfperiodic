@@ -41,14 +41,14 @@ pcklFile = os.path.join(outputDir,"data.pkl")
 logsDir = os.path.join(opts.condorDir,"logs")
 
 if not os.path.isfile(pcklFile):
-    logfiles = glob.glob(os.path.join(logsDir,"*out*"))
+    logfiles = glob.glob(os.path.join(logsDir,"*out*")) + glob.glob(os.path.join(logsDir,"*.sub.o*"))
     analysis_times, kowalski_times, objects = [], [], []
 
     if opts.runtype == "periods":
         data_out = np.empty((0,6))
         #logfiles = logfiles[:1000]
         for ii, logfile in enumerate(logfiles):
-            num = int(logfile.split("/")[-1].split(".")[-1])
+            num = int(logfile.split("/")[-1].split(".")[-1].replace("o",""))
 
             if np.mod(ii,100) == 0:
                 print('Loading %d/%d' % (ii, len(logfiles)))
@@ -107,6 +107,8 @@ if not os.path.isfile(pcklFile):
 
 with open(pcklFile, 'rb') as handle:
     data_out = pickle.load(handle)
+
+print(data_out)
 
 if opts.runtype == "periods":
 
