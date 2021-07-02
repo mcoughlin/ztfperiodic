@@ -1510,14 +1510,14 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
 def get_featuresetnames(featuresetname):
 
-    feature_all = ['ra', 'dec', 'period', 'significance', 'pdot', 'n', 'median', 'wmean', 'chi2red', 'roms', 'wstd', 'norm_peak_to_peak_amp', 'norm_excess_var', 'median_abs_dev', 'iqr', 'f60', 'f70', 'f80', 'f90', 'skew', 'smallkurt', 'inv_vonneumannratio', 'welch_i', 'stetson_j', 'stetson_k', 'ad', 'sw', 'f1_power', 'f1_bic', 'f1_a', 'f1_b', 'f1_amp', 'f1_phi0', 'f1_relamp1', 'f1_relphi1', 'f1_relamp2', 'f1_relphi2', 'f1_relamp3', 'f1_relphi3', 'f1_relamp4', 'f1_relphi5', 'n_ztf_alerts', 'mean_ztf_alert_braai', 'dmdt', 'AllWISE___id', 'AllWISE__w1mpro', 'AllWISE__w1sigmpro', 'AllWISE__w2mpro', 'AllWISE__w2sigmpro', 'AllWISE__w3mpro', 'AllWISE__w3sigmpro', 'AllWISE__w4mpro', 'AllWISE__w4sigmpro', 'AllWISE__ph_qual', 'Gaia_DR2___id', 'Gaia_DR2__phot_g_mean_mag', 'Gaia_DR2__phot_bp_mean_mag', 'Gaia_DR2__phot_rp_mean_mag', 'Gaia_DR2__parallax', 'Gaia_DR2__parallax_error', 'Gaia_DR2__pmra', 'Gaia_DR2__pmra_error', 'Gaia_DR2__pmdec', 'Gaia_DR2__pmdec_error', 'Gaia_DR2__astrometric_excess_noise', 'Gaia_DR2__phot_bp_rp_excess_factor', 'PS1_DR1___id', 'PS1_DR1__gMeanPSFMag', 'PS1_DR1__gMeanPSFMagErr', 'PS1_DR1__rMeanPSFMag', 'PS1_DR1__rMeanPSFMagErr', 'PS1_DR1__iMeanPSFMag', 'PS1_DR1__iMeanPSFMagErr', 'PS1_DR1__zMeanPSFMag', 'PS1_DR1__zMeanPSFMagErr', 'PS1_DR1__yMeanPSFMag', 'PS1_DR1__yMeanPSFMagErr', 'PS1_DR1__qualityFlag']
+    feature_all = ['ra', 'dec', 'period', 'significance', 'pdot', 'n', 'median', 'wmean', 'chi2red', 'roms', 'wstd', 'norm_peak_to_peak_amp', 'norm_excess_var', 'median_abs_dev', 'iqr', 'i60r', 'i70r', 'i80r', 'i90r', 'skew', 'smallkurt', 'inv_vonneumannratio', 'welch_i', 'stetson_j', 'stetson_k', 'ad', 'sw', 'f1_power', 'f1_BIC', 'f1_a', 'f1_b', 'f1_amp', 'f1_phi0', 'f1_relamp1', 'f1_relphi1', 'f1_relamp2', 'f1_relphi2', 'f1_relamp3', 'f1_relphi3', 'f1_relamp4', 'f1_relphi5', 'n_ztf_alerts', 'mean_ztf_alert_braai', 'dmdt', 'AllWISE___id', 'AllWISE__w1mpro', 'AllWISE__w1sigmpro', 'AllWISE__w2mpro', 'AllWISE__w2sigmpro', 'AllWISE__w3mpro', 'AllWISE__w3sigmpro', 'AllWISE__w4mpro', 'AllWISE__w4sigmpro', 'AllWISE__ph_qual', 'Gaia_DR2___id', 'Gaia_DR2__phot_g_mean_mag', 'Gaia_DR2__phot_bp_mean_mag', 'Gaia_DR2__phot_rp_mean_mag', 'Gaia_DR2__parallax', 'Gaia_DR2__parallax_error', 'Gaia_DR2__pmra', 'Gaia_DR2__pmra_error', 'Gaia_DR2__pmdec', 'Gaia_DR2__pmdec_error', 'Gaia_DR2__astrometric_excess_noise', 'Gaia_DR2__phot_bp_rp_excess_factor', 'PS1_DR1___id', 'PS1_DR1__gMeanPSFMag', 'PS1_DR1__gMeanPSFMagErr', 'PS1_DR1__rMeanPSFMag', 'PS1_DR1__rMeanPSFMagErr', 'PS1_DR1__iMeanPSFMag', 'PS1_DR1__iMeanPSFMagErr', 'PS1_DR1__zMeanPSFMag', 'PS1_DR1__zMeanPSFMagErr', 'PS1_DR1__yMeanPSFMag', 'PS1_DR1__yMeanPSFMagErr', 'PS1_DR1__qualityFlag']
 
     feature_set11 = ['median', 'wmean', 'chi2red', 'roms', 'wstd', 'norm_peak_to_peak_amp',
-           'norm_excess_var', 'median_abs_dev', 'iqr', 'f60', 'f70', 'f80', 'f90',
+           'norm_excess_var', 'median_abs_dev', 'iqr', 'i60r', 'i70r', 'i80r', 'i90r',
            'skew', 'smallkurt', 'inv_vonneumannratio', 'welch_i', 'stetson_j',
            'stetson_k', 'ad', 'sw']
     
-    feature_set12 = ['f1_power', 'f1_bic', 'f1_a', 'f1_b', 'f1_amp',
+    feature_set12 = ['f1_power', 'f1_BIC', 'f1_a', 'f1_b', 'f1_amp',
            'f1_phi0', 'f1_relamp1', 'f1_relphi1', 'f1_relamp2', 'f1_relphi2',
            'f1_relamp3', 'f1_relphi3', 'f1_relamp4', 'f1_relphi5']
     
@@ -1553,10 +1553,10 @@ def get_featuresetnames(featuresetname):
            'Gaia_DR2__astrometric_excess_noise']
    
     phenomenological = ['dmdt', 'ad', 'chi2red', 'f1_a', 'f1_amp' ,'f1_b', 
-                        'f1_bic', 'f1_phi0', 'f1_power', 'f1_relamp1',
+                        'f1_BIC', 'f1_phi0', 'f1_power', 'f1_relamp1',
                         'f1_relamp2', 'f1_relamp3', 'f1_relamp4',
                         'f1_relphi1', 'f1_relphi2', 'f1_relphi3',
-                        'f1_relphi5', 'f60', 'f70', 'f80', 'f90',
+                        'f1_relphi4', 'i60r', 'i70r', 'i80r', 'i90r',
                         'inv_vonneumannratio', 'iqr', 'median',
                         'median_abs_dev', 'norm_excess_var',
                         'norm_peak_to_peak_amp', 'pdot', 'period',

@@ -889,12 +889,20 @@ class Dataset(object):
         if self.verbose:
             print('Moving dmdt\'s to a dedicated numpy array...')
             for i in tqdm(self.df_ds.itertuples(), total=len(self.df_ds)):
-                dmdt.append(np.asarray(literal_eval(self.df_ds['dmdt'][i.Index])))
+                #if i.Index > 10: continue
+                var = np.asarray(literal_eval(self.df_ds['dmdt'][i.Index]))
+                if not var.shape == (26,26):
+                    var = np.zeros((26,26))
+                dmdt.append(var)
         else:
             for i in self.df_ds.itertuples():
-                dmdt.append(np.asarray(literal_eval(self.df_ds['dmdt'][i.Index])))
-        self.dmdt = np.array(dmdt)
-        self.dmdt = np.expand_dims(self.dmdt, axis=-1)
+                var = np.asarray(literal_eval(self.df_ds['dmdt'][i.Index]))
+                if not var.shape == (26,26):
+                    var = np.zeros((26,26))
+                dmdt.append(var)
+        self.dmdt = np.dstack(dmdt)
+        self.dmdt = np.transpose(self.dmdt, (2, 0, 1))
+        #self.dmdt = np.expand_dims(self.dmdt, axis=-1)
 
         # drop in df_ds:
         self.df_ds.drop(columns='dmdt', inplace=True)
@@ -976,13 +984,15 @@ class Dataset(object):
         # Obviously, the same norms will have to be applied at the testing and serving stages.
 
         # load/compute feature norms:
-        if not path_norms:
+        if not path_norms or not os.path.isfile(path_norms):
             norms = {feature: np.linalg.norm(self.df_ds.loc[ds_indexes, feature]) for feature in self.features}
             for feature, norm in norms.items():
                 if np.isnan(norm) or norm == 0.0:
                     norms[feature] = 1.0
             if self.verbose:
                 print('Computed feature norms:\n', norms)
+            with open(path_norms, 'w') as f:
+                json.dump(norms, f)
         else:
             with open(path_norms, 'r') as f:
                 norms = json.load(f)

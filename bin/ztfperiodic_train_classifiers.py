@@ -47,9 +47,9 @@ def parse_commandline():
     Parse the options given on the command-line.
     """
     parser = optparse.OptionParser()
-    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/labels")
-    parser.add_option("-t","--tag",default="d12")
-    parser.add_option("-n","--normFile",default="/home/michael.coughlin/ZTF/ZTFVariability/pipeline/saved_models/norms.20200615.json")
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/labels_d14")
+    parser.add_option("-t","--tag",default="d14")
+    parser.add_option("-n","--normFile",default="/home/michael.coughlin/ZTF/labels_d14/norms.20210702.json")
 
     opts, args = parser.parse_args()
 
@@ -58,7 +58,7 @@ def parse_commandline():
 # Parse command line
 opts = parse_commandline()
 
-catalogs = {'features': 'ZTF_source_features_20191101',
+catalogs = {'features': 'ZTF_source_features_DR3',
             'sources': 'ZTF_sources_20200401'}
 
 outputDir = opts.outputDir
@@ -179,8 +179,8 @@ for label in sorted(target_labels.keys()):
     # class_weight = {0: 2, 1: 1}
     # class_weight = {0: 1, 1: 2.5}
     # class_weight = {0: 1.1, 1: 1}
-    epochs = 300
-    # epochs = 20
+    # epochs = 300
+    epochs = 20
     
     classifier.meta['callbacks'].append(TqdmCallback(verbose=1))
     
