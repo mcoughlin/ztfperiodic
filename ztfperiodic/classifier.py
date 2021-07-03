@@ -856,9 +856,9 @@ class Dataset(object):
         path_labels: str = '../labels',
         features=(
             'ad', 'chi2red', 'f1_a', 'f1_amp', 'f1_b',
-            'f1_bic', 'f1_phi0', 'f1_power', 'f1_relamp1', 'f1_relamp2',
+            'f1_BIC', 'f1_phi0', 'f1_power', 'f1_relamp1', 'f1_relamp2',
             'f1_relamp3', 'f1_relamp4', 'f1_relphi1', 'f1_relphi2', 'f1_relphi3',
-            'f1_relphi5', 'f60', 'f70', 'f80', 'f90', 'inv_vonneumannratio', 'iqr',
+            'f1_relphi4', 'i60r', 'i70r', 'i80r', 'i90r', 'inv_vonneumannratio', 'iqr',
             'median', 'median_abs_dev',
             # 'n',
             'norm_excess_var', 'norm_peak_to_peak_amp', 'pdot', 'period', 'roms', 'significance',

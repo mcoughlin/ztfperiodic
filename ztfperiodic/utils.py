@@ -47,7 +47,7 @@ def gaia_query(ra_deg, dec_deg, rad_deg, maxmag=25,
     returns: astropy.table object
     
     See below for explanation:
-    https://gea.esac.esa.int/archive/documentation/GDR2/Gaia_archive/chap_datamodel/sec_dm_main_tables/ssec_dm_gaia_source.html
+    https://gea.esac.esa.int/archive/documentation/GEDR3/Gaia_archive/chap_datamodel/sec_dm_main_tables/ssec_dm_gaia_source.html
     
     """
     vquery = Vizier(columns=['all'], column_filters={"phot_g_mean_mag":
@@ -246,7 +246,7 @@ def get_catalog(data):
 
 def get_kowalski_external(ra, dec, kow, radius = 5.0):
 
-    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_eDR3": { "filter": "{}", "projection": "{}"}, "AllWISE": { "filter": "{}", "projection": "{}" }, "PS1_DR1": { "filter": "{}", "projection": "{}"}, "GALEX": { "filter": "{}", "projection": "{}"} } } }
+    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_EDR3": { "filter": "{}", "projection": "{}"}, "AllWISE": { "filter": "{}", "projection": "{}" }, "PS1_DR1": { "filter": "{}", "projection": "{}"}, "GALEX": { "filter": "{}", "projection": "{}"} } } }
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
@@ -257,7 +257,7 @@ def get_kowalski_external(ra, dec, kow, radius = 5.0):
         print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec))
         return {}
 
-    key1, key2, key3, key4 = 'PS1_DR1', 'Gaia_eDR3', 'AllWISE', 'GALEX'
+    key1, key2, key3, key4 = 'PS1_DR1', 'Gaia_EDR3', 'AllWISE', 'GALEX'
     data1, data2 = r["data"][key1], r["data"][key2]
     data3, data4 = r["data"][key3], r["data"][key4]
     key = list(data1.keys())[0]
@@ -359,7 +359,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
     tmax = Time('2020-06-30T00:00:00', format='isot', scale='utc').jd
 
     #qu = { "query_type": "cone_search", "object_coordinates": { "radec": "[(%.5f,%.5f)]"%(ra,dec), "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20191101": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'filter': 1}" } } }
-    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20210401": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_eDR3": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_g_mean_mag_err': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } } }
+    qu = { "query_type": "cone_search", "query": {"object_coordinates": {"radec": {'test': [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "ZTF_sources_20210401": { "filter": "{}", "projection": "{'data.hjd': 1, 'data.mag': 1, 'data.magerr': 1, 'data.programid': 1, 'data.maglim': 1, 'data.ra': 1, 'data.dec': 1, 'data.catflags': 1, 'filter': 1}" }, "Gaia_EDR3": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_g_mean_mag_err': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"}, "ZTF_alerts": { "filter": "{}", "projection": "{'candidate.jd': 1,'candidate.fid': 1, 'candidate.magpsf': 1, 'candidate.sigmapsf': 1, 'candidate.magnr': 1, 'candidate.sigmagnr': 1, 'candidate.distnr': 1, 'candidate.fid': 1, 'candidate.programid': 1, 'candidate.maglim': 1, 'candidate.isdiffpos': 1, 'candidate.ra': 1, 'candidate.dec': 1}" } } } }
 
     start = time.time()
     r = database_query(kow, qu, nquery = 10)
@@ -370,7 +370,7 @@ def get_kowalski(ra, dec, kow, radius = 5.0, oid = None,
         print("Query for RA: %.5f, Dec: %.5f failed... returning."%(ra,dec)) 
         return {}
 
-    key1, key2, key3 = 'ZTF_sources_20210401', 'Gaia_eDR3', 'ZTF_alerts'
+    key1, key2, key3 = 'ZTF_sources_20210401', 'Gaia_EDR3', 'ZTF_alerts'
     data1, data2, data3 = r["data"][key1], r["data"][key2], r["data"][key3]
     key = list(data1.keys())[0]
     data = data1[key]
@@ -780,7 +780,7 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
         nlightcurves = 1
 
         radius = 5
-        qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": {'test': [np.median(ra),np.median(dec)]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_eDR3": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"} } }}
+        qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": {'test': [np.median(ra),np.median(dec)]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_EDR3": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"} } }}
 
         r = database_query(kow, qu, nquery = 10)
 
@@ -789,7 +789,7 @@ def get_kowalski_objid(objids, kow, program_ids = [1,2,3], min_epochs = 1,
 
         absmag, bp_rp = [np.nan, np.nan, np.nan], [np.nan, np.nan]
         if "data" in r:
-            key2 = 'Gaia_eDR3'
+            key2 = 'Gaia_EDR3'
             data2 = r["data"][key2]
             key = list(data2.keys())[0]
             data2 = data2[key]
@@ -1510,7 +1510,7 @@ def get_kowalski_bulk(field, ccd, quadrant, kow,
 
 def get_featuresetnames(featuresetname):
 
-    feature_all = ['ra', 'dec', 'period', 'significance', 'pdot', 'n', 'median', 'wmean', 'chi2red', 'roms', 'wstd', 'norm_peak_to_peak_amp', 'norm_excess_var', 'median_abs_dev', 'iqr', 'i60r', 'i70r', 'i80r', 'i90r', 'skew', 'smallkurt', 'inv_vonneumannratio', 'welch_i', 'stetson_j', 'stetson_k', 'ad', 'sw', 'f1_power', 'f1_BIC', 'f1_a', 'f1_b', 'f1_amp', 'f1_phi0', 'f1_relamp1', 'f1_relphi1', 'f1_relamp2', 'f1_relphi2', 'f1_relamp3', 'f1_relphi3', 'f1_relamp4', 'f1_relphi5', 'n_ztf_alerts', 'mean_ztf_alert_braai', 'dmdt', 'AllWISE___id', 'AllWISE__w1mpro', 'AllWISE__w1sigmpro', 'AllWISE__w2mpro', 'AllWISE__w2sigmpro', 'AllWISE__w3mpro', 'AllWISE__w3sigmpro', 'AllWISE__w4mpro', 'AllWISE__w4sigmpro', 'AllWISE__ph_qual', 'Gaia_DR2___id', 'Gaia_DR2__phot_g_mean_mag', 'Gaia_DR2__phot_bp_mean_mag', 'Gaia_DR2__phot_rp_mean_mag', 'Gaia_DR2__parallax', 'Gaia_DR2__parallax_error', 'Gaia_DR2__pmra', 'Gaia_DR2__pmra_error', 'Gaia_DR2__pmdec', 'Gaia_DR2__pmdec_error', 'Gaia_DR2__astrometric_excess_noise', 'Gaia_DR2__phot_bp_rp_excess_factor', 'PS1_DR1___id', 'PS1_DR1__gMeanPSFMag', 'PS1_DR1__gMeanPSFMagErr', 'PS1_DR1__rMeanPSFMag', 'PS1_DR1__rMeanPSFMagErr', 'PS1_DR1__iMeanPSFMag', 'PS1_DR1__iMeanPSFMagErr', 'PS1_DR1__zMeanPSFMag', 'PS1_DR1__zMeanPSFMagErr', 'PS1_DR1__yMeanPSFMag', 'PS1_DR1__yMeanPSFMagErr', 'PS1_DR1__qualityFlag']
+    feature_all = ['ra', 'dec', 'period', 'significance', 'pdot', 'n', 'median', 'wmean', 'chi2red', 'roms', 'wstd', 'norm_peak_to_peak_amp', 'norm_excess_var', 'median_abs_dev', 'iqr', 'i60r', 'i70r', 'i80r', 'i90r', 'skew', 'smallkurt', 'inv_vonneumannratio', 'welch_i', 'stetson_j', 'stetson_k', 'ad', 'sw', 'f1_power', 'f1_BIC', 'f1_a', 'f1_b', 'f1_amp', 'f1_phi0', 'f1_relamp1', 'f1_relphi1', 'f1_relamp2', 'f1_relphi2', 'f1_relamp3', 'f1_relphi3', 'f1_relamp4', 'f1_relphi5', 'n_ztf_alerts', 'mean_ztf_alert_braai', 'dmdt', 'AllWISE___id', 'AllWISE__w1mpro', 'AllWISE__w1sigmpro', 'AllWISE__w2mpro', 'AllWISE__w2sigmpro', 'AllWISE__w3mpro', 'AllWISE__w3sigmpro', 'AllWISE__w4mpro', 'AllWISE__w4sigmpro', 'AllWISE__ph_qual', 'Gaia_EDR3___id', 'Gaia_EDR3__phot_g_mean_mag', 'Gaia_EDR3__phot_bp_mean_mag', 'Gaia_EDR3__phot_rp_mean_mag', 'Gaia_EDR3__parallax', 'Gaia_EDR3__parallax_error', 'Gaia_EDR3__pmra', 'Gaia_EDR3__pmra_error', 'Gaia_EDR3__pmdec', 'Gaia_EDR3__pmdec_error', 'Gaia_EDR3__astrometric_excess_noise', 'Gaia_EDR3__phot_bp_rp_excess_factor', 'PS1_DR1___id', 'PS1_DR1__gMeanPSFMag', 'PS1_DR1__gMeanPSFMagErr', 'PS1_DR1__rMeanPSFMag', 'PS1_DR1__rMeanPSFMagErr', 'PS1_DR1__iMeanPSFMag', 'PS1_DR1__iMeanPSFMagErr', 'PS1_DR1__zMeanPSFMag', 'PS1_DR1__zMeanPSFMagErr', 'PS1_DR1__yMeanPSFMag', 'PS1_DR1__yMeanPSFMagErr', 'PS1_DR1__qualityFlag']
 
     feature_set11 = ['median', 'wmean', 'chi2red', 'roms', 'wstd', 'norm_peak_to_peak_amp',
            'norm_excess_var', 'median_abs_dev', 'iqr', 'i60r', 'i70r', 'i80r', 'i90r',
@@ -1532,14 +1532,14 @@ def get_featuresetnames(featuresetname):
            'AllWISE__w2mpro', 'AllWISE__w2sigmpro', 'AllWISE__w3mpro',
            'AllWISE__w3sigmpro', 'AllWISE__w4mpro', 'AllWISE__w4sigmpro',
     #       'AllWISE__ph_qual', 
-    #        'Gaia_DR2___id', 
-            'Gaia_DR2__phot_g_mean_mag',
-           'Gaia_DR2__phot_bp_mean_mag', 'Gaia_DR2__phot_rp_mean_mag',
-           'Gaia_DR2__parallax',
-    #    'Gaia_DR2__parallax_error', 'Gaia_DR2__pmra',
-    #       'Gaia_DR2__pmra_error', 'Gaia_DR2__pmdec', 'Gaia_DR2__pmdec_error',
-    #       'Gaia_DR2__astrometric_excess_noise',
-           'Gaia_DR2__phot_bp_rp_excess_factor',
+    #        'Gaia_EDR3___id', 
+            'Gaia_EDR3__phot_g_mean_mag',
+           'Gaia_EDR3__phot_bp_mean_mag', 'Gaia_EDR3__phot_rp_mean_mag',
+           'Gaia_EDR3__parallax',
+    #    'Gaia_EDR3__parallax_error', 'Gaia_EDR3__pmra',
+    #       'Gaia_EDR3__pmra_error', 'Gaia_EDR3__pmdec', 'Gaia_EDR3__pmdec_error',
+    #       'Gaia_EDR3__astrometric_excess_noise',
+           'Gaia_EDR3__phot_bp_rp_excess_factor',
     #    'PS1_DR1___id',
            'PS1_DR1__gMeanPSFMag', 'PS1_DR1__gMeanPSFMagErr',
            'PS1_DR1__rMeanPSFMag', 'PS1_DR1__rMeanPSFMagErr',
@@ -1548,9 +1548,9 @@ def get_featuresetnames(featuresetname):
            'PS1_DR1__yMeanPSFMag', 'PS1_DR1__yMeanPSFMagErr',
     #       'PS1_DR1__qualityFlag'
             ]
-    feature_set32 = ['Gaia_DR2__parallax_error', 'Gaia_DR2__pmra',
-           'Gaia_DR2__pmra_error', 'Gaia_DR2__pmdec', 'Gaia_DR2__pmdec_error',
-           'Gaia_DR2__astrometric_excess_noise']
+    feature_set32 = ['Gaia_EDR3__parallax_error', 'Gaia_EDR3__pmra',
+           'Gaia_EDR3__pmra_error', 'Gaia_EDR3__pmdec', 'Gaia_EDR3__pmdec_error',
+           'Gaia_EDR3__astrometric_excess_noise']
    
     phenomenological = ['dmdt', 'ad', 'chi2red', 'f1_a', 'f1_amp' ,'f1_b', 
                         'f1_BIC', 'f1_phi0', 'f1_power', 'f1_relamp1',
@@ -1572,17 +1572,17 @@ def get_featuresetnames(featuresetname):
                                       'AllWISE__w3sigmpro',
                                       'AllWISE__w4mpro',
                                       'AllWISE__w4sigmpro',
-                                      'Gaia_DR2__phot_g_mean_mag',
-                                      'Gaia_DR2__phot_bp_mean_mag',
-                                      'Gaia_DR2__phot_rp_mean_mag',
-                                      'Gaia_DR2__parallax',
-                                      'Gaia_DR2__parallax_error',
-                                      'Gaia_DR2__pmra',
-                                      'Gaia_DR2__pmra_error',
-                                      'Gaia_DR2__pmdec',
-                                      'Gaia_DR2__pmdec_error',
-                                      'Gaia_DR2__astrometric_excess_noise',
-                                      'Gaia_DR2__phot_bp_rp_excess_factor',
+                                      'Gaia_EDR3__phot_g_mean_mag',
+                                      'Gaia_EDR3__phot_bp_mean_mag',
+                                      'Gaia_EDR3__phot_rp_mean_mag',
+                                      'Gaia_EDR3__parallax',
+                                      'Gaia_EDR3__parallax_error',
+                                      'Gaia_EDR3__pmra',
+                                      'Gaia_EDR3__pmra_error',
+                                      'Gaia_EDR3__pmdec',
+                                      'Gaia_EDR3__pmdec_error',
+                                      'Gaia_EDR3__astrometric_excess_noise',
+                                      'Gaia_EDR3__phot_bp_rp_excess_factor',
                                       'PS1_DR1__gMeanPSFMag',
                                       'PS1_DR1__gMeanPSFMagErr',
                                       'PS1_DR1__rMeanPSFMag',
@@ -2116,7 +2116,7 @@ def get_matchfile(kow, filename, min_epochs = 1,
 
         if not kow is None:
             radius = 5
-            qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": {'test': [np.float64(np.median(ra)),np.float64(np.median(dec))]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_eDR3": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"} } }}
+            qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": {'test': [np.float64(np.median(ra)),np.float64(np.median(dec))]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { "Gaia_EDR3": { "filter": "{}", "projection": "{'parallax': 1, 'parallax_error': 1, 'phot_g_mean_mag': 1, 'phot_bp_mean_mag': 1, 'phot_rp_mean_mag': 1, 'phot_bp_mean_flux_over_error': 1, 'phot_rp_mean_flux_over_error': 1, 'ra': 1, 'dec': 1}"} } }}
 
             r = database_query(kow, qu, nquery = 10)
 
@@ -2131,7 +2131,7 @@ def get_matchfile(kow, filename, min_epochs = 1,
 
         if not kow is None:
             if "data" in r:
-                key2 = 'Gaia_eDR3'
+                key2 = 'Gaia_EDR3'
                 data2 = r["data"][key2]
                 key = list(data2.keys())[0]
                 data2 = data2[key]
