@@ -66,9 +66,9 @@ def parse_commandline():
     #parser.add_option("--doUpload",  action="store_true", default=False)
 
     #parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output_features_20Fields/catalog/compare/bw/")
-    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/labels")
+    parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/labels_d14")
 
-    parser.add_option("-t","--tag",default="d12")
+    parser.add_option("-t","--tag",default="d14")
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
@@ -148,6 +148,25 @@ def get_program_ids(tag):
             91,
             94, 95, 96, 97, 98, 101, 102
         ]
+    elif tag == 'd13' or tag == "d14":
+        zvm_program_ids = [
+            3, 4, 5, 6, 9,
+            11, 12, 13, 14, 15, 16, 17, 18, 19,
+            20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+            30, 31, 32, 33, 34, 36, 37,
+            40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+            51, 53, 54, 56, 58,
+            60, 61, 62, 63, 64, 65, 66, 67, 68, 69,
+            70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
+            81, 82, 89,
+            91, 94, 95, 96, 97, 98,
+            101, 102, 103, 104, 105, 106, 107, 108, 109,
+            111, 112, 113, 114, 115, 116, 117, 118, 119,
+            120, 121, 122, 123, 124, 125, 126, 127, 128, 129,
+            130, 131, 132, 133, 134, 135, 136, 137, 138, 139,
+            140, 141, 142, 143, 144, 145, 146, 147, 148
+        ]
+
 
     return zvm_program_ids
 
@@ -194,31 +213,47 @@ def get_labels(zvm_id):
              }
          }
         }
+    qu = zvmarshal.query(query=q)
+    if qu.get('result') is not None:
+        r = qu.get('result').get('result_data').get('query_result')
+        #print(r)
+        return {'zvm_id': zvm_id, 'labels': r[0]['labels']}
+    else:
+        return None
 
-    r = zvmarshal.query(query=q).get('result').get('result_data').get('query_result')
-    #print(r)
-    return {'zvm_id': zvm_id, 'labels': r[0]['labels']}
+def get_features(source):
+    zvm_id = str(source.zvm_id)
+    q = {
+        "query_type": "near",
+        "query": {
+            "max_distance": 2,
+            "distance_units": "arcsec",
+            "radec": {
+                zvm_id: [float(source.ra), float(source.dec)]
+            },
+            "catalogs": {
+                catalogs["features"]: {
+                    "filter": {},
+                    "projection": {
+                        "coordinates": 0
+                    }
+                }
+            }
+        },
+    }
+    r = kow.query(query=q).get("data").get(catalogs["features"]).get(zvm_id)
 
-def get_features(ztf_id):
-    # fixme: cross_matches are omitted for now
-    q = {'query_type': 'find',
-         'query': {
-             'catalog': catalogs['features'],
-             'filter': {'_id': int(ztf_id)},
-             'projection': {'coordinates': 0, 'cross_matches': 0}
-         }}
-
-    r = database_query(kow,q)
-    if not bool(r):
-        return {}
-    r = r.get('result_data').get('query_result')[0]
+    for lc in r:
+        lc["ztf_id"] = lc["_id"]
+        lc.pop("_id")
+        lc["zvm_id"] = zvm_id
 
     return r
 
 # Parse command line
 opts = parse_commandline()
 
-catalogs = {'features': 'ZTF_source_features_20191101',
+catalogs = {'features': 'ZTF_source_features_DR3',
             'sources': 'ZTF_sources_20200401'}
 
 outputDir = opts.outputDir
@@ -232,7 +267,11 @@ nquery = 10
 cnt = 0
 while cnt < nquery:
     try:
-        kow = Kowalski(username=opts.user, password=opts.pwd)
+        TIMEOUT = 60
+        protocol, host, port = "https", "gloria.caltech.edu", 443
+        kow = Kowalski(username=opts.user, password=opts.pwd,
+                       timeout=TIMEOUT,
+                       protocol=protocol, host=host, port=port)
         break
     except:
         time.sleep(5)
@@ -298,7 +337,8 @@ if not os.path.isfile(dfmfile):
                  'labels.0': {'$exists': True}
              },
              'projection': {
-                 'lc.id': 1
+                 "ra": 1,
+                 "dec": 1
              }
          }
         }
@@ -306,28 +346,27 @@ if not os.path.isfile(dfmfile):
     
     ids = []
     for s in r:
-        for i in s['lc']:
-            ids.append({'ztf_id': i['id'], 'zvm_id': s['_id']})
+        ids.append({'ra': s['ra'], 'dec': s['dec'], 'zvm_id': s['_id']})
     df_i = pd.DataFrame.from_records(ids)
     #df_i = df_i[:10000]
     
-    print('Checking objects for features...')
-    if opts.doParallel:
-        r = ProgressParallel(n_jobs=opts.Ncore,use_tqdm=True,total=len(df_i['ztf_id'].unique()))(delayed(is_ingested)(ztf_id) for ztf_id in df_i['ztf_id'].unique())
-    else:
-        r = []
-        for ii, ztf_id in enumerate(df_i['ztf_id'].unique()):
-            if np.mod(ii, 100) == 0:
-                print('Checked object %d/%d' % (ii+1, len(df_i['ztf_id'].unique())))
-            r.append(is_ingested(ztf_id))
-    
-    df_r = pd.DataFrame.from_records(r)    
-    df_m = pd.merge(df_r, df_i, on='ztf_id')
-    df_m.to_hdf(dfmfile, key='df_merged', mode='w')
+    #print('Checking objects for features...')
+    #if opts.doParallel:
+    #    r = ProgressParallel(n_jobs=opts.Ncore,use_tqdm=True,total=len(df_i['ztf_id'].unique()))(delayed(is_ingested)(ztf_id) for ztf_id in df_i['ztf_id'].unique())
+    #else:
+    #    r = []
+    #    for ii, ztf_id in enumerate(df_i['ztf_id'].unique()):
+    #        if np.mod(ii, 100) == 0:
+    #            print('Checked object %d/%d' % (ii+1, len(df_i['ztf_id'].unique())))
+    #        r.append(is_ingested(ztf_id))
+    #
+    #df_r = pd.DataFrame.from_records(r)    
+    #df_m = pd.merge(df_r, df_i, on='ztf_id')
+    df_i.to_hdf(dfmfile, key='df_merged', mode='w')
 else:
-    df_m = pd.read_hdf(dfmfile, key='df_merged')
+    df_i = pd.read_hdf(dfmfile, key='df_merged')
 
-zvm_ids = set(df_m.loc[df_m['ingested'] == 1, 'zvm_id'].values)
+zvm_ids = df_i['zvm_id'].unique()
 
 dflabelsfile = os.path.join(outputDir, 'df_zvm_labels.hdf5')
 if not os.path.isfile(dflabelsfile):
@@ -365,8 +404,8 @@ for tu in df_zvm_labels.itertuples():
     labels_source.append(dict(**{'zvm_id': tu.zvm_id}, **_l))
 
 df_labels_source = pd.DataFrame.from_records(labels_source).fillna(0)
-df_labels = pd.merge(df_m, df_labels_source,
-                     on='zvm_id').drop_duplicates('ztf_id').reset_index(drop=True)
+df_labels = pd.merge(df_i, df_labels_source,
+                     on='zvm_id').reset_index(drop=True)
 
 df_label_stats = pd.DataFrame(labels,
                               columns=['type',
@@ -376,30 +415,34 @@ df_label_stats['number'] = 0
 
 for dl in df_labels.columns.values[5:]:
     ww = df_label_stats['label'] == dl
-    df_label_stats.loc[ww, 'number'] = ((df_labels[dl] > 0.0) & (df_labels['ingested'] == 1)).sum()
-
-ztf_ids = sorted(df_m.loc[df_m['ingested'] == 1, 'ztf_id'].unique())
+    df_label_stats.loc[ww, 'number'] = (df_labels[dl] > 0.0).sum()
 
 dffeaturesfile = os.path.join(outputDir, 'df_features.hdf5')
 if not os.path.isfile(dffeaturesfile):
     print('Pulling labels...')
     if opts.doParallel:
-        features = ProgressParallel(n_jobs=opts.Ncore,use_tqdm=True,total=len(ztf_ids))(delayed(get_features)(ztf_id) for ztf_id in ztf_ids)
+        #features = ProgressParallel(n_jobs=opts.Ncore,use_tqdm=True,total=len(df_labels))(delayed(get_features)(df_label) for df_label in df_labels.itertuples())
+        import multiprocessing as mp
+        from multiprocessing.pool import ThreadPool
+
+        with ThreadPool(processes=opts.Ncore) as pool:
+            features = list(tqdm(pool.imap(get_features, df_labels.itertuples()), total=len(df_labels)))
+
     else:
         features = []
-        for ii, ztf_id in enumerate(ztf_ids):
+        for ii, df_label in enumerate(df_labels.itertuples()):
             if np.mod(ii, 100) == 0:
-                print('Getting features for object %d/%d' % (ii+1, len(ztf_ids)))
-            features.append(get_features(ztf_id))
+                print('Getting features for object %d/%d' % (ii+1, len(df_labels)))
+            features.append(get_features(df_label))
 
+    features = list(np.concatenate(features).flat)
     df_features = pd.DataFrame(features).fillna(0)
-    df_features.rename(columns={"_id": "ztf_id"}, inplace=True)
     df_features.to_hdf(dffeaturesfile, key='df_merged', mode='w')
 else:
     df_features = pd.read_hdf(dffeaturesfile, key='df_merged')
 
 ### Merge labels and features into single df
-df_ds = pd.merge(df_labels[df_labels['ingested'] == 1], df_features, on='ztf_id')
+df_ds = pd.merge(df_labels, df_features, on='zvm_id')
 # keep ra/dec's of the individual light curves (ztf_id)
 df_ds.drop(['ra_x', 'dec_x'], axis=1, inplace=True)
 df_ds.rename(columns={"ra_y": "ra", "dec_y": "dec"}, inplace=True)

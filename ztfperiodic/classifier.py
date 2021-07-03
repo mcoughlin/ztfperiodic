@@ -69,7 +69,7 @@ class DNN(AbstractClassifier):
 
     def setup(self, features_shape=(41, ), dmdt_shape=(26, 26, 1), dense_branch=True, conv_branch=True,
               loss='binary_crossentropy', optimizer='adam', callbacks=('early_stopping', 'tensorboard'),
-              tag=None, logdir='logs', **kwargs):
+              tag=None, logdir='logs', histogram_freq=0, **kwargs):
 
         tf.keras.backend.clear_session()
 
@@ -131,7 +131,7 @@ class DNN(AbstractClassifier):
                     log_tag = f'{self.name.replace(" ", "_")}-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
                 logdir_tag = os.path.join('logs', log_tag)
                 tensorboard_callback = tf.keras.callbacks.TensorBoard(os.path.join(logdir_tag, log_tag),
-                                                                      histogram_freq=1)
+                                                                      histogram_freq=histogram_freq)
                 self.meta['callbacks'].append(tensorboard_callback)
 
         self.model.compile(optimizer=self.meta['optimizer'],
@@ -742,7 +742,7 @@ class DNNTunable(DNN):
     def setup(
         self, features_shape=(41,), dmdt_shape=(26, 26, 1), dense_branch=True, conv_branch=True,
         loss='binary_crossentropy', optimizer='adam', patience=2, callbacks=('early_stopping', 'tensorboard'),
-        tag=None, logdir='logs', **kwargs
+        tag=None, logdir='logs', histogram_freq=0, **kwargs
     ):
 
         tf.keras.backend.clear_session()
@@ -802,7 +802,7 @@ class DNNTunable(DNN):
                     log_tag = f'{self.name.replace(" ", "_")}-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
                 logdir_tag = os.path.join('logs', log_tag)
                 tensorboard_callback = tf.keras.callbacks.TensorBoard(os.path.join(logdir_tag, log_tag),
-                                                                      histogram_freq=1)
+                                                                      histogram_freq=histogram_freq)
                 self.meta['callbacks'].append(tensorboard_callback)
 
         self.hypermodel = self.build_model(

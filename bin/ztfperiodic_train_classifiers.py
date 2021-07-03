@@ -79,27 +79,46 @@ if not os.path.isdir(logsDir):
 
 datasetfile = os.path.join(outputDir, 'dataset.%s.csv' % opts.tag)
 
-target_labels = {'agn': 'AGN',
-                 'bis': 'binary star',
-                 'blyr': 'Beta Lyr',
-                 'ceph': ['Cepheid', 'Cepheid type-II'],
-                 'dscu': 'Delta Scu',
+target_labels = {#'agn': 'AGN',
+                 #'bis': 'binary star',
+                 #'blyr': 'Beta Lyr',
+                 #'bogus': 'bogus',
+                 #'ceph': ['Cepheid', 'Cepheid type-II'],
+                 ##'cv': 'CV',
+                 #'dip': 'dipping',
+                 #'dscu': 'Delta Scu',
                  'e': 'eclipsing',
                  'ea': 'EA',
                  'eb': 'EB',
+                 'ell': 'elliptical',
                  'ew': 'EW',
                  'fla': 'flaring',
                  'i': 'irregular',
+                 'lpv': 'long timescale',
                  'pnp': 'periodic',
                  'puls': 'pulsator',
                  'rrlyr': 'RR Lyrae',
+                 'rrlyrab': 'RR Lyrae ab',
+                 'rrlyrc': 'RR Lyrae c',
+                 'rrlyrd': 'RR Lyrae d',
+                 'rrlyrbl': 'RR Lyrae Blazhko',
                  'rscvn': 'RS CVn',
+                 'saw': 'sawtooth',
+                 'sine': 'sinusoidal',
                  'vnv': 'variable',
+                 'wuma': 'W Uma',
+                 'yso': 'YSO'
+                }
+
+target_labels = {'wuma': 'W Uma',
                  'yso': 'YSO'
                 }
 
 #target_labels = {'pnp': 'periodic',
 #                 'vnv': 'variable'}
+
+target_labels = {'bogus': 'bogus'}
+target_labels = {'lpv': 'long timescale'}
 
 for label in sorted(target_labels.keys()):
     print('Analyzing %s' % label)
@@ -108,12 +127,15 @@ for label in sorted(target_labels.keys()):
     target_label = target_labels[label]       
     modelFile = os.path.join(modelsDir, '%s.%s_dnn_v2.h5' % (label, opts.tag))
 
-    if label in ['agn', 'bis', 'blyr', 'ceph', 'dscu', 'puls', 'rrlyr',
-                 'rscvn', 'yso']:
+    if label in ['agn', 'bis', 'blyr', 'ceph', 'dscu', 'ell', 'puls', 'rrlyr',
+                 'rrlyrab', 'rrlyrc', 'rrlyrd', 'rrlyrbl', 'rscvn', 'wuma', 'yso']:
         featuresetname = 'ontological'
-    elif label in ['e', 'ea', 'eb', 'ew', 'fla', 'i', 'pnp', 'vnv']:
+    elif label in ['bogus', 'dip', 'e', 'ea', 'eb', 'ew', 'fla', 'i', 'pnp', 'saw', 'sine', 'vnv', 'lpv']:
         featuresetname = 'phenomenological'
-    
+    else:
+        print('Please specify featuresetname.')
+        exit(0)   
+ 
     features = get_featuresetnames(featuresetname)[1:] # remove dmdt
     
     pklfile = datasetfile.replace("csv", featuresetname) + ".pkl"
@@ -128,7 +150,7 @@ for label in sorted(target_labels.keys()):
 
         print(ds)
     
-        if label in ["bis", "pnp", "vnv", "e", "ew"]:
+        if label in ["bis", "pnp", "vnv", "e", "ew", "wuma"]:
             balance = None
         else:
             balance = 2.5
@@ -144,7 +166,9 @@ for label in sorted(target_labels.keys()):
         shuffle_buffer_size = 32
         #batch_size = 64
         #shuffle_buffer_size = 64
+        epochs = 20
         #epochs = 300
+        histogram_freq=0
     
         datasets, indexes, steps_per_epoch, class_weight = ds.make(
             target_label=target_label, threshold=threshold,
@@ -159,7 +183,7 @@ for label in sorted(target_labels.keys()):
         classifier.setup(features_shape=(len(features), ), dmdt_shape=(26, 26, 1), 
                          dense_branch=True, conv_branch=True,
                          loss='binary_crossentropy', optimizer='adam', lr=3e-4, momentum=0.9,
-                         monitor='val_loss', patience=30,
+                         monitor='val_loss', patience=30, histogram_freq=0,
         #                  loss='binary_crossentropy', optimizer='adam', lr=2e-4, momentum=0.88,
         #                  monitor='val_loss', patience=5,
                          callbacks=('early_stopping', 'tensorboard'),
@@ -186,7 +210,9 @@ for label in sorted(target_labels.keys()):
         epochs = 20
         
         classifier.meta['callbacks'].append(TqdmCallback(verbose=1))
-        
+
+        print(datasets['train'])       
+ 
         classifier.train(datasets['train'], datasets['val'], 
                          steps_per_epoch['train'], steps_per_epoch['val'],
                          epochs=epochs, class_weight=class_weight, verbose=0)
@@ -216,9 +242,17 @@ for label in sorted(target_labels.keys()):
         return b
 
     threshold_value = 0.5
+
     predictions = model.predict([df_ds[features].values, dmdt], verbose=False).flatten()
+
+    if isinstance(target_label, list):
+        for tar in target_label[1:]:
+            wc2 = df_ds[tar] >= 0.7
+            df_ds.loc[wc2, target_label[0]] = 1
+        target_label = target_label[0]
+
     target = np.asarray(list(map(int, threshold(df_ds[target_label].values, t=threshold_value))))
- 
+
     pt = np.vstack((predictions, target)).T
     pt_thresholded = np.rint(pt)
     w = np.logical_xor(pt_thresholded[:, 0], pt_thresholded[:, 1])
