@@ -69,7 +69,7 @@ class DNN(AbstractClassifier):
 
     def setup(self, features_shape=(41, ), dmdt_shape=(26, 26, 1), dense_branch=True, conv_branch=True,
               loss='binary_crossentropy', optimizer='adam', callbacks=('early_stopping', 'tensorboard'),
-              tag=None, logdir='logs', **kwargs):
+              tag=None, logdir='logs', histogram_freq=0, **kwargs):
 
         tf.keras.backend.clear_session()
 
@@ -131,7 +131,7 @@ class DNN(AbstractClassifier):
                     log_tag = f'{self.name.replace(" ", "_")}-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
                 logdir_tag = os.path.join('logs', log_tag)
                 tensorboard_callback = tf.keras.callbacks.TensorBoard(os.path.join(logdir_tag, log_tag),
-                                                                      histogram_freq=1)
+                                                                      histogram_freq=histogram_freq)
                 self.meta['callbacks'].append(tensorboard_callback)
 
         self.model.compile(optimizer=self.meta['optimizer'],
@@ -742,7 +742,7 @@ class DNNTunable(DNN):
     def setup(
         self, features_shape=(41,), dmdt_shape=(26, 26, 1), dense_branch=True, conv_branch=True,
         loss='binary_crossentropy', optimizer='adam', patience=2, callbacks=('early_stopping', 'tensorboard'),
-        tag=None, logdir='logs', **kwargs
+        tag=None, logdir='logs', histogram_freq=0, **kwargs
     ):
 
         tf.keras.backend.clear_session()
@@ -802,7 +802,7 @@ class DNNTunable(DNN):
                     log_tag = f'{self.name.replace(" ", "_")}-{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
                 logdir_tag = os.path.join('logs', log_tag)
                 tensorboard_callback = tf.keras.callbacks.TensorBoard(os.path.join(logdir_tag, log_tag),
-                                                                      histogram_freq=1)
+                                                                      histogram_freq=histogram_freq)
                 self.meta['callbacks'].append(tensorboard_callback)
 
         self.hypermodel = self.build_model(
@@ -856,9 +856,9 @@ class Dataset(object):
         path_labels: str = '../labels',
         features=(
             'ad', 'chi2red', 'f1_a', 'f1_amp', 'f1_b',
-            'f1_bic', 'f1_phi0', 'f1_power', 'f1_relamp1', 'f1_relamp2',
+            'f1_BIC', 'f1_phi0', 'f1_power', 'f1_relamp1', 'f1_relamp2',
             'f1_relamp3', 'f1_relamp4', 'f1_relphi1', 'f1_relphi2', 'f1_relphi3',
-            'f1_relphi5', 'f60', 'f70', 'f80', 'f90', 'inv_vonneumannratio', 'iqr',
+            'f1_relphi4', 'i60r', 'i70r', 'i80r', 'i90r', 'inv_vonneumannratio', 'iqr',
             'median', 'median_abs_dev',
             # 'n',
             'norm_excess_var', 'norm_peak_to_peak_amp', 'pdot', 'period', 'roms', 'significance',
@@ -889,12 +889,20 @@ class Dataset(object):
         if self.verbose:
             print('Moving dmdt\'s to a dedicated numpy array...')
             for i in tqdm(self.df_ds.itertuples(), total=len(self.df_ds)):
-                dmdt.append(np.asarray(literal_eval(self.df_ds['dmdt'][i.Index])))
+                #if i.Index > 10: continue
+                var = np.asarray(literal_eval(self.df_ds['dmdt'][i.Index]))
+                if not var.shape == (26,26):
+                    var = np.zeros((26,26))
+                dmdt.append(var)
         else:
             for i in self.df_ds.itertuples():
-                dmdt.append(np.asarray(literal_eval(self.df_ds['dmdt'][i.Index])))
-        self.dmdt = np.array(dmdt)
-        self.dmdt = np.expand_dims(self.dmdt, axis=-1)
+                var = np.asarray(literal_eval(self.df_ds['dmdt'][i.Index]))
+                if not var.shape == (26,26):
+                    var = np.zeros((26,26))
+                dmdt.append(var)
+        self.dmdt = np.dstack(dmdt)
+        self.dmdt = np.transpose(self.dmdt, (2, 0, 1))
+        #self.dmdt = np.expand_dims(self.dmdt, axis=-1)
 
         # drop in df_ds:
         self.df_ds.drop(columns='dmdt', inplace=True)
@@ -976,13 +984,15 @@ class Dataset(object):
         # Obviously, the same norms will have to be applied at the testing and serving stages.
 
         # load/compute feature norms:
-        if not path_norms:
+        if not path_norms or not os.path.isfile(path_norms):
             norms = {feature: np.linalg.norm(self.df_ds.loc[ds_indexes, feature]) for feature in self.features}
             for feature, norm in norms.items():
                 if np.isnan(norm) or norm == 0.0:
                     norms[feature] = 1.0
             if self.verbose:
                 print('Computed feature norms:\n', norms)
+            with open(path_norms, 'w') as f:
+                json.dump(norms, f)
         else:
             with open(path_norms, 'r') as f:
                 norms = json.load(f)

@@ -55,6 +55,7 @@ def parse_commandline():
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     parser.add_option("-m","--modelFiles",default="/home/michael.coughlin/ZTF/ZTFVariability/pipeline/saved_models/d11.ea.f.model") 
+    parser.add_option("--normFile",default="/home/michael.coughlin/ZTF/labels_d14/norms.20210702.json")
 
     parser.add_option("-k","--kowalski_batch_size",default=1000,type=int)
     parser.add_option("-a","--algorithm",default="xgboost")
@@ -99,6 +100,7 @@ Ncatalog = opts.Ncatalog
 Ncatindex = opts.Ncatindex
 modelFiles = opts.modelFiles.split(",")
 dbname = opts.dbname
+normFile = opts.normFile
 
 if algorithm == "xgboost":
     modeltype = modelFiles[0].split("/")[-1].split(".")[-2]
@@ -109,8 +111,8 @@ if algorithm == "xgboost":
             exit(0)
 elif algorithm == "dnn":
     featuresetnames = {}
-    featuresetnames["ontological"] = ['puls', 'dscu', 'ceph', 'rrlyr', 'lpv', 'srv', 'bis', 'blyr', 'rscvn', 'agn', 'yso', 'wuma']
-    featuresetnames["phenomenological"] = ['vnv', 'pnp', 'i', 'e', 'ea', 'eb', 'ew', 'fla']
+    featuresetnames["ontological"] = ['agn', 'bis', 'blyr', 'ceph', 'dscu', 'ell', 'puls', 'rrlyr', 'rrlyrab', 'rrlyrc', 'rrlyrd', 'rrlyrbl', 'rscvn', 'wuma', 'yso'] 
+    featuresetnames["phenomenological"] = ['bogus', 'dip', 'e', 'ea', 'eb', 'ew', 'fla', 'i', 'pnp', 'saw', 'sine', 'vnv']
 
     modelname = modelFiles[0].split("/")[-1].split(".")[0]
     if modelname in featuresetnames["ontological"]:
@@ -159,7 +161,7 @@ coordinates = []
 baseline=0
 fil = 'all'
 
-print('Organizing lightcurves...')
+print('Organizing features...')
 if opts.lightcurve_source == "Kowalski":
 
     kow = []
@@ -167,7 +169,11 @@ if opts.lightcurve_source == "Kowalski":
     cnt = 0
     while cnt < nquery:
         try:
-            kow = Kowalski(username=opts.user, password=opts.pwd)
+            TIMEOUT = 60
+            protocol, host, port = "https", "gloria.caltech.edu", 443
+            kow = Kowalski(username=opts.user, password=opts.pwd,
+                           timeout=TIMEOUT,
+                           protocol=protocol, host=host, port=port)
             break
         except:
             time.sleep(5)
@@ -332,17 +338,22 @@ print('Analyzing %d lightcurves...' % len(features))
 start_time = time.time()
 
 for modelFile in modelFiles:
-    pred = classify(algorithm, features, modelFile=modelFile)
+    pred = classify(algorithm, features, modelFile=modelFile, normFile=normFile)
     data_out = np.vstack([ids, pred]).T
 
     modelName = modelFile.replace(".model","").split("/")[-1]
     catalogDir = os.path.join(basecatalogDir, modelName)
     if not os.path.isdir(catalogDir):
         os.makedirs(catalogDir)
-    catalogFile = os.path.join(catalogDir,"%d.h5"%(Ncatindex))
+
+    if opts.source_type == "quadrant" and opts.query_type == "ids":
+        field_ccd_quadrant = opts.ids_file.split("/")[-1].replace(".npy","")
+        catalogFile = os.path.join(catalogDir,"%s_%d.h5"%(field_ccd_quadrant, Ncatindex))
+    else:
+        catalogFile = os.path.join(catalogDir,"%d.h5"%(Ncatindex))
 
     with h5py.File(catalogFile, 'w') as hf:
         hf.create_dataset("preds",  data=data_out)
 
 end_time = time.time()
-print('Lightcurve analysis took %.2f seconds' % (end_time - start_time))
+print('Classification analysis took %.2f seconds' % (end_time - start_time))

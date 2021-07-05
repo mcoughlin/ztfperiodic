@@ -280,7 +280,7 @@ if opts.lightcurve_source == "Kowalski":
 
 elif opts.lightcurve_source == "matchfiles":
 
-    fields = np.arange(250,400)
+    fields = np.arange(600,700)
     fields1 = [683,853,487,718,372,842,359,778,699,296]
     fields2 = [841,852,682,717,488,423,424,563,562,297,700,777]
     fields3 = [851,848,797,761,721,508,352,355,364,379]
@@ -288,14 +288,12 @@ elif opts.lightcurve_source == "matchfiles":
 
     fields = fields1 + fields2
 
-    fields = np.arange(250,400)
-
     job_number = 0
     quadrantfile = os.path.join(qsubDir,'qsub.dat')
     fid = open(quadrantfile,'w')
 
     directory="%s/*/*.h5"%opts.matchfileDir
-    filenames = [f for f in glob.iglob(directory)]
+    filenames = sorted([f for f in glob.iglob(directory)])
     for jj, filename in enumerate(filenames):
         if np.mod(jj, 100) == 0:
             print('%d/%d' % (jj, len(filenames)))
@@ -326,7 +324,7 @@ elif opts.lightcurve_source == "matchfiles":
                 print('%s already exists... continuing.' % catalogFile)
                 continue
 
-            fid.write('%d %d %d %d %d %d %s\n' % (job_number, field_id, ccd_id, q_id, ii, Ncatalog, filename))
+            print('%d %d %d %d %d %d %s' % (job_number, field_id, ccd_id, q_id, ii, Ncatalog, filename), file=fid, flush=True)
 
             job_number = job_number + 1
     fid.close()
@@ -397,6 +395,10 @@ if "bridges" in host:
     fid.write('source /ocean/projects/ast200014p/mcoughli/ZTF/ztfperiodic/setup.sh\n')
 elif "nasa" in host:
     fid.write('source /home4/mwcoughl/ZTF/ztfperiodic/setup.sh\n')
+elif "comet" in host:
+    fid.write('#sbatch -p gpu --gres=gpu:p100:4 --account=umn131 --nodes=1 --ntasks-per-node=8 -t 48:00:00 --wait=0 --export=ALL qsub_submission.sub\n')
+elif "expanse" in host:
+    fid.write('#sbatch -p gpu --gpus=4 --account=umn131 --nodes=1 --ntasks-per-node=8 -t 48:00:00 --wait=0 --export=ALL qsub_submission.sub\n')
 else:
     fid.write('source /home/cough052/cough052/ZTF/ztfperiodic/setup.sh\n')
 if opts.lightcurve_source in ["Kowalski", "matchfiles", "matchfiles_kevin"]:
