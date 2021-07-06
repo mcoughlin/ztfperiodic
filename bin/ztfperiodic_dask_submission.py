@@ -110,6 +110,9 @@ def run_job(row):
             jobstr = jobstr + " -m %s" % idsFile        
         print(jobstr)
         os.system(jobstr)
+    else:
+        print('%s already completed...' % catalogFile)
+
 
 if __name__ == '__main__':
 
