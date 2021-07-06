@@ -37,6 +37,7 @@ from ztfperiodic.utils import get_kowalski
 from ztfperiodic.utils import get_kowalski_features_objids 
 from ztfperiodic.utils import get_kowalski_classifications_objids
 from ztfperiodic.utils import get_kowalski_objids
+from ztfperiodic.utils import get_kowalski_list
 from ztfperiodic.utils import gaia_query
 from ztfperiodic.utils import combine_lcs
 from ztfperiodic.zooniverse import ZooProject
@@ -106,6 +107,8 @@ def parse_commandline():
 
     parser.add_option("-N","--Nexamples",default=10,type=int)
 
+    parser.add_option("-t","--tag",default="v1")
+
     opts, args = parser.parse_args()
 
     return opts
@@ -155,7 +158,13 @@ nquery = 10
 cnt = 0
 while cnt < nquery:
     try:
-        kow = Kowalski(username=opts.user, password=opts.pwd)
+        kow_features = Kowalski(username=opts.user, password=opts.pwd)
+
+        TIMEOUT = 60
+        protocol, host, port = "https", "gloria.caltech.edu", 443
+        kow_lcs = Kowalski(username=opts.user, password=opts.pwd,
+                           timeout=TIMEOUT,
+                           protocol=protocol, host=host, port=port)
         break
     except:
         time.sleep(5)
@@ -233,7 +242,7 @@ bands = {1: 'g', 2: 'r', 3: 'i'}
 
 if opts.doSubjectSet:
    image_list, metadata_list, subject_set_name = [], [], intersectionType 
-   subject_set_name = subject_set_name + "_y_error"
+   subject_set_name = subject_set_name + "_" + opts.tag
    #subject_set_name = "labeling_guide_2"
    #subject_set_name = "mira_catalog"
    #subject_set_name = "base"
@@ -272,29 +281,23 @@ for ii, (index, row) in enumerate(df.iterrows()):
             absmags.append(lc["absmag"])
             bp_rps.append(lc["bp_rp"])
  
-        lightcurves_combined = combine_lcs(lightcurves_all)
-        key = list(lightcurves_combined.keys())[0]
-
     else:
-        objid, features = get_kowalski_features_objids([index], kow)
+        objid, features = get_kowalski_features_objids([index], kow_features,
+                                                       dbname="ZTF_source_features_20191101", featuresetname='limited')
 
         try:
             period = features.period.values[0]
-            amp = features.f1_amp.values[0]
+            ra, dec = features.ra.values[0], features.dec.values[0]
         except:
             period = row["p"]
-            amp = -1
+        amp = -1
 
-        lightcurves, coordinates, filters, ids, absmags, bp_rps, names, baseline = get_kowalski_objids([index], kow)
-        ra, dec = coordinates[0][0], coordinates[0][1]
+        lightcurves = get_kowalski(ra, dec, kow_lcs, min_epochs=20, radius=2.0)
 
-        lightcurves_all = get_kowalski(ra, dec, kow,
-                                       min_epochs=20)
-        lightcurves_combined = combine_lcs(lightcurves_all)
-        key = list(lightcurves_combined.keys())[0] 
+    key = list(lightcurves.keys())[0]
 
-    hjd, magnitude, err = lightcurves[0]
-    absmag, bp_rp = absmags[0], bp_rps[0]
+    hjd, magnitude, err = lightcurves[key]["hjd"], lightcurves[key]["mag"], lightcurves[key]["magerr"]
+    absmag, bp_rp = lightcurves[key]["absmag"], lightcurves[key]["bp_rp"]
     gaia = gaia_query(ra, dec, 5/3600.0)
     d_pc, gofAL = None, None
     if gaia:
@@ -325,9 +328,9 @@ for ii, (index, row) in enumerate(df.iterrows()):
             if fid == 3: continue
 
             seriesData = []
-            nmax, period_tmp, amp_tmp = -1, period, amp
-            for ii, key in enumerate(lightcurves_all.keys()):
-                lc = lightcurves_all[key]
+            nmax, amp_tmp = -1, amp
+            for ii, key in enumerate(lightcurves.keys()):
+                lc = lightcurves[key]
                 if not lc["fid"][0] == fid: continue
                 idx = np.where(lc["fid"][0] == fids)[0]
 
@@ -342,12 +345,6 @@ for ii, (index, row) in enumerate(df.iterrows()):
                     nmax = len(lc["fid"])
                     amp_tmp = np.diff(np.percentile(lc["mag"], (5,95)))[0]
 
-                    tmp, features = get_kowalski_features_objids([int(key)], kow)
-                    if len(features) == 0:
-                        continue
-
-                    period_tmp = features.period.values[0]
-
             if len(seriesData) == 0: continue
 
             if fid == 1:
@@ -359,10 +356,10 @@ for ii, (index, row) in enumerate(df.iterrows()):
 
             seriesOptions = {"color": color,
                              "label": label,
-                             "period": period_tmp}
+                             "period": period}
             periodOptions = {"color": color,
                              "label": label,
-                             "value": np.log10(period_tmp)}
+                             "value": np.log10(period)}
             amplitudeOptions = {"color": color,
                                 "label": label,
                                 "value": amp_tmp}
@@ -380,8 +377,8 @@ for ii, (index, row) in enumerate(df.iterrows()):
         plt.axes(ax1)
         bands_count = np.zeros((len(fids),1))
         for jj, (fid, color, symbol) in enumerate(zip(fids, colors, symbols)):
-            for ii, key in enumerate(lightcurves_all.keys()):
-                lc = lightcurves_all[key]
+            for ii, key in enumerate(lightcurves.keys()):
+                lc = lightcurves[key]
                 if not lc["fid"][0] == fid: continue
                 idx = np.where(lc["fid"][0] == fids)[0]
                 if bands_count[idx] == 0:
