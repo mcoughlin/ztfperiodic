@@ -460,6 +460,16 @@ if opts.lightcurve_source == "Kowalski":
                     ras.append(float(lineSplit[3]))
                     decs.append(float(lineSplit[4]))
                     errs.append(default_err)
+                elif ("eROSITA" in catalog_file):
+                    ra_hex, dec_hex = convert_to_hex(float(lineSplit[1])*24/360.0,delimiter=''), convert_to_hex(float(lineSplit[2]),delimiter='')
+                    if dec_hex[0] == "-":
+                        objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:5])
+                    else:
+                        objname = "ZTFJ%s%s"%(ra_hex[:4],dec_hex[:4])
+                    names.append(objname)
+                    ras.append(float(lineSplit[1]))
+                    decs.append(float(lineSplit[2]))
+                    errs.append(float(lineSplit[3]))
                 elif ("fermi" in catalog_file):
                     names.append(lineSplit[0])
                     ras.append(float(lineSplit[1]))

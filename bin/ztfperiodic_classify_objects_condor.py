@@ -104,7 +104,7 @@ if algorithm == "dnn":
         varclasses = ['vnv', 'pnp', 'i', 'e', 'ea', 'eb', 'ew', 'fla', 'bogus', 'dip', 'lpv', 'saw', 'sine']
     for varclass in varclasses:
         for trainingset in ['d14', 'd12', 'd11', 'd10']:
-            modelFile = glob.glob(os.path.join(modelPath, "%s*%s*h5" % (varclass, trainingset)))        
+            modelFile = glob.glob(os.path.join(modelPath, "%s.*%s*h5" % (varclass, trainingset)))        
             if len(modelFile) > 0:
                 modelFiles.append(modelFile[0])
                 break
@@ -261,7 +261,7 @@ fid.write('output = logs/out.$(jobNumber)\n');
 fid.write('error = logs/err.$(jobNumber)\n');
 if opts.lightcurve_source == "Kowalski":
     if opts.source_type == "quadrant":
-        fid.write('arguments = --outputDir %s --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doPlots --algorithm %s --dbname %s --modelFiles $(modelFiles) --query_type %s\n'%(outputDir,opts.user,opts.pwd,opts.algorithm,dbname,opts.query_type))
+        fid.write('arguments = --outputDir %s --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --user %s --pwd %s -l Kowalski --doPlots --algorithm %s --dbname %s --modelFiles $(modelFiles) --query_type %s --ids_file $(idsFile)\n'%(outputDir,opts.user,opts.pwd,opts.algorithm,dbname,opts.query_type))
     elif opts.source_type == "catalog":
         fid.write('arguments = --outputDir %s --user %s --pwd %s -l Kowalski --source_type catalog --catalog_file %s --doPlots --Ncatalog $(Ncatalog) --Ncatindex $(Ncatindex) --algorithm %s --dbname %s --modelFiles $(modelFiles)\n'%(outputDir,opts.user,opts.pwd,opts.catalog_file,opts.algorithm,dbname))
 fid.write('requirements = OpSys == "LINUX"\n');

@@ -109,6 +109,10 @@ def parse_commandline():
 
     parser.add_option("-t","--tag",default="v1")
 
+    parser.add_option("--doThreshold",  action="store_true", default=False)
+    parser.add_option("--threshold_min",default=0.7, type=float)
+    parser.add_option("--threshold_max",default=1.0, type=float)
+
     opts, args = parser.parse_args()
 
     return opts
@@ -183,6 +187,9 @@ elif ".fits" in catalogPath:
     tab = Table.read(catalogPath, format='fits')
     df = tab.to_pandas()
     df.set_index('objid',inplace=True)
+
+    df = df[(df.prob >= opts.threshold_min) & (df.prob <= opts.threshold_max)]
+
 elif ".csv" in catalogPath:
     tab = Table.read(catalogPath, format='csv')
 
@@ -233,6 +240,10 @@ if opts.doIntersection:
     idy = df.index.intersection(df1.iloc[idx].index)
     df = df.loc[idy]
     df1 = df1.iloc[idx]
+else:
+    idx = np.random.choice(np.arange(len(df)), size=opts.Nexamples)
+    idx = idx.astype(int)
+    df = df.iloc[idx]
 
 fs = 24
 colors = ['g','r','y']
