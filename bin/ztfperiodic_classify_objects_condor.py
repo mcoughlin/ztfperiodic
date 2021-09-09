@@ -33,7 +33,7 @@ def parse_commandline():
     parser.add_option("-s","--source_type",default="quadrant")
     parser.add_option("--catalog_file",default="../input/xray.dat")
     parser.add_option("--Ncatalog",default=13.0,type=int)
-    parser.add_option("--Nmax",default=1000000.0,type=int)
+    parser.add_option("--Nmax",default=10000.0,type=int)
 
     parser.add_option("-m","--modelPath",default="/home/mcoughlin/ZTF/labels_d15/models/")
 
