@@ -35,12 +35,12 @@ def parse_commandline():
     parser.add_option("--Ncatalog",default=13.0,type=int)
     parser.add_option("--Nmax",default=1000000.0,type=int)
 
-    parser.add_option("-m","--modelPath",default="/home/mcoughlin/ZTF/labels_d14/models/")
+    parser.add_option("-m","--modelPath",default="/home/mcoughlin/ZTF/labels_d15/models/")
 
     parser.add_option("--doDocker",  action="store_true", default=False)
 
     parser.add_option("-f","--featuresetname",default="b")
-    parser.add_option("-d","--dbname",default="ZTF_source_features_DR3")
+    parser.add_option("-d","--dbname",default="ZTF_source_features_DR5")
     parser.add_option("-q","--query_type",default="ids")
     parser.add_option("-i","--ids_file",default="/home/michael.coughlin/ZTF/ZTFVariability/ids/ids.20fields.npy")
 
@@ -93,7 +93,7 @@ if not os.path.isdir(logDir):
 idsDir = os.path.join(condorDir,'ids')
 if not os.path.isdir(idsDir):
     os.makedirs(idsDir)
-idsDir = "/home/michael.coughlin/ZTF/output_quadrants_Primary_DR5/condor/ids"
+idsDir = "/home/michael.coughlin/ZTF/output_features_phenomenological_DR5/condor/ids"
 
 if algorithm == "dnn":
     modelFiles = []
@@ -103,13 +103,13 @@ if algorithm == "dnn":
     elif featuresetname == "phenomenological":
         varclasses = ['vnv', 'pnp', 'i', 'e', 'ea', 'eb', 'ew', 'fla', 'bogus', 'dip', 'lpv', 'saw', 'sine']
     for varclass in varclasses:
-        for trainingset in ['d14', 'd12', 'd11', 'd10']:
+        for trainingset in ['d15', 'd14', 'd12', 'd11', 'd10']:
             modelFile = glob.glob(os.path.join(modelPath, "%s.*%s*h5" % (varclass, trainingset)))        
             if len(modelFile) > 0:
                 modelFiles.append(modelFile[0])
                 break
 elif algorithm == "xgboost":
-    modelFiles = glob.glob(os.path.join(modelPath, "d11*.%s.*model" % featuresetname))
+    modelFiles = glob.glob(os.path.join(modelPath, "d15*.%s.*model" % featuresetname))
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -137,15 +137,15 @@ if opts.lightcurve_source == "Kowalski":
         #fields3 = [851,848,797,761,721,508,352,355,364,379]
         #fields4 = [1866,1834,1835,1804,1734,1655,1565]
 
-        #fields = fields1 + fields2
+        fields = fields1 + fields2
         #fields_complete = fields1 + fields2 # + fields3 + fields4
         #fields = np.arange(300,400)
         #fields = np.arange(700,800)
         #fields = np.setdiff1d(fields,fields_complete)
 
         #fields = [700]
-        fields = np.arange(250,882)
-        #fields = np.arange(350,500)
+        #fields = np.arange(250,882)
+        #fields = np.arange(350,400)
         #fields = np.arange(686,880)
         #fields = [400]
 
@@ -162,19 +162,20 @@ if opts.lightcurve_source == "Kowalski":
                             nlightcurves = len(objids)
                             Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
                         else:
-                            #qu = {"query_type":"count_documents",
-                            #      "query": {
-                            #          "catalog": 'ZTF_source_features_DR3',
-                            #          "filter": {'field': {'$eq': int(field)},
-                            #                     'ccd': {'$eq': int(ccd)},
-                            #                     'quad': {'$eq': int(quadrant)}
-                            #                     }
-                            #               }
-                            #     }
-                            #r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
-                            #if not "data" in r: continue
-                            #nlightcurves = r['data']
-                            #if nlightcurves == 0: continue
+                            qu = {"query_type":"count_documents",
+                                  "query": {
+                                      "catalog": 'ZTF_source_features_DR5',
+                                      "filter": {'field': {'$eq': int(field)},
+                                                 'ccd': {'$eq': int(ccd)},
+                                                 'quad': {'$eq': int(quadrant)}
+                                                 }
+                                           }
+                                 }
+                            r = ztfperiodic.utils.database_query(kow, qu, nquery = 1)
+                            print(r)
+                            if not "data" in r: continue
+                            nlightcurves = r['data']
+                            if nlightcurves == 0: continue
 
                             Ncatalog = int(np.ceil(float(nlightcurves)/opts.Nmax))
 
@@ -182,17 +183,11 @@ if opts.lightcurve_source == "Kowalski":
                             if not os.path.isfile(idsFile):
                                 print(idsFile)
                                 qu = {"query_type":"find",
-                                      "query": {"catalog": 'ZTF_source_features_DR3',
+                                      "query": {"catalog": 'ZTF_source_features_DR5',
                                                 "filter": {'field': {'$eq': int(field)},
                                                            'ccd': {'$eq': int(ccd)},
                                                            'quad': {'$eq': int(quadrant)}
                                                           },
-                                                "projection": "{'_id': 1}"},
-                                     }
-                                qu = {"query_type":"find",
-                                      "query": {"catalog": 'ZTF_source_features_DR3',
-                                                "filter": {},
-                                                "kwargs": {"limit": 1000},
                                                 "projection": "{'_id': 1}"},
                                      }
                                 r = {}
