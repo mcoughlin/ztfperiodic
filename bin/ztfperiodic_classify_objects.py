@@ -337,8 +337,13 @@ if len(features) == 0:
 print('Analyzing %d lightcurves...' % len(features))
 start_time = time.time()
 
+if algorithm == "xgboost":
+    import xgboost as xgb
+    features = xgb.DMatrix(features)
+
 for modelFile in modelFiles:
-    pred = classify(algorithm, features, modelFile=modelFile, normFile=normFile)
+    pred = classify(algorithm, features,
+                    modelFile=modelFile, normFile=normFile)
     data_out = np.vstack([ids, pred]).T
 
     modelName = modelFile.replace(".model","").split("/")[-1]

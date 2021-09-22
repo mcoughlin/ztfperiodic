@@ -3,15 +3,12 @@ def classify(algorithm, features, modelFile=None, normFile=None):
 
     if algorithm == "xgboost":
         import xgboost as xgb
-
-        dtest = xgb.DMatrix(features)
         ################ Actual inferencing
-
         loaded_model = xgb.Booster()
-
         loaded_model.load_model(modelFile)
         # And use it for predictions.
-        pred = loaded_model.predict(dtest)
+        pred = loaded_model.predict(features)
+
     elif algorithm == "dnn":
         import json
         import numpy as np
