@@ -858,7 +858,7 @@ def get_kowalski_features_list(ras, decs, kow,
                                errs = None, names = None,
                                amaj=None, amin=None, phi=None,
                                featuresetname='f',
-                               dbname='ZTF_source_features_DR3'):
+                               dbname='ZTF_source_features_DR5'):
 
     if errs is None:
         errs = 5.0*np.ones(ras.shape)
@@ -1619,7 +1619,7 @@ def get_featuresetnames(featuresetname):
     return featuresetnames[featuresetname]
 
 def get_kowalski_objids_from_radec(ra, dec, kow, radius = 5.0,
-                                   dbname='ZTF_source_features_DR3'):
+                                   dbname='ZTF_source_features_DR5'):
 
     qu = { "query_type": "cone_search", "query": {"object_coordinates": { "radec": { "test": [ra,dec]}, "cone_search_radius": "%.2f"%radius, "cone_search_unit": "arcsec" }, "catalogs": { dbname: { "filter": "{}", "projection": "{'_id':1}" } } } }
 
@@ -1638,7 +1638,7 @@ def get_kowalski_objids_from_radec(ra, dec, kow, radius = 5.0,
 
 def get_kowalski_features_ind(ra, dec, kow, radius = 5.0, oid = None,
                               featuresetname='f',
-                              dbname='ZTF_source_features_DR3'):
+                              dbname='ZTF_source_features_DR5'):
 
     start = time.time()
 
@@ -1675,7 +1675,7 @@ def get_kowalski_features_ind(ra, dec, kow, radius = 5.0, oid = None,
     return df_features["ztf_id"], df_features[featuresetnames]
 
 def get_kowalski_features_objids(objids, kow, featuresetname='f',
-                                 dbname='ZTF_source_features_DR3'):
+                                 dbname='ZTF_source_features_DR5'):
 
     start = time.time()
 

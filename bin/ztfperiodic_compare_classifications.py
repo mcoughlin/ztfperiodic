@@ -167,7 +167,7 @@ if opts.doPlots:
 
 catalogPaths = []
 for modelPath in modelPaths:
-    folders = glob.glob(os.path.join(modelPath,'*_*'))
+    folders = glob.glob(os.path.join(modelPath,'*_*')) + glob.glob(os.path.join(modelPath,'*.*'))
     for folder in folders:
         if opts.doField:
             catalogPaths = catalogPaths + glob.glob(os.path.join(modelPath, "*", "%d_*.h5" % (opts.field)))
@@ -229,6 +229,9 @@ df_merged = pd.read_hdf(mergedfile)
 
 for model in modelList:
     modelName = model.split("/")[-1]
+    if modelName not in df_merged:
+        continue
+
     idx = np.where(df_merged[modelName] >= 0.9)[0]
     print("Model %s: %.5f%%" % (modelName, 100*len(idx)/len(df_merged[modelName])))
 
@@ -241,6 +244,8 @@ for model in modelList:
             if cnt > 10: continue
 
             objid, features = get_kowalski_features_objids([index], kow)
+            if len(features) == 0: continue
+
             period = features.period.values[0]
             amp = features.f1_amp.values[0]
 
