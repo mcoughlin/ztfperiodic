@@ -99,15 +99,13 @@ if algorithm == "dnn":
     modelFiles = []
     
     if featuresetname == "ontological":
-        varclasses = ['puls', 'dscu', 'ceph', 'rrlyr', 'rrlyrab', 'rrlyrc', 'rrlyrbl', 'rrlyrd', 'srv', 'bis', 'blyr', 'rscvn', 'agn', 'yso', 'wuma', 'ell']
+        varclasses = ['puls', 'dscu', 'ceph', 'rrlyr', 'rrlyrab', 'rrlyrc', 'rrlyrbl', 'rrlyrd', 'srv', 'bis', 'blyr', 'rscvn', 'agn', 'yso', 'wuma', 'ell', 'lpv']
     elif featuresetname == "phenomenological":
-        varclasses = ['vnv', 'pnp', 'i', 'e', 'ea', 'eb', 'ew', 'fla', 'bogus', 'dip', 'lpv', 'saw', 'sine']
+        varclasses = ['vnv', 'pnp', 'i', 'e', 'ea', 'eb', 'ew', 'fla', 'bogus', 'dip', 'saw', 'sine']
     for varclass in varclasses:
-        for trainingset in ['d15', 'd14', 'd12', 'd11', 'd10']:
-            modelFile = glob.glob(os.path.join(modelPath, "%s.*%s*h5" % (varclass, trainingset)))        
-            if len(modelFile) > 0:
-                modelFiles.append(modelFile[0])
-                break
+        modelFile = glob.glob(os.path.join(modelPath, "%s-*h5" % (varclass)))        
+        if len(modelFile) > 0:
+            modelFiles.append(modelFile[0])
 elif algorithm == "xgboost":
     modelFiles = glob.glob(os.path.join(modelPath, "d15*.%s.*model" % featuresetname))
 
