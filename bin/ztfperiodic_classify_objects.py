@@ -55,7 +55,7 @@ def parse_commandline():
 
     parser.add_option("-o","--outputDir",default="/home/michael.coughlin/ZTF/output")
     parser.add_option("-m","--modelFiles",default="/home/michael.coughlin/ZTF/ZTFVariability/pipeline/saved_models/d11.ea.f.model") 
-    parser.add_option("--normFile",default="/home/michael.coughlin/ZTF/labels_d14/norms.20210702.json")
+    parser.add_option("--configFile",default="/home/michael.coughlin/ZTF/scope/config.defaults.yaml")
 
     parser.add_option("-k","--kowalski_batch_size",default=1000,type=int)
     parser.add_option("-a","--algorithm",default="xgboost")
@@ -100,7 +100,7 @@ Ncatalog = opts.Ncatalog
 Ncatindex = opts.Ncatindex
 modelFiles = opts.modelFiles.split(",")
 dbname = opts.dbname
-normFile = opts.normFile
+configFile = opts.configFile
 
 if algorithm == "xgboost":
     modeltype = modelFiles[0].split("/")[-1].split(".")[-2]
@@ -114,14 +114,14 @@ elif algorithm == "dnn":
     featuresetnames["ontological"] = ['agn', 'bis', 'blyr', 'ceph', 'dscu', 'ell', 'puls', 'rrlyr', 'rrlyrab', 'rrlyrc', 'rrlyrd', 'rrlyrbl', 'rscvn', 'wuma', 'yso'] 
     featuresetnames["phenomenological"] = ['bogus', 'dip', 'e', 'ea', 'eb', 'ew', 'fla', 'i', 'pnp', 'saw', 'sine', 'vnv']
 
-    modelname = modelFiles[0].split("/")[-1].split(".")[0]
+    modelname = modelFiles[0].split("/")[-1].split("-")[0]
     if modelname in featuresetnames["ontological"]:
         modeltype = "ontological"
     elif modelname in featuresetnames["phenomenological"]:
         modeltype = "phenomenological"
 
     for modelFile in modelFiles:
-        modelname = modelFile.split("/")[-1].split(".")[0]
+        modelname = modelFile.split("/")[-1].split("-")[0]
         if modelname in featuresetnames["ontological"]:
             modeltype2 = "ontological"
         elif modelname in featuresetnames["phenomenological"]:
@@ -194,6 +194,7 @@ if opts.lightcurve_source == "Kowalski":
             objids_split = np.array_split(objids, Ncatalog)
             objids = objids_split[Ncatindex]
 
+            print(modeltype)
             ids, features = get_kowalski_features_objids(objids, kow, 
                                                          featuresetname=modeltype,
                                                          dbname=dbname)
@@ -343,7 +344,7 @@ if algorithm == "xgboost":
 
 for modelFile in modelFiles:
     pred = classify(algorithm, features,
-                    modelFile=modelFile, normFile=normFile)
+                    modelFile=modelFile, configFile=configFile)
     data_out = np.vstack([ids, pred]).T
 
     modelName = modelFile.replace(".model","").split("/")[-1]
