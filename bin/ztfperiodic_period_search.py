@@ -731,7 +731,6 @@ elif opts.lightcurve_source in ["matchfiles", "matchfiles_kevin"]:
 
     if len(lightcurves) == 0:
         print("No data available...")
-        exit(0)
 
 elif opts.lightcurve_source == "h5files":
     if not os.path.isfile(matchFile):
