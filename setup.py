@@ -114,7 +114,6 @@ setup(name=DISTNAME,
       install_requires=install_requires,
       tests_require=tests_require,
       extras_require=extras_require,
-      use_2to3=True,
       classifiers=[
           'Programming Language :: Python',
           'Development Status :: 3 - Alpha',
