@@ -523,7 +523,7 @@ if opts.doSubjectSet:
     if ".csv" in catalogPath: 
         if "class" in tab.colnames and "comments" in tab.colnames:
             class_dict = {"Non-Periodic (eruptive): CV – SU UMa": "SU_UMa", 
-                          "Periodic (pulsating): RRLc": "RRLc",
+                          "Periodic (pulsating): RR Lyrae FO": "RRLc",
                           "Periodic (pulsating): RR Lyrae DM": "RRLd",
                           "Periodic (pulsating): LSP": "LSP",
                           "Periodic (rotating): RS CVn": "RS_CVn",
