@@ -520,7 +520,33 @@ if opts.doSubjectSet:
     #                          metadata_list,
     #                          subject_set_name=subject_set_name)
 
-    ret = zoo.add_new_subject_timeseries(image_list,
-                                         metadata_list,
-                                         subject_set_name=subject_set_name)
+    if ".csv" in catalogPath: 
+        if "class" in tab.colnames and "comments" in tab.colnames:
+            class_dict = {"Non-Periodic (eruptive): CV – SU UMa": "SU_UMa", 
+                          "Periodic (pulsating): RRLc": "RRLc",
+                          "Periodic (pulsating): RR Lyrae DM": "RRLd",
+                          "Periodic (pulsating): LSP": "LSP",
+                          "Periodic (rotating): RS CVn": "RS_CVn",
+                          "Non-Periodic (stochastic): RCB": "R_Cor_Bor",
+                          "Periodic (pulsating): SX Phe": "SX_Phe",
+                          "Periodic (pulsating): PopII Cepheid": "PopII_Ceph",
+                          "Non-periodic (stochastic): ClassT Tauri": "CTTS",
+                          "Periodic (eclipsing): Ellipsoidal": "Ellipsoidal",
+                          "Periodic (pulsating): RV Tauri": "RV_Tauri",
+                          "Periodic (rotating): Weak-line T Tauri": "WTTS",
+                          "Non-Periodic (stochastic): Herbig AeBe": "Herbig",
+                          "Non-Periodic (eruptive): CV – U Gem": "U_Gem",
+                          "Non-Periodic (eruptive): CV – Z Cam": "Z_Cam"}
+            for var_type in np.unique(tab["class"]):
+                subject_set_name = class_dict[var_type]
+                ssn = subject_set_name + "_" + opts.tag
+                this_type = np.where(tab["class"] == var_type)
+                ret = zoo.add_new_subject_timeseries(image_list[this_type],
+                                                     metadata_list[this_type],
+                                                     subject_set_name=ssn)
+    
+    else:
+        ret = zoo.add_new_subject_timeseries(image_list,
+                                             metadata_list,
+                                             subject_set_name=subject_set_name)
 
