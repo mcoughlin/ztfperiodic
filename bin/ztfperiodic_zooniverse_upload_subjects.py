@@ -195,7 +195,7 @@ elif ".csv" in catalogPath:
 
     objids = []
     for tt, row in enumerate(tab):
-        lightcurves_all = get_kowalski(row["RA"], row["Dec"], kow,
+        lightcurves_all = get_kowalski(row["RA"], row["Dec"], kow_lcs,
                                        min_epochs=20)
         nmax, key_to_keep = -1, -1
         for ii, key in enumerate(lightcurves_all.keys()):
@@ -254,10 +254,24 @@ bands = {1: 'g', 2: 'r', 3: 'i'}
 if opts.doSubjectSet:
    image_list, metadata_list, subject_set_name = [], [], intersectionType 
    subject_set_name = subject_set_name + "_" + opts.tag
-   #subject_set_name = "labeling_guide_2"
-   #subject_set_name = "mira_catalog"
-   #subject_set_name = "base"
-   #subject_set_name = "two"
+
+   if "class" in tab.colnames and "comments" in tab.colnames:
+       class_dict = {"Non-Periodic (eruptive): CV – SU UMa": "SU_UMa",
+                     "Periodic (pulsating): RR Lyrae FO": "RRLc",
+                     "Periodic (pulsating): RR Lyrae DM": "RRLd",
+                     "Periodic (pulsating): LSP": "LSP",
+                     "Periodic (rotating): RS CVn": "RS_CVn",
+                     "Non-Periodic (stochastic): RCB": "R_Cor_Bor",
+                     "Periodic (pulsating): SX Phe": "SX_Phe",
+                     "Periodic (pulsating): PopII Cepheid": "PopII_Ceph",
+                     "Non-periodic (stochastic): ClassT Tauri": "CTTS",
+                     "Periodic (eclipsing): Ellipsoidal": "Ellipsoidal",
+                     "Periodic (pulsating): RV Tauri": "RV_Tauri",
+                     "Periodic (rotating): Weak-line T Tauri": "WTTS",
+                     "Non-Periodic (stochastic): Herbig AeBe": "Herbig",
+                     "Non-Periodic (eruptive): CV – U Gem": "U_Gem",
+                     "Non-Periodic (eruptive): CV – Z Cam": "Z_Cam"}
+       class_list = []
 
 objfile = os.path.join(plotDir, 'objids.dat')
 objfid = open(objfile, 'w')
@@ -300,11 +314,18 @@ for ii, (index, row) in enumerate(df.iterrows()):
             period = features.period.values[0]
             ra, dec = features.ra.values[0], features.dec.values[0]
         except:
-            period = row["p"]
+            ra, dec = row["RA"], row["Dec"]
+            if "p" in row:
+                period = row["p"]
+            else:
+                period = -1
+
         amp = -1
 
         lightcurves = get_kowalski(ra, dec, kow_lcs, min_epochs=20, radius=2.0)
 
+    if len(lightcurves.keys()) == 0:
+        continue
     key = list(lightcurves.keys())[0]
 
     hjd, magnitude, err = lightcurves[key]["hjd"], lightcurves[key]["mag"], lightcurves[key]["magerr"]
@@ -513,6 +534,10 @@ for ii, (index, row) in enumerate(df.iterrows()):
                  'ra': ra, 'dec': dec, 
                  'period': period}
         metadata_list.append(mdict)
+
+        if "class" in tab.colnames and "comments" in tab.colnames:
+            class_list.append(row["class"])
+
 objfid.close()
 
 if opts.doSubjectSet:
@@ -521,28 +546,14 @@ if opts.doSubjectSet:
     #                          subject_set_name=subject_set_name)
 
     if ".csv" in catalogPath: 
-        if "class" in tab.colnames and "comments" in tab.colnames:
-            class_dict = {"Non-Periodic (eruptive): CV – SU UMa": "SU_UMa", 
-                          "Periodic (pulsating): RRLc": "RRLc",
-                          "Periodic (pulsating): RR Lyrae DM": "RRLd",
-                          "Periodic (pulsating): LSP": "LSP",
-                          "Periodic (rotating): RS CVn": "RS_CVn",
-                          "Non-Periodic (stochastic): RCB": "R_Cor_Bor",
-                          "Periodic (pulsating): SX Phe": "SX_Phe",
-                          "Periodic (pulsating): PopII Cepheid": "PopII_Ceph",
-                          "Non-periodic (stochastic): ClassT Tauri": "CTTS",
-                          "Periodic (eclipsing): Ellipsoidal": "Ellipsoidal",
-                          "Periodic (pulsating): RV Tauri": "RV_Tauri",
-                          "Periodic (rotating): Weak-line T Tauri": "WTTS",
-                          "Non-Periodic (stochastic): Herbig AeBe": "Herbig",
-                          "Non-Periodic (eruptive): CV – U Gem": "U_Gem",
-                          "Non-Periodic (eruptive): CV – Z Cam": "Z_Cam"}
-            for var_type in np.unique(tab["class"]):
+            for var_type in list(set(class_list)):
                 subject_set_name = class_dict[var_type]
                 ssn = subject_set_name + "_" + opts.tag
-                this_type = np.where(tab["class"] == var_type)
-                ret = zoo.add_new_subject_timeseries(image_list[this_type],
-                                                     metadata_list[this_type],
+                this_type = [i for i, x in enumerate(class_list) if x == var_type]
+                image_list_tmp = [image_list[idx] for idx in this_type]
+                metadata_list_tmp = [metadata_list[idx] for idx in this_type]
+                ret = zoo.add_new_subject_timeseries(image_list_tmp,
+                                                     metadata_list_tmp,
                                                      subject_set_name=ssn)
     
     else:
