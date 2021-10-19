@@ -321,7 +321,6 @@ for ii, (index, row) in enumerate(df.iterrows()):
                 period = -1
 
         amp = -1
-
         lightcurves = get_kowalski(ra, dec, kow_lcs, min_epochs=20, radius=2.0)
 
     if len(lightcurves.keys()) == 0:
@@ -329,6 +328,9 @@ for ii, (index, row) in enumerate(df.iterrows()):
     key = list(lightcurves.keys())[0]
 
     hjd, magnitude, err = lightcurves[key]["hjd"], lightcurves[key]["mag"], lightcurves[key]["magerr"]
+    if period == -1:
+        period = np.max(hjd) - np.min(hjd)
+
     absmag, bp_rp = lightcurves[key]["absmag"], lightcurves[key]["bp_rp"]
     gaia = gaia_query(ra, dec, 5/3600.0)
     d_pc, gofAL = None, None
