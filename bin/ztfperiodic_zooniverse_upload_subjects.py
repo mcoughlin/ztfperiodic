@@ -395,7 +395,7 @@ for ii, (index, row) in enumerate(df.iterrows()):
                              "period": period}
             periodOptions = {"color": color,
                              "label": label,
-                             "value": np.log10(period) if period_det else -3}
+                             "value": np.log10(period) if period_det else -2.5}
             amplitudeOptions = {"color": color,
                                 "label": label,
                                 "value": amp_tmp}
