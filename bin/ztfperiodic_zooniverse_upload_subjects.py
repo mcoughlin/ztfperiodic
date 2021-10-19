@@ -328,8 +328,10 @@ for ii, (index, row) in enumerate(df.iterrows()):
     key = list(lightcurves.keys())[0]
 
     hjd, magnitude, err = lightcurves[key]["hjd"], lightcurves[key]["mag"], lightcurves[key]["magerr"]
+    period_det = True
     if period == -1:
         period = np.max(hjd) - np.min(hjd)
+        period_det = False
 
     absmag, bp_rp = lightcurves[key]["absmag"], lightcurves[key]["bp_rp"]
     gaia = gaia_query(ra, dec, 5/3600.0)
@@ -393,7 +395,7 @@ for ii, (index, row) in enumerate(df.iterrows()):
                              "period": period}
             periodOptions = {"color": color,
                              "label": label,
-                             "value": np.log10(period)}
+                             "value": np.log10(period) if period_det else -3}
             amplitudeOptions = {"color": color,
                                 "label": label,
                                 "value": amp_tmp}
