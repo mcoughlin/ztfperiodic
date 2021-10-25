@@ -47,8 +47,10 @@ docker run -it python-ztfperiodic
 If you see `GPUassert: all CUDA-capable devices are busy or unavailable gcex/src/manager.cu 57`, type `nvidia-smi` and check `Volatile GPU-Util`. Try `export CUDA_VISIBLE_DEVICES=1`.
 
 ## Installation
-Using a conda environment:
-conda install astropy Cython h5py matplotlib numpy pandas scipy pytables
-conda install -c conda-forge astropy-healpix astroquery astroplan healpy
-pip install penquins
+Using a conda environment:  
+`conda install astropy Cython h5py matplotlib numpy pandas scipy pytables`  
+`conda install -c conda-forge astropy-healpix astroquery astroplan healpy`  
+`pip install penquins`  
 Install from source: https://github.com/ejaszewski/periodfind
+
+[you may find that a single call including all the packages listed under conda results in a more smooth install]
