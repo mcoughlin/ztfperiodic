@@ -99,6 +99,7 @@ def parse_commandline():
 
     parser.add_option("-u","--user")
     parser.add_option("-w","--pwd")
+    parser.add_option("--Kpwd")
 
     parser.add_option("--doSubjectSet",  action="store_true", default=False)
     parser.add_option("--zooniverse_user")
@@ -160,9 +161,13 @@ with h5py.File(HRcat,'r') as f:
 kow = []
 nquery = 10
 cnt = 0
+try:
+    features_pw = opts.Kpwd
+except:
+    features_pw = opts.pwd
 while cnt < nquery:
-    try:
-        kow_features = Kowalski(username=opts.user, password=opts.pwd)
+    try: 
+        kow_features = Kowalski(username=opts.user, password=features_pw)
 
         TIMEOUT = 60
         protocol, host, port = "https", "gloria.caltech.edu", 443
@@ -241,7 +246,8 @@ if opts.doIntersection:
     df = df.loc[idy]
     df1 = df1.iloc[idx]
 else:
-    idx = np.random.choice(np.arange(len(df)), size=opts.Nexamples)
+    idx = np.random.choice(np.arange(len(df)), size=opts.Nexamples, 
+                           replace=False)
     idx = idx.astype(int)
     df = df.iloc[idx]
 
@@ -276,7 +282,7 @@ if opts.doSubjectSet:
 objfile = os.path.join(plotDir, 'objids.dat')
 objfid = open(objfile, 'w')
 for ii, (index, row) in enumerate(df.iterrows()): 
-    if np.mod(ii,100) == 0:
+    if np.mod(ii,100) == 0 and ii > 100:
         print('Loading %d/%d'%(ii,len(df)))
 
     if index < 0: continue
@@ -322,16 +328,12 @@ for ii, (index, row) in enumerate(df.iterrows()):
 
         amp = -1
         lightcurves = get_kowalski(ra, dec, kow_lcs, min_epochs=20, radius=2.0)
-
     if len(lightcurves.keys()) == 0:
         continue
     key = list(lightcurves.keys())[0]
-
     hjd, magnitude, err = lightcurves[key]["hjd"], lightcurves[key]["mag"], lightcurves[key]["magerr"]
-    period_det = True
     if period == -1:
         period = np.max(hjd) - np.min(hjd)
-        period_det = False
 
     absmag, bp_rp = lightcurves[key]["absmag"], lightcurves[key]["bp_rp"]
     gaia = gaia_query(ra, dec, 5/3600.0)
@@ -364,9 +366,18 @@ for ii, (index, row) in enumerate(df.iterrows()):
             if fid == 3: continue
 
             seriesData = []
-            nmax, amp_tmp = -1, amp
+            nmax, amp_tmp, per_tmp = -1, amp, -1
             for ii, key in enumerate(lightcurves.keys()):
                 lc = lightcurves[key]
+                #retrive period from K for this light curve
+                objid, features = get_kowalski_features_objids([key], kow_features,
+                                                               dbname="ZTF_source_features_20191101", featuresetname='limited')
+                try:
+                    this_per = features.period.values[0]
+                    period_det = True
+                except:
+                    period_det = False
+                    this_per = np.ptp(lc["hjd"])
                 if not lc["fid"][0] == fid: continue
                 idx = np.where(lc["fid"][0] == fids)[0]
 
@@ -380,6 +391,7 @@ for ii, (index, row) in enumerate(df.iterrows()):
                 if len(lc["fid"]) > nmax:
                     nmax = len(lc["fid"])
                     amp_tmp = np.diff(np.percentile(lc["mag"], (5,95)))[0]
+                    per_tmp = this_per
 
             if len(seriesData) == 0: continue
 
@@ -392,10 +404,10 @@ for ii, (index, row) in enumerate(df.iterrows()):
 
             seriesOptions = {"color": color,
                              "label": label,
-                             "period": period}
+                             "period": per_tmp}
             periodOptions = {"color": color,
                              "label": label,
-                             "value": np.log10(period) if period_det else -2.5}
+                             "value": np.log10(per_tmp) if period_det else -2.5}
             amplitudeOptions = {"color": color,
                                 "label": label,
                                 "value": amp_tmp}
@@ -526,7 +538,6 @@ for ii, (index, row) in enumerate(df.iterrows()):
         plt.close()
 
     objfid.write('%d %.10f %.10f %.10f\n' % (index, ra, dec, period))
-    print('%d %.10f %.10f %.10f' % (index, ra, dec, period))
 
     if opts.doSubjectSet:
         #image_list.append(pngfile)
@@ -538,7 +549,6 @@ for ii, (index, row) in enumerate(df.iterrows()):
                  'ra': ra, 'dec': dec, 
                  'period': period}
         metadata_list.append(mdict)
-
         if "class" in tab.colnames and "comments" in tab.colnames:
             class_list.append(row["class"])
 
